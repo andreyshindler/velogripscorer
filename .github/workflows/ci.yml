@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Smoke test — server boots and serves the SPA
+        run: |
+          DATA_DIR=/tmp/vgs-smoke node server/index.js &
+          SERVER_PID=$!
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then break; fi
+            sleep 0.5
+          done
+          curl -sf http://localhost:3000/api/health
+          curl -sf http://localhost:3000/ | grep -q VeloGripScorer
+          kill $SERVER_PID

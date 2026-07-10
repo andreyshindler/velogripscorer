@@ -1,0 +1,265 @@
+openapi: 3.0.3
+info:
+  title: VeloGripScorer API
+  description: >
+    REST API for the VeloGripScorer online competition platform: create contests
+    with weighted judging criteria, submit entries, cast per-criterion votes, and
+    read live leaderboards. Real-time updates are delivered over Server-Sent Events
+    at /api/contests/{id}/stream.
+  version: 0.1.0
+servers:
+  - url: /api
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string } }
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        name: { type: string, description: Required on register only }
+    Session:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        role: { type: string, enum: [voter, admin] }
+        bio: { type: string }
+        avatar_url: { type: string }
+        reputation: { type: integer }
+        is_public: { type: integer }
+    Criterion:
+      type: object
+      required: [name, weight]
+      properties:
+        id: { type: integer, readOnly: true }
+        name: { type: string }
+        weight: { type: integer, minimum: 1, maximum: 100, description: Percentages must sum to 100 across a contest }
+    ContestInput:
+      type: object
+      required: [title, start_at, end_at, criteria]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        category: { type: string, enum: [photo, design, code, writing, video, other] }
+        tags: { type: array, items: { type: string } }
+        visibility: { type: string, enum: [public, private] }
+        voting_mode: { type: string, enum: [open, closed] }
+        blind_voting: { type: boolean }
+        scale_max: { type: integer, minimum: 2, maximum: 100, default: 10 }
+        participant_cap: { type: integer, nullable: true }
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+        voting_start_at: { type: string, format: date-time, nullable: true }
+        voting_end_at: { type: string, format: date-time, nullable: true }
+        criteria: { type: array, items: { $ref: '#/components/schemas/Criterion' } }
+        prizes:
+          type: array
+          items:
+            type: object
+            properties:
+              rank: { type: integer }
+              name: { type: string }
+              type: { type: string, enum: [badge, points, physical, coupon, premium] }
+              details: { type: string }
+    VoteInput:
+      type: object
+      required: [scores]
+      properties:
+        scores:
+          type: object
+          additionalProperties: { type: number }
+          description: Map of criterion id -> score (0..scale_max). One ballot per voter per entry; re-voting overwrites.
+    LeaderboardRow:
+      type: object
+      properties:
+        rank: { type: integer }
+        entry_id: { type: integer }
+        title: { type: string }
+        author_name: { type: string }
+        score: { type: number, description: 'Σ (weight/100 × avg criterion score)' }
+        pct_of_max: { type: number }
+        votes: { type: integer }
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      security: []
+      responses: { '200': { description: OK } }
+  /auth/register:
+    post:
+      summary: Register with email + password
+      security: []
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/Credentials' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '409': { description: Email already registered }
+  /auth/login:
+    post:
+      summary: Log in
+      security: []
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/Credentials' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '401': { description: Invalid credentials }
+  /users/me:
+    get: { summary: Current user profile, responses: { '200': { description: OK } } }
+    patch: { summary: Update profile (name, bio, avatar_url, links, is_public), responses: { '200': { description: OK } } }
+  /users/me/export:
+    get: { summary: GDPR data export for the current user, responses: { '200': { description: JSON dump } } }
+  /users/{id}:
+    get:
+      summary: Public profile
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+  /users/{id}/activity:
+    get:
+      summary: Created/joined contests and awards
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: OK }, '403': { description: Private profile } }
+  /notifications:
+    get: { summary: Latest in-app notifications, responses: { '200': { description: OK } } }
+  /notifications/read:
+    post: { summary: 'Mark notifications read (body: {ids?: number[]})', responses: { '200': { description: OK } } }
+  /contests:
+    get:
+      summary: List & search contests
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Full-text over title/description/tags/organizer }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, popular] } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses: { '200': { description: OK } }
+    post:
+      summary: Create a contest (criteria weights must sum to 100)
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContestInput' } } }
+      responses:
+        '201': { description: Created }
+        '400': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /contests/recommended:
+    get: { summary: Contests matching tags the user follows or entered, responses: { '200': { description: OK } } }
+  /contests/{id}:
+    get:
+      summary: Contest details (private contests need invite_code or membership)
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: invite_code, in: query, schema: { type: string } }
+      responses: { '200': { description: OK }, '403': { description: Private } }
+    patch: { summary: Update contest (organizer only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/join:
+    post: { summary: Join as participant, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK }, '409': { description: Contest full } } }
+  /contests/{id}/invite:
+    post: { summary: 'Invite a user by email (organizer only)', parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/follow:
+    post: { summary: Follow contest, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+    delete: { summary: Unfollow contest, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/entries:
+    get:
+      summary: List visible entries (authors hidden while blind voting is active)
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: OK } }
+    post:
+      summary: Submit an entry (JSON for text/code, multipart with `file` for image/video/PDF)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                tags: { type: string }
+                kind: { type: string, enum: [text, code, link] }
+                body: { type: string }
+                file: { type: string, format: binary }
+      responses: { '201': { description: Created }, '400': { description: Closed or invalid } }
+  /contests/{id}/leaderboard:
+    get:
+      summary: Ranked leaderboard; `?format=csv` downloads CSV
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leaderboard: { type: array, items: { $ref: '#/components/schemas/LeaderboardRow' } }
+            text/csv: {}
+  /contests/{id}/history:
+    get: { summary: Score history points for charts, security: [], parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/stream:
+    get:
+      summary: Server-Sent Events stream; emits `leaderboard` events after each vote
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: text/event-stream } }
+  /contests/{id}/finish:
+    post: { summary: 'End contest: declare winners, award badges/prizes, fire webhooks (organizer only)', parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/webhooks:
+    get: { summary: List webhooks (organizer only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+    post:
+      summary: Register a webhook (events contest.finished, winner.declared, abuse.reported; HMAC-SHA256 signature in X-Signature-256)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '201': { description: Created } }
+  /entries/{id}:
+    get: { summary: Entry details, security: [], parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /entries/{id}/vote:
+    post:
+      summary: Cast or update a ballot (one per voter per entry; self-votes rejected)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/VoteInput' } } }
+      responses:
+        '200': { description: Vote saved; returns updated weighted score }
+        '400': { description: Voting closed or invalid scores }
+        '403': { description: Own entry }
+  /entries/{id}/comments:
+    get: { summary: List comments, security: [], parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+    post: { summary: Add a comment (profanity-filtered; notifies entry owner), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '201': { description: Created } } }
+  /reports:
+    post:
+      summary: Report abusive content (entry/comment/user/contest); lands in the admin moderation queue
+      responses: { '201': { description: Created } }
+  /admin/reports:
+    get: { summary: Moderation queue (admin only), responses: { '200': { description: OK } } }
+  /admin/reports/{id}/resolve:
+    post: { summary: 'Resolve a report with action: dismiss | remove | ban', parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /admin/entries/{id}/status:
+    post: { summary: Set entry status (visible/hidden/removed), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /admin/users:
+    get: { summary: List users (admin only), responses: { '200': { description: OK } } }
+  /admin/users/{id}/ban:
+    post: { summary: Ban or unban a user, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /admin/audit-log:
+    get: { summary: Immutable audit trail of platform actions, responses: { '200': { description: OK } } }
