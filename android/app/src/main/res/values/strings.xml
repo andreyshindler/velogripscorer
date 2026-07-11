@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VeloGrip RFID</string>
+    <string name="settings_title">Settings</string>
+
+    <string name="status_idle">Bridge: off</string>
+    <string name="status_line">Bridge: %1$s · Reader: %2$s · WiFi: %3$s</string>
+    <string name="counters_idle">Uploaded 0 · pending 0</string>
+    <string name="counters_line">Uploaded %1$d · pending %2$d</string>
+    <string name="on">on</string>
+    <string name="off">off</string>
+    <string name="connected">connected</string>
+    <string name="disconnected">disconnected</string>
+    <string name="start_bridge">Start bridge</string>
+    <string name="stop_bridge">Stop bridge</string>
+    <string name="live_log">Live log</string>
+    <string name="saved">Saved</string>
+    <string name="save">Save</string>
+
+    <string name="section_server">Scoring server</string>
+    <string name="label_server_url">Server URL</string>
+    <string name="hint_server_url">https://scores.example.com</string>
+    <string name="label_reader_token">Reader device token</string>
+    <string name="hint_reader_token">vgr_… (from the contest Timing tab)</string>
+    <string name="test_server">Test server connection</string>
+    <string name="test_ok">Server OK:</string>
+    <string name="test_failed">Failed:</string>
+
+    <string name="section_reader">RFID reader</string>
+    <string name="label_protocol">Protocol</string>
+    <string name="label_reader_host">Reader IP address</string>
+    <string name="hint_reader_host">192.168.1.190</string>
+    <string name="label_reader_port">Reader TCP port</string>
+    <string name="label_on_connect_hex">On-connect command (hex, optional)</string>
+    <string name="label_poll_hex">Poll command (hex, optional)</string>
+    <string name="hint_hex">e.g. A0 04 01 89 01 D1</string>
+    <string name="label_poll_interval">Poll interval (ms)</string>
+    <string name="label_dedupe">Duplicate window per tag (ms)</string>
+
+    <string name="section_wifi">Reader WiFi (optional)</string>
+    <string name="wifi_help">On Android 10+ the app can join the RFID router\'s WiFi itself and keep mobile data for uploads. Leave empty to use the phone\'s current network.</string>
+    <string name="label_wifi_ssid">WiFi network name (SSID)</string>
+    <string name="hint_wifi_ssid">RFID-ROUTER</string>
+    <string name="label_wifi_pass">WiFi password</string>
+
+    <string name="notif_channel">Bridge status</string>
+    <string name="notif_starting">Starting…</string>
+    <string name="notif_status">Uploaded %1$d reads · %2$d pending</string>
+
+    <string name="log_welcome">Configure the server and reader, then start the bridge.</string>
+    <string name="log_started">Bridge started</string>
+    <string name="log_stopped">Bridge stopped</string>
+    <string name="log_wifi_manual">Join WiFi \"%1$s\" manually in system settings (Android 9 or older)</string>
+    <string name="log_wifi_connected">Reader WiFi connected: %1$s</string>
+    <string name="log_wifi_lost">Reader WiFi lost, retrying…</string>
+    <string name="log_wifi_unavailable">Reader WiFi unavailable — check SSID/password</string>
+    <string name="log_reader_connected">Reader connected: %1$s</string>
+    <string name="log_reader_error">Reader error: %1$s</string>
+    <string name="log_upload_error">Upload error (will retry): %1$s</string>
+    <string name="log_demo">Demo mode: emitting fake tag reads</string>
+
+    <string-array name="protocols">
+        <item>ASCII lines (EPC per line)</item>
+        <item>UHF binary frames (0xA0…)</item>
+        <item>Demo mode (fake reads)</item>
+    </string-array>
+</resources>

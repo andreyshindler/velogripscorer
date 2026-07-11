@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VeloGrip RFID</string>
+    <string name="settings_title">הגדרות</string>
+
+    <string name="status_idle">גשר: כבוי</string>
+    <string name="status_line">גשר: %1$s · קורא: %2$s · WiFi: %3$s</string>
+    <string name="counters_idle">הועלו 0 · ממתינות 0</string>
+    <string name="counters_line">הועלו %1$d · ממתינות %2$d</string>
+    <string name="on">פעיל</string>
+    <string name="off">כבוי</string>
+    <string name="connected">מחובר</string>
+    <string name="disconnected">מנותק</string>
+    <string name="start_bridge">הפעל גשר</string>
+    <string name="stop_bridge">עצור גשר</string>
+    <string name="live_log">יומן חי</string>
+    <string name="saved">נשמר</string>
+    <string name="save">שמור</string>
+
+    <string name="section_server">שרת הניקוד</string>
+    <string name="label_server_url">כתובת השרת</string>
+    <string name="hint_server_url">https://scores.example.com</string>
+    <string name="label_reader_token">אסימון מכשיר הקורא</string>
+    <string name="hint_reader_token">vgr_… (מלשונית מדידת זמנים)</string>
+    <string name="test_server">בדוק חיבור לשרת</string>
+    <string name="test_ok">השרת תקין:</string>
+    <string name="test_failed">נכשל:</string>
+
+    <string name="section_reader">קורא RFID</string>
+    <string name="label_protocol">פרוטוקול</string>
+    <string name="label_reader_host">כתובת IP של הקורא</string>
+    <string name="hint_reader_host">192.168.1.190</string>
+    <string name="label_reader_port">פורט TCP של הקורא</string>
+    <string name="label_on_connect_hex">פקודת התחברות (hex, רשות)</string>
+    <string name="label_poll_hex">פקודת תשאול (hex, רשות)</string>
+    <string name="hint_hex">למשל A0 04 01 89 01 D1</string>
+    <string name="label_poll_interval">מרווח תשאול (מ״ש)</string>
+    <string name="label_dedupe">חלון כפילויות לתג (מ״ש)</string>
+
+    <string name="section_wifi">WiFi של הקורא (רשות)</string>
+    <string name="wifi_help">באנדרואיד 10 ומעלה האפליקציה יכולה להתחבר בעצמה ל-WiFi של נתב ה-RFID ולשמור על חבילת הנתונים להעלאות. השאר ריק לשימוש ברשת הנוכחית.</string>
+    <string name="label_wifi_ssid">שם רשת WiFi (SSID)</string>
+    <string name="hint_wifi_ssid">RFID-ROUTER</string>
+    <string name="label_wifi_pass">סיסמת WiFi</string>
+
+    <string name="notif_channel">מצב הגשר</string>
+    <string name="notif_starting">מתחיל…</string>
+    <string name="notif_status">הועלו %1$d קריאות · %2$d ממתינות</string>
+
+    <string name="log_welcome">הגדר את השרת והקורא, ואז הפעל את הגשר.</string>
+    <string name="log_started">הגשר הופעל</string>
+    <string name="log_stopped">הגשר נעצר</string>
+    <string name="log_wifi_manual">התחבר ידנית לרשת \"%1$s\" בהגדרות המערכת (אנדרואיד 9 ומטה)</string>
+    <string name="log_wifi_connected">חובר ל-WiFi של הקורא: %1$s</string>
+    <string name="log_wifi_lost">חיבור ה-WiFi של הקורא אבד, מנסה שוב…</string>
+    <string name="log_wifi_unavailable">רשת הקורא אינה זמינה — בדוק SSID/סיסמה</string>
+    <string name="log_reader_connected">הקורא מחובר: %1$s</string>
+    <string name="log_reader_error">שגיאת קורא: %1$s</string>
+    <string name="log_upload_error">שגיאת העלאה (ינוסה שוב): %1$s</string>
+    <string name="log_demo">מצב הדגמה: נוצרות קריאות תגים מדומות</string>
+
+    <string-array name="protocols">
+        <item>שורות ASCII (EPC בכל שורה)</item>
+        <item>מסגרות UHF בינאריות (0xA0…)</item>
+        <item>מצב הדגמה (קריאות מדומות)</item>
+    </string-array>
+</resources>

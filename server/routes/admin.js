@@ -7,7 +7,9 @@ const { notify } = require('../events');
 
 const router = express.Router();
 
-router.use(requireAdmin);
+// Scope the admin guard to /admin/* only — this router is mounted at /api and
+// unmatched /api requests flow through it on their way to later routers.
+router.use('/admin', requireAdmin);
 
 // Moderation queue (req 3.9)
 router.get('/admin/reports', (req, res) => {

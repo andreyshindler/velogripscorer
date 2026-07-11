@@ -9,6 +9,7 @@ const users = require('./routes/users');
 const contests = require('./routes/contests');
 const entries = require('./routes/entries');
 const admin = require('./routes/admin');
+const readers = require('./routes/readers');
 
 const app = express();
 app.disable('x-powered-by');
@@ -30,6 +31,7 @@ app.use('/api', users.router);
 app.use('/api', contests.router);
 app.use('/api', entries.router);
 app.use('/api', admin.router);
+app.use('/api', readers.router);
 
 app.get('/openapi.yaml', (_req, res) => res.sendFile(path.join(__dirname, '..', 'openapi.yaml')));
 app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads')));

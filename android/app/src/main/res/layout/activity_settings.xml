@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView style="@style/SettingsHeader" android:text="@string/section_server" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_server_url" />
+        <EditText
+            android:id="@+id/serverUrl"
+            style="@style/SettingsField"
+            android:hint="@string/hint_server_url"
+            android:inputType="textUri" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_reader_token" />
+        <EditText
+            android:id="@+id/readerToken"
+            style="@style/SettingsField"
+            android:hint="@string/hint_reader_token"
+            android:inputType="textVisiblePassword" />
+
+        <Button
+            android:id="@+id/testServer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/test_server" />
+
+        <TextView style="@style/SettingsHeader" android:text="@string/section_reader" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_protocol" />
+        <Spinner
+            android:id="@+id/protocol"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_reader_host" />
+        <EditText
+            android:id="@+id/readerHost"
+            style="@style/SettingsField"
+            android:hint="@string/hint_reader_host"
+            android:inputType="textUri" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_reader_port" />
+        <EditText
+            android:id="@+id/readerPort"
+            style="@style/SettingsField"
+            android:inputType="number" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_on_connect_hex" />
+        <EditText
+            android:id="@+id/onConnectHex"
+            style="@style/SettingsField"
+            android:hint="@string/hint_hex"
+            android:inputType="textVisiblePassword" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_poll_hex" />
+        <EditText
+            android:id="@+id/pollHex"
+            style="@style/SettingsField"
+            android:hint="@string/hint_hex"
+            android:inputType="textVisiblePassword" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_poll_interval" />
+        <EditText
+            android:id="@+id/pollInterval"
+            style="@style/SettingsField"
+            android:inputType="number" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_dedupe" />
+        <EditText
+            android:id="@+id/dedupeWindow"
+            style="@style/SettingsField"
+            android:inputType="number" />
+
+        <TextView style="@style/SettingsHeader" android:text="@string/section_wifi" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/wifi_help"
+            android:textSize="12sp" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_wifi_ssid" />
+        <EditText
+            android:id="@+id/wifiSsid"
+            style="@style/SettingsField"
+            android:hint="@string/hint_wifi_ssid"
+            android:inputType="text" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_wifi_pass" />
+        <EditText
+            android:id="@+id/wifiPass"
+            style="@style/SettingsField"
+            android:inputType="textPassword" />
+
+        <Button
+            android:id="@+id/save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/save" />
+    </LinearLayout>
+</ScrollView>

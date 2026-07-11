@@ -392,6 +392,7 @@ function viewCreate() {
 async function viewContest(id, tab) {
   const c = await api(`/contests/${id}`);
   const tabs = ['details', 'entries', 'vote', 'leaderboard', 'comments'];
+  if (c.is_organizer) tabs.push('timing');
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
@@ -441,6 +442,7 @@ async function viewContest(id, tab) {
   else if (tab === 'vote') renderEntries(box, c, true);
   else if (tab === 'leaderboard') renderLeaderboard(box, c);
   else if (tab === 'comments') renderContestComments(box, c);
+  else if (tab === 'timing') renderTiming(box, c);
 }
 
 function renderDetails(box, c) {
@@ -769,6 +771,154 @@ async function drawHistoryChart(c) {
   const legend = [...byEntry.values()].map((s, i) =>
     `<span style="color:${colors[i % colors.length]};font-weight:700;font-size:0.8rem">— ${esc(s.title)}</span>`).join(' ');
   boxEl.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('score_history')}">${lines}</svg><div>${legend}</div>`;
+}
+
+// ---------- timing tab: RFID readers, live reads, tag assignment ----------
+
+async function renderTiming(box, c) {
+  const [{ readers }, { tags }] = await Promise.all([
+    api(`/contests/${c.id}/readers`),
+    api(`/contests/${c.id}/tags`),
+  ]);
+  box.innerHTML = `
+    <p class="muted">${t('timing_help')}</p>
+    <div class="detail-grid">
+      <div class="card">
+        <h3 style="margin-top:0">${t('readers')}</h3>
+        <div id="readers-list">
+          ${readers.map((r) => `
+            <div class="comment" data-reader="${r.id}">
+              <div class="who">📡 ${esc(r.name)} ${r.location ? `<span class="pill">${esc(r.location)}</span>` : ''}
+                <span class="muted" style="font-weight:400">· ${r.read_count} ${t('reads')} · ${t('last_seen')}: ${r.last_seen ? fmtDate(r.last_seen) : t('never')}</span>
+                <button class="ghost reader-del" data-id="${r.id}" aria-label="${t('delete')}" style="margin-inline-start:auto">🗑</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <code style="font-size:0.75rem;overflow-wrap:anywhere">${esc(r.token)}</code>
+                <button class="btn small secondary copy-token" data-token="${esc(r.token)}">${t('copy')}</button>
+              </div>
+            </div>`).join('') || `<p class="muted">—</p>`}
+        </div>
+        <form id="reader-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <input name="name" placeholder="${t('reader_name')}" required style="flex:1;min-width:130px">
+          <input name="location" placeholder="${t('reader_location')}" style="flex:1;min-width:130px">
+          <button class="btn small">+ ${t('add_reader')}</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">${t('tag_assignments')}</h3>
+        <form id="tag-form" style="display:flex;gap:6px;flex-wrap:wrap">
+          <input name="epc" placeholder="${t('epc')}" required pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
+          <input name="bib" placeholder="${t('bib')}" style="width:70px">
+          <input name="participant" placeholder="${t('participant')}" required style="flex:2;min-width:110px">
+          <button class="btn small">${t('assign')}</button>
+        </form>
+        <div id="tags-list" class="mt" style="max-height:220px;overflow:auto">
+          ${tags.map((a) => `
+            <div class="comment" style="display:flex;gap:8px;align-items:center">
+              <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
+              <code style="font-size:0.7rem;overflow-wrap:anywhere">${esc(a.epc)}</code>
+              <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}" style="margin-inline-start:auto">🗑</button>
+            </div>`).join('') || `<p class="muted">—</p>`}
+        </div>
+      </div>
+    </div>
+    <div class="card mt">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0">${t('live_reads')} <span class="live-indicator">● ${t('live')}</span></h3>
+        <a class="btn small secondary" href="/api/contests/${c.id}/reads?format=csv" id="reads-csv">⬇ ${t('export_csv')}</a>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="board"><thead><tr>
+          <th>${t('last_read')}</th><th>${t('epc')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('reader_col')}</th><th>RSSI</th>
+        </tr></thead><tbody id="reads-body"></tbody></table>
+      </div>
+      <h3>${t('passings')}</h3>
+      <div style="overflow-x:auto">
+        <table class="board"><thead><tr>
+          <th>${t('epc')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('passes')}</th><th>${t('first_read')}</th><th>${t('last_read')}</th><th>${t('elapsed')}</th>
+        </tr></thead><tbody id="passings-body"></tbody></table>
+      </div>
+    </div>`;
+
+  // CSV link needs the auth token — fetch and download via blob instead.
+  document.getElementById('reads-csv').onclick = async (e) => {
+    e.preventDefault();
+    const res = await fetch(`/api/contests/${c.id}/reads?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `reads-${c.id}.csv`;
+    a.click();
+  };
+
+  document.getElementById('reader-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/contests/${c.id}/readers`, { method: 'POST', body: { name: e.target.name.value, location: e.target.location.value } });
+      viewContest(c.id, 'timing');
+    } catch (err) { toast(err.message, true); }
+  };
+  box.querySelectorAll('.reader-del').forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm(t('delete') + '?')) return;
+      await api(`/contests/${c.id}/readers/${btn.dataset.id}`, { method: 'DELETE' });
+      viewContest(c.id, 'timing');
+    };
+  });
+  box.querySelectorAll('.copy-token').forEach((btn) => {
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(btn.dataset.token); toast(t('copied')); }
+      catch { prompt(t('copy'), btn.dataset.token); }
+    };
+  });
+  document.getElementById('tag-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
+        epc: e.target.epc.value, bib: e.target.bib.value, participant: e.target.participant.value,
+      }});
+      viewContest(c.id, 'timing');
+    } catch (err) { toast(err.message, true); }
+  };
+  box.querySelectorAll('.tag-del').forEach((btn) => {
+    btn.onclick = async () => {
+      await api(`/contests/${c.id}/tags/${btn.dataset.epc}`, { method: 'DELETE' });
+      viewContest(c.id, 'timing');
+    };
+  });
+
+  const readRow = (r) => `
+    <tr><td>${fmtDate(r.read_at)}</td><td><code style="font-size:0.75rem">${esc(r.epc)}</code></td>
+    <td>${esc(r.bib || '')}</td><td>${r.participant ? esc(r.participant) : `<span class="muted">${t('unassigned')}</span>`}</td>
+    <td>${esc(r.reader_name || r.reader?.name || '')}</td><td>${r.rssi ?? ''}</td></tr>`;
+
+  const refreshPassings = async () => {
+    const { passings } = await api(`/contests/${c.id}/passings`);
+    const body = document.getElementById('passings-body');
+    if (!body) return;
+    body.innerHTML = passings.map((p) => `
+      <tr><td><code style="font-size:0.75rem">${esc(p.epc)}</code></td><td>${esc(p.bib || '')}</td>
+      <td>${p.participant ? esc(p.participant) : `<span class="muted">${t('unassigned')}</span>`}</td>
+      <td>${p.passes}</td><td>${fmtDate(p.first_read)}</td><td>${fmtDate(p.last_read)}</td>
+      <td>${Math.floor(p.elapsed_seconds / 60)}:${String(p.elapsed_seconds % 60).padStart(2, '0')}</td></tr>`).join('')
+      || `<tr><td colspan="7" class="muted">${t('no_reads')}</td></tr>`;
+  };
+
+  const { reads } = await api(`/contests/${c.id}/reads?limit=100`);
+  const tbody = document.getElementById('reads-body');
+  tbody.innerHTML = reads.map(readRow).join('') || `<tr><td colspan="6" class="muted">${t('no_reads')}</td></tr>`;
+  refreshPassings();
+
+  closeSse();
+  state.sse = new EventSource(`/api/contests/${c.id}/stream`);
+  state.sse.addEventListener('tag_reads', (ev) => {
+    const payload = JSON.parse(ev.data);
+    const rows = payload.reads.map((r) => readRow({ ...r, reader_name: payload.reader.name })).join('');
+    if (reads.length === 0 && tbody.children.length === 1 && tbody.textContent.includes(t('no_reads'))) tbody.innerHTML = '';
+    tbody.insertAdjacentHTML('afterbegin', rows);
+    while (tbody.children.length > 100) tbody.removeChild(tbody.lastChild);
+    refreshPassings();
+  });
 }
 
 // ---------- contest comments tab (aggregates entry comments) ----------

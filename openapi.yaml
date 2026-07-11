@@ -263,3 +263,80 @@ paths:
     post: { summary: Ban or unban a user, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
   /admin/audit-log:
     get: { summary: Immutable audit trail of platform actions, responses: { '200': { description: OK } } }
+  /contests/{id}/readers:
+    get: { summary: List RFID readers with device tokens (organizer only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+    post:
+      summary: Register an RFID reader; returns a device token for the Android bridge app
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                location: { type: string, description: 'e.g. start line, finish line' }
+      responses: { '201': { description: 'Created: { id, name, token }' } }
+  /contests/{id}/readers/{rid}:
+    delete: { summary: Remove a reader (revokes its token), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: rid, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /ingest/reads:
+    post:
+      summary: Batch-ingest tag reads from a bridge device (max 500 per call)
+      security: []
+      parameters:
+        - { name: X-Reader-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reads]
+              properties:
+                reads:
+                  type: array
+                  items:
+                    type: object
+                    required: [epc]
+                    properties:
+                      epc: { type: string, description: 4-64 hex chars }
+                      rssi: { type: number }
+                      read_at: { type: string, format: date-time }
+      responses:
+        '200': { description: '{ accepted, rejected }' }
+        '401': { description: Unknown reader token }
+  /ingest/ping:
+    get:
+      summary: Verify a reader token; returns the reader and its contest
+      security: []
+      parameters: [{ name: X-Reader-Token, in: header, required: true, schema: { type: string } }]
+      responses: { '200': { description: OK }, '401': { description: Unknown token } }
+  /contests/{id}/reads:
+    get:
+      summary: Recent tag reads with participant mapping (organizer only); `?format=csv` exports
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 2000 } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+      responses: { '200': { description: OK } }
+  /contests/{id}/passings:
+    get: { summary: 'Per-EPC summary: passes, first/last read, elapsed seconds (organizer only)', parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/tags:
+    get: { summary: List EPC→participant assignments (organizer only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+    post:
+      summary: Assign an EPC to a participant (upsert)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [epc, participant]
+              properties:
+                epc: { type: string }
+                bib: { type: string }
+                participant: { type: string }
+                user_id: { type: integer, nullable: true }
+      responses: { '201': { description: OK } }
+  /contests/{id}/tags/{epc}:
+    delete: { summary: Remove an EPC assignment, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: epc, in: path, required: true, schema: { type: string } }], responses: { '200': { description: OK } } }

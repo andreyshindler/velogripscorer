@@ -175,6 +175,37 @@ CREATE TABLE IF NOT EXISTS score_history (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS readers (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  contest_id INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  token      TEXT NOT NULL UNIQUE,
+  location   TEXT NOT NULL DEFAULT '' , -- e.g. start line, finish line, checkpoint 1
+  last_seen  TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS tag_reads (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  reader_id   INTEGER NOT NULL REFERENCES readers(id) ON DELETE CASCADE,
+  contest_id  INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+  epc         TEXT NOT NULL,
+  rssi        REAL,
+  read_at     TEXT NOT NULL,           -- when the reader saw the tag (device clock)
+  received_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS tag_assignments (
+  contest_id  INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+  epc         TEXT NOT NULL,
+  bib         TEXT NOT NULL DEFAULT '',
+  participant TEXT NOT NULL,           -- display name of the rider/participant
+  user_id     INTEGER REFERENCES users(id),
+  PRIMARY KEY (contest_id, epc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);
 CREATE INDEX IF NOT EXISTS idx_entries_contest   ON entries(contest_id);
 CREATE INDEX IF NOT EXISTS idx_votes_entry       ON votes(entry_id);
 CREATE INDEX IF NOT EXISTS idx_comments_entry    ON comments(entry_id);

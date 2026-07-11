@@ -85,6 +85,45 @@ Score history is recorded per vote and rendered as an SVG line chart.
 - **DevOps**: GitHub Actions CI runs the test suite on Node 20 and 22 plus a boot smoke
   test. `npm run dev` gives auto-reload locally.
 
+## RFID race timing (Android bridge app)
+
+The platform doubles as an RFID timing system. The `android/` directory contains
+**VeloGrip RFID** — a zero-dependency Java Android app that connects to your RFID
+system's WiFi router, talks TCP to the RFID reader on that network, and streams tag
+reads to this server:
+
+```
+[RFID reader] --TCP over reader WiFi--> [VeloGrip RFID app] --HTTPS (cellular)--> [server]
+```
+
+### Setup
+
+1. **Web**: open your contest → **Timing** tab → *Add reader* → copy the device token.
+2. **App**: install `app-debug.apk` (built by the `Android APK` CI job — download the
+   `velogrip-rfid-debug-apk` artifact from the Actions tab, or run
+   `cd android && gradle assembleDebug` with the Android SDK installed).
+3. In the app settings enter:
+   - **Server URL** + **reader device token** (from step 1) — *Test server connection*
+     verifies both.
+   - **Reader IP/port** — the RFID reader's address on the router's LAN.
+   - **Protocol** — `ASCII lines` for readers/timing boxes that stream an EPC per line,
+     `UHF binary frames` for the common `0xA0`-framed UHF reader modules
+     (Chafon/Rodinbell/Impinj-module clones, real-time inventory `cmd 0x89/0x8B`,
+     RSSI = byte − 129), or `Demo mode` to test the whole pipeline with fake reads.
+   - Optional **on-connect / poll hex commands** (e.g. to kick the reader into
+     real-time inventory) and a per-tag duplicate window.
+   - Optional **reader WiFi SSID/password** — on Android 10+ the app joins the RFID
+     router's WiFi itself via `WifiNetworkSpecifier` *without* dropping mobile data:
+     the reader socket binds to the WiFi network while uploads ride the cellular
+     connection. On Android 9 or older, join the reader WiFi manually.
+4. **Start bridge**. Reads are queued in a local SQLite outbox (survives offline
+   stretches and restarts) and batch-uploaded every 3 s; the Timing tab shows them
+   live via SSE, maps EPCs to participants/bibs, computes passings (first/last read,
+   elapsed), and exports CSV.
+
+Reader management, ingestion (`POST /api/ingest/reads` with `X-Reader-Token`),
+tag assignment, and passings endpoints are documented in `openapi.yaml`.
+
 ## API
 
 Interactive spec in [`openapi.yaml`](openapi.yaml). Flavor:
