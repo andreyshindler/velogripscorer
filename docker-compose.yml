@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@velogripscorer.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    volumes:
+      - vgs_data:/data
+    expose:
+      - "3000"
+
+  # Reverse proxy with automatic HTTPS. Set DOMAIN in .env to your hostname
+  # (e.g. scores.example.com) for a Let's Encrypt certificate; leave it unset
+  # to serve plain HTTP on port 80 (fine for a first test by IP address).
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  vgs_data:
+  caddy_data:
+  caddy_config:

@@ -13,6 +13,9 @@ npm start            # http://localhost:3000
 npm test             # integration test suite (node:test + supertest)
 ```
 
+Deploying to a server? See **[DEPLOY.md](DEPLOY.md)** — Docker Compose with
+automatic HTTPS via Caddy, persistent SQLite volume, updates and backups.
+
 Default admin account is seeded on first boot: `admin@velogripscorer.local` /
 `change-me-please` — override with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 
