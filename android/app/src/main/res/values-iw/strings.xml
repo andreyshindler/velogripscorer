@@ -60,6 +60,7 @@
     <string name="log_demo">מצב הדגמה: נוצרות קריאות תגים מדומות</string>
 
     <string name="race_title">מרוץ</string>
+    <string name="add_wave">+ הוסף מקצה</string>
     <string name="download_startlist">⬇ רשימת זינוק</string>
     <string name="wave_name_hint">שם מקצה חדש (למשל wave1)</string>
     <string name="manual_bib_hint">הזנה ידנית: מספר חזה</string>

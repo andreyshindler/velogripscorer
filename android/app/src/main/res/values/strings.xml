@@ -60,6 +60,7 @@
     <string name="log_demo">Demo mode: emitting fake tag reads</string>
 
     <string name="race_title">Race</string>
+    <string name="add_wave">+ Add wave</string>
     <string name="download_startlist">⬇ Start list</string>
     <string name="wave_name_hint">New wave name (e.g. wave1)</string>
     <string name="manual_bib_hint">Manual entry: bib #</string>
