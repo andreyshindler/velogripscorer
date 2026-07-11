@@ -80,3 +80,21 @@ the volume, start again.
 - SQLite comfortably handles club/event-scale traffic. If you outgrow it,
   `server/db.js` is the single seam to swap for PostgreSQL.
 - Health probe for uptime monitors: `GET /api/health`.
+
+## Serving under a path prefix
+
+To host the app at `https://your-host/veloscorer` instead of the domain root
+(e.g. the VPS hostname already serves something else), set in `.env`:
+
+```
+BASE_PATH=/veloscorer
+```
+
+and rebuild (`docker compose up -d --build`). All pages, API routes and the
+Android sync endpoints then live under the prefix — set the app's *Server URL*
+to `https://your-host/veloscorer`. If an existing reverse proxy (nginx/Apache)
+already owns ports 80/443 on the VPS, remove the `caddy` service from
+`docker-compose.yml`, publish the app port instead (`ports: ["3000:3000"]` on
+the app service) and proxy `location /veloscorer/ { proxy_pass http://127.0.0.1:3000/veloscorer/; }`
+— keep the prefix in both places and enable proxy buffering off for
+`/veloscorer/api/contests/` SSE streams.

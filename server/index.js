@@ -48,6 +48,26 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: status === 400 ? err.message : 'internal server error' });
 });
 
+// Optional path-prefix hosting (e.g. BASE_PATH=/veloscorer behind a shared
+// reverse proxy). The whole app mounts under the prefix; the bare prefix
+// redirects to the trailing-slash form so the SPA's relative URLs resolve.
+const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, '');
+let rootApp = app;
+if (BASE_PATH) {
+  if (!BASE_PATH.startsWith('/')) throw new Error('BASE_PATH must start with /');
+  rootApp = express();
+  rootApp.disable('x-powered-by');
+  rootApp.set('trust proxy', true);
+  rootApp.use((req, res, next) => {
+    // exact bare prefix only — Express route matching would also swallow
+    // the trailing-slash form and loop
+    if (req.originalUrl.split('?')[0] === BASE_PATH) return res.redirect(301, BASE_PATH + '/');
+    next();
+  });
+  rootApp.use(BASE_PATH, app);
+  rootApp.get('/', (_req, res) => res.redirect(302, BASE_PATH + '/'));
+}
+
 // Seed an administrator account on first boot (configurable via env).
 function seedAdmin() {
   const email = (process.env.ADMIN_EMAIL || 'admin@velogripscorer.local').toLowerCase();
@@ -63,9 +83,10 @@ function seedAdmin() {
 function start(port = process.env.PORT || 3000) {
   seedAdmin();
   setInterval(contests.sweepEndedContests, 60_000).unref();
-  return app.listen(port, () => console.log(`velogripscorer listening on http://localhost:${port}`));
+  return rootApp.listen(port, () =>
+    console.log(`velogripscorer listening on http://localhost:${port}${BASE_PATH || ''}`));
 }
 
 if (require.main === module) start();
 
-module.exports = { app, start, seedAdmin };
+module.exports = { app: rootApp, start, seedAdmin };

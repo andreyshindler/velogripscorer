@@ -4,6 +4,10 @@
 
 // ---------- state & helpers ----------
 
+// Base path when hosted under a URL prefix (e.g. /veloscorer): derived from
+// this script's own URL so it works at any mount point.
+const BASE = new URL('.', document.currentScript.src).pathname.replace(/\/$/, '');
+
 const state = {
   token: localStorage.getItem('token') || null,
   user: JSON.parse(localStorage.getItem('user') || 'null'),
@@ -18,7 +22,7 @@ async function api(path, { method = 'GET', body, form } = {}) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (body) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`/api${path}`, { method, headers, body: form || (body ? JSON.stringify(body) : undefined) });
+  const res = await fetch(`${BASE}/api${path}`, { method, headers, body: form || (body ? JSON.stringify(body) : undefined) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || t('error_generic'));
   return data;
@@ -503,9 +507,9 @@ async function renderEntries(box, c, votingMode) {
 }
 
 function entryMediaHtml(e) {
-  if (e.kind === 'image' && e.file_url) return `<img class="thumb" src="${esc(e.file_url)}" alt="${esc(e.title)}">`;
-  if (e.kind === 'video' && e.file_url) return `<video controls preload="metadata" src="${esc(e.file_url)}"></video>`;
-  if (e.kind === 'pdf' && e.file_url) return `<a class="btn small secondary" href="${esc(e.file_url)}" target="_blank" rel="noopener">📄 PDF</a>`;
+  if (e.kind === 'image' && e.file_url) return `<img class="thumb" src="${BASE}${esc(e.file_url)}" alt="${esc(e.title)}">`;
+  if (e.kind === 'video' && e.file_url) return `<video controls preload="metadata" src="${BASE}${esc(e.file_url)}"></video>`;
+  if (e.kind === 'pdf' && e.file_url) return `<a class="btn small secondary" href="${BASE}${esc(e.file_url)}" target="_blank" rel="noopener">📄 PDF</a>`;
   if (e.kind === 'code') return `<pre><code>${esc(e.body.slice(0, 1200))}</code></pre>`;
   return e.body ? `<p style="white-space:pre-wrap">${esc(e.body.slice(0, 500))}${e.body.length > 500 ? '…' : ''}</p>` : '';
 }
@@ -696,7 +700,7 @@ async function renderLeaderboard(box, c) {
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <span class="live-indicator" id="live-indicator">● ${t('live')} — <span id="updated-ago">${t('updated_ago', { s: 0 })}</span></span>
-        <a class="btn small secondary" href="/api/contests/${c.id}/leaderboard?format=csv" download>⬇ ${t('export_csv')}</a>
+        <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/leaderboard?format=csv" download>⬇ ${t('export_csv')}</a>
       </div>
       <div style="overflow-x:auto">
         <table class="board" id="board">
@@ -746,7 +750,7 @@ async function renderLeaderboard(box, c) {
   }, 1000);
 
   closeSse();
-  state.sse = new EventSource(`/api/contests/${c.id}/stream`);
+  state.sse = new EventSource(`${BASE}/api/contests/${c.id}/stream`);
   state.sse.addEventListener('leaderboard', (ev) => {
     const payload = JSON.parse(ev.data);
     drawBoard(payload.leaderboard, data.awards);
@@ -896,7 +900,7 @@ async function renderTiming(box, c) {
     <div class="card mt">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <h3 style="margin:0">${t('live_reads')} <span class="live-indicator">● ${t('live')}</span></h3>
-        <a class="btn small secondary" href="/api/contests/${c.id}/reads?format=csv" id="reads-csv">⬇ ${t('export_csv')}</a>
+        <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/reads?format=csv" id="reads-csv">⬇ ${t('export_csv')}</a>
       </div>
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
@@ -914,7 +918,7 @@ async function renderTiming(box, c) {
   // CSV link needs the auth token — fetch and download via blob instead.
   $('#reads-csv').onclick = async (e) => {
     e.preventDefault();
-    const res = await fetch(`/api/contests/${c.id}/reads?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
+    const res = await fetch(`${BASE}/api/contests/${c.id}/reads?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
     const blob = await res.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1004,7 +1008,7 @@ async function renderTiming(box, c) {
   };
   $('#results-csv').onclick = async (e) => {
     e.preventDefault();
-    const res = await fetch(`/api/contests/${c.id}/race-results?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
+    const res = await fetch(`${BASE}/api/contests/${c.id}/race-results?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(await res.blob());
     a.download = `race-results-${c.id}.csv`;
@@ -1067,7 +1071,7 @@ async function renderTiming(box, c) {
   refreshPassings();
 
   closeSse();
-  state.sse = new EventSource(`/api/contests/${c.id}/stream`);
+  state.sse = new EventSource(`${BASE}/api/contests/${c.id}/stream`);
   state.sse.addEventListener('tag_reads', (ev) => {
     const payload = JSON.parse(ev.data);
     const rows = payload.reads.map((r) => readRow({ ...r, reader_name: payload.reader.name })).join('');
@@ -1114,7 +1118,7 @@ async function viewProfile(id) {
         ${u.reputation !== undefined ? `<span class="pill">⭐ ${u.reputation} rep</span>` : ''}
       </div>
       ${isMe ? `<button class="btn small secondary" id="edit-profile" style="margin-inline-start:auto">✏️</button>
-        <a class="btn small secondary" href="/api/users/me/export" download>${t('export_my_data')}</a>` : ''}
+        <button class="btn small secondary" id="export-data">${t('export_my_data')}</button>` : ''}
     </div>
     <div id="edit-box"></div>
     ${data.private ? '' : `
@@ -1131,6 +1135,14 @@ async function viewProfile(id) {
       </div>
     </div>`}`;
 
+  const exportBtn = document.getElementById('export-data');
+  if (exportBtn) exportBtn.onclick = async () => {
+    const res = await fetch(`${BASE}/api/users/me/export`, { headers: { Authorization: `Bearer ${state.token}` } });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = 'my-data.json';
+    a.click();
+  };
   const editBtn = document.getElementById('edit-profile');
   if (editBtn) editBtn.onclick = () => {
     document.getElementById('edit-box').innerHTML = `
