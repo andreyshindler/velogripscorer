@@ -311,6 +311,28 @@ paths:
       security: []
       parameters: [{ name: X-Reader-Token, in: header, required: true, schema: { type: string } }]
       responses: { '200': { description: OK }, '401': { description: Unknown token } }
+  /ingest/startlist:
+    get:
+      summary: Start-list download for the offline timing app (racers, waves, timing settings)
+      security: []
+      parameters: [{ name: X-Reader-Token, in: header, required: true, schema: { type: string } }]
+      responses: { '200': { description: OK }, '401': { description: Unknown token } }
+  /ingest/wave-start:
+    post:
+      summary: Gun-time upload from the offline timing app; waves matched by name (created if new), earlier server gun time kept unless force
+      security: []
+      parameters: [{ name: X-Reader-Token, in: header, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, started_at]
+              properties:
+                name: { type: string }
+                started_at: { type: string, format: date-time }
+                force: { type: boolean }
+      responses: { '200': { description: OK }, '401': { description: Unknown token } }
   /contests/{id}/reads:
     get:
       summary: Recent tag reads with participant mapping (organizer only); `?format=csv` exports

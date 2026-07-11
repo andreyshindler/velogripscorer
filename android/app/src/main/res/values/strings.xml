@@ -59,6 +59,28 @@
     <string name="log_upload_error">Upload error (will retry): %1$s</string>
     <string name="log_demo">Demo mode: emitting fake tag reads</string>
 
+    <string name="race_title">Race</string>
+    <string name="download_startlist">⬇ Start list</string>
+    <string name="wave_name_hint">New wave name (e.g. wave1)</string>
+    <string name="manual_bib_hint">Manual entry: bib #</string>
+    <string name="record_manual">⏱ Record</string>
+    <string name="standings">Live standings</string>
+    <string name="start_gun">▶ Start</string>
+    <string name="restart_gun">↺ Restart</string>
+    <string name="restart_gun_confirm">This wave already started. Restart and reset its gun time?</string>
+    <string name="not_started_wave">not started</string>
+    <string name="on_course">on course</string>
+    <string name="bib_n">Bib %1$s</string>
+    <string name="bib_col">Bib</string>
+    <string name="name_col">Name</string>
+    <string name="laps_col">Laps</string>
+    <string name="time_col">Time</string>
+    <string name="no_racers">No racers yet. Download the start list or record a manual bib entry.</string>
+    <string name="sync_needs_config">Set the server URL and reader token in Settings first.</string>
+    <string name="sync_done">Start list loaded: %1$d racers, %2$d waves.</string>
+    <string name="sync_failed">Start list download failed: %1$s</string>
+    <string name="log_wave_synced">Gun time uploaded for wave %1$s</string>
+
     <string name="scan_reader">Scan for reader(s)</string>
     <string name="scan_started">Scanning the WiFi subnet for the reader…</string>
     <string name="scan_found">Reader found at %1$s</string>

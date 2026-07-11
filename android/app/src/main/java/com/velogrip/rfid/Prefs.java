@@ -28,6 +28,17 @@ public final class Prefs {
     public String wifiSsid() { return sp.getString("wifiSsid", ""); }
     public String wifiPass() { return sp.getString("wifiPass", ""); }
     public int dedupeWindowMs() { return sp.getInt("dedupeWindowMs", 2000); }
+    public int suppressSecs() { return sp.getInt("suppressSecs", 10); }
+    public int lapGapSecs() { return sp.getInt("lapGapSecs", 30); }
+    public String contestTitle() { return sp.getString("contestTitle", ""); }
+
+    public void saveTimingSettings(int suppressSecs, int lapGapSecs, String contestTitle) {
+        sp.edit()
+                .putInt("suppressSecs", suppressSecs)
+                .putInt("lapGapSecs", lapGapSecs)
+                .putString("contestTitle", contestTitle)
+                .apply();
+    }
 
     public boolean isConfigured() {
         boolean serverOk = !serverUrl().isEmpty() && !readerToken().isEmpty();

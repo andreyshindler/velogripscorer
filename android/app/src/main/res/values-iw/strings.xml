@@ -59,6 +59,28 @@
     <string name="log_upload_error">שגיאת העלאה (ינוסה שוב): %1$s</string>
     <string name="log_demo">מצב הדגמה: נוצרות קריאות תגים מדומות</string>
 
+    <string name="race_title">מרוץ</string>
+    <string name="download_startlist">⬇ רשימת זינוק</string>
+    <string name="wave_name_hint">שם מקצה חדש (למשל wave1)</string>
+    <string name="manual_bib_hint">הזנה ידנית: מספר חזה</string>
+    <string name="record_manual">⏱ רשום</string>
+    <string name="standings">דירוג חי</string>
+    <string name="start_gun">▶ זנק</string>
+    <string name="restart_gun">↺ זנק מחדש</string>
+    <string name="restart_gun_confirm">המקצה כבר זונק. לזנק מחדש ולאפס את זמן הזינוק?</string>
+    <string name="not_started_wave">לא זונק</string>
+    <string name="on_course">במסלול</string>
+    <string name="bib_n">חזה %1$s</string>
+    <string name="bib_col">חזה</string>
+    <string name="name_col">שם</string>
+    <string name="laps_col">הקפות</string>
+    <string name="time_col">זמן</string>
+    <string name="no_racers">אין רוכבים עדיין. הורד רשימת זינוק או רשום מספר חזה ידנית.</string>
+    <string name="sync_needs_config">הגדר תחילה את כתובת השרת ואסימון הקורא בהגדרות.</string>
+    <string name="sync_done">רשימת הזינוק נטענה: %1$d רוכבים, %2$d מקצים.</string>
+    <string name="sync_failed">הורדת רשימת הזינוק נכשלה: %1$s</string>
+    <string name="log_wave_synced">זמן הזינוק הועלה עבור מקצה %1$s</string>
+
     <string name="scan_reader">סרוק לאיתור קורא</string>
     <string name="scan_started">סורק את רשת ה-WiFi לאיתור הקורא…</string>
     <string name="scan_found">נמצא קורא בכתובת %1$s</string>

@@ -16,7 +16,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 
-import com.velogrip.rfid.db.ReadQueue;
+import com.velogrip.rfid.db.RaceStore;
 import com.velogrip.rfid.net.Uploader;
 import com.velogrip.rfid.protocol.AsciiLineParser;
 import com.velogrip.rfid.protocol.LlrpEngine;
@@ -73,7 +73,7 @@ public class BridgeService extends Service {
     private final Map<String, Long> lastSeen = new HashMap<>();
 
     private Prefs prefs;
-    private ReadQueue queue;
+    private RaceStore store;
     private Thread readerThread;
     private Thread uploadThread;
     private ConnectivityManager.NetworkCallback wifiCallback;
@@ -84,7 +84,7 @@ public class BridgeService extends Service {
     public void onCreate() {
         super.onCreate();
         prefs = new Prefs(this);
-        queue = new ReadQueue(this);
+        store = new RaceStore(this);
     }
 
     @Override
@@ -306,7 +306,7 @@ public class BridgeService extends Service {
             Long prev = lastSeen.get(read.epc);
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
-            queue.add(read);
+            store.addPassing(read);
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
@@ -322,10 +322,17 @@ public class BridgeService extends Service {
         while (running.get()) {
             try {
                 Thread.sleep(UPLOAD_INTERVAL_MS);
-                List<ReadQueue.Row> batch = queue.peekBatch(BATCH_SIZE);
+                // gun times first: results on the web are wrong without them
+                for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
+                    if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) {
+                        store.markWaveSynced(wave.name);
+                        broadcastStatus(getString(R.string.log_wave_synced, wave.name));
+                    }
+                }
+                List<RaceStore.Passing> batch = store.pendingUpload(BATCH_SIZE);
                 if (batch.isEmpty()) continue;
                 if (uploader.upload(batch)) {
-                    queue.deleteUpTo(batch.get(batch.size() - 1).id);
+                    store.markUploaded(batch.get(batch.size() - 1).id);
                     uploadedTotal.addAndGet(batch.size());
                     broadcastStatus(null);
                     updateNotification();
@@ -346,7 +353,7 @@ public class BridgeService extends Service {
         intent.putExtra(EXTRA_RUNNING, running.get());
         intent.putExtra(EXTRA_READER_CONNECTED, readerConnected.get());
         intent.putExtra(EXTRA_WIFI_STATE, wifiState.get());
-        intent.putExtra(EXTRA_PENDING, queue.pendingCount());
+        intent.putExtra(EXTRA_PENDING, store.pendingCount());
         intent.putExtra(EXTRA_UPLOADED, uploadedTotal.get());
         if (log != null) intent.putExtra(EXTRA_LOG, log);
         return intent;
@@ -376,7 +383,7 @@ public class BridgeService extends Service {
     private void updateNotification() {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         nm.notify(NOTIFICATION_ID, buildNotification(
-                getString(R.string.notif_status, uploadedTotal.get(), queue.pendingCount())));
+                getString(R.string.notif_status, uploadedTotal.get(), store.pendingCount())));
     }
 
     private void closeSocket() {

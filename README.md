@@ -88,13 +88,24 @@ Score history is recorded per vote and rendered as an SVG line chart.
 ## RFID race timing (Android bridge app)
 
 The platform doubles as an RFID timing system. The `android/` directory contains
-**VeloGrip RFID** — a zero-dependency Java Android app that connects to your RFID
-system's WiFi router, talks TCP to the RFID reader on that network, and streams tag
-reads to this server:
+**VeloGrip RFID** — a zero-dependency Java Android app that is a **standalone timing
+computer**: it connects to the RFID system's WiFi router, talks TCP to the reader on
+that LAN, and runs the entire race locally — start list, gun times, live standings —
+with no internet required. The web platform is a sync target, not a dependency:
 
 ```
-[RFID reader] --TCP over reader WiFi--> [VeloGrip RFID app] --HTTPS (cellular)--> [server]
+                 [RFID reader] --LAN--> [router] --WiFi--> [VeloGrip RFID app]
+                                                                │  runs the race offline
+   start list  ⬇ download before the race    results ⬆ upload  │  (when connectivity exists)
+                          [VeloGripScorer web platform]
 ```
+
+The app's **Race** screen shows waves with local Start buttons and a live race clock,
+computes standings on-device (same suppression/lap/ranking rules as the server), and
+takes manual bib entries for failed chips. Every passing and gun time is stored in the
+phone's SQLite database and marked-as-uploaded once the server confirms it, so results
+survive dead zones and sync automatically whenever the bridge has connectivity —
+during the race over cellular, or hours later from home WiFi.
 
 ### Setup
 
@@ -144,9 +155,17 @@ The Timing tab is a full race console:
 - **Manual entry** — type a bib and hit Record for racers whose chip failed;
   unknown numeric bibs get a synthetic assignment automatically.
 
-Reader management, ingestion (`POST /api/ingest/reads` with `X-Reader-Token`),
-tag assignment, waves, race-results and passings endpoints are documented in
-`openapi.yaml`.
+### App ⇄ web sync (all authenticated by the reader device token)
+
+- `GET /api/ingest/startlist` — the app pulls racers (EPC/bib/name/category/wave),
+  waves, and timing settings before the race.
+- `POST /api/ingest/wave-start` — the app pushes locally recorded gun times; the
+  server keeps an earlier gun time unless `force` is set, and creates waves that
+  were born on the phone.
+- `POST /api/ingest/reads` — passings batch-upload from the phone's outbox.
+
+Reader management, ingestion, tag assignment, waves, race-results and passings
+endpoints are documented in `openapi.yaml`.
 
 ## API
 

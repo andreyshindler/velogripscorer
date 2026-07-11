@@ -79,6 +79,9 @@ public class MainActivity extends Activity {
         });
         settingsButton.setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
+        Button raceButton = findViewById(R.id.race);
+        raceButton.setOnClickListener(v ->
+                startActivity(new Intent(this, RaceActivity.class)));
 
         requestNeededPermissions();
         appendLog(getString(R.string.log_welcome));

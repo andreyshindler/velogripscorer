@@ -1,6 +1,6 @@
 package com.velogrip.rfid.net;
 
-import com.velogrip.rfid.db.ReadQueue;
+import com.velogrip.rfid.db.RaceStore;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,9 +17,12 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * Batch-uploads queued reads to the VeloGripScorer ingestion API over the
- * device's default network (cellular or internet-bearing WiFi), independent of
- * the reader-WiFi socket which is bound to the RFID router's network.
+ * Web sync for the standalone timing app: batch-uploads passings and gun times
+ * to the VeloGripScorer ingestion API and downloads the start list — all
+ * authenticated by the reader device token, over the device's default network
+ * (cellular or internet-bearing WiFi), independent of the reader-WiFi socket
+ * which is bound to the RFID router's network. The race itself never depends
+ * on any of these calls succeeding.
  */
 public final class Uploader {
 
@@ -34,20 +37,54 @@ public final class Uploader {
         this.iso.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
-    /** Uploads a batch; returns true when the server acknowledged it. */
-    public boolean upload(List<ReadQueue.Row> batch) throws IOException {
+    /** Uploads a batch of passings; returns true when the server acknowledged it. */
+    public boolean upload(List<RaceStore.Passing> batch) throws IOException {
         StringBuilder json = new StringBuilder("{\"reads\":[");
         for (int i = 0; i < batch.size(); i++) {
-            ReadQueue.Row row = batch.get(i);
+            RaceStore.Passing row = batch.get(i);
             if (i > 0) json.append(',');
             json.append("{\"epc\":\"").append(row.epc).append('"');
             if (row.rssi != null) json.append(",\"rssi\":").append(row.rssi);
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
         json.append("]}");
+        int code = post("/api/ingest/reads", json.toString());
+        if (code == 401) throw new IOException("server rejected reader token (401)");
+        return code >= 200 && code < 300;
+    }
 
-        HttpURLConnection conn = open("/api/ingest/reads", "POST");
-        byte[] body = json.toString().getBytes(StandardCharsets.UTF_8);
+    /** Uploads a locally recorded gun time; the server keeps an earlier one unless forced. */
+    public boolean uploadWaveStart(String name, long startedAtMs) throws IOException {
+        String json = "{\"name\":" + jsonString(name)
+                + ",\"started_at\":\"" + iso.format(new Date(startedAtMs)) + "\"}";
+        int code = post("/api/ingest/wave-start", json);
+        if (code == 401) throw new IOException("server rejected reader token (401)");
+        return code >= 200 && code < 300;
+    }
+
+    /** Downloads the start list JSON (racers, waves, timing settings). */
+    public String downloadStartList() throws IOException {
+        HttpURLConnection conn = open("/api/ingest/startlist", "GET");
+        int code = conn.getResponseCode();
+        String body = readBody(conn, code);
+        conn.disconnect();
+        if (code != 200) throw new IOException("HTTP " + code + ": " + body);
+        return body;
+    }
+
+    /** Verifies server + token; returns the server's description of this reader. */
+    public String ping() throws IOException {
+        HttpURLConnection conn = open("/api/ingest/ping", "GET");
+        int code = conn.getResponseCode();
+        String body = readBody(conn, code);
+        conn.disconnect();
+        if (code != 200) throw new IOException("HTTP " + code + ": " + body);
+        return body;
+    }
+
+    private int post(String path, String json) throws IOException {
+        HttpURLConnection conn = open(path, "POST");
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
         conn.setDoOutput(true);
         conn.setFixedLengthStreamingMode(body.length);
         OutputStream os = conn.getOutputStream();
@@ -58,28 +95,33 @@ public final class Uploader {
         }
         int code = conn.getResponseCode();
         conn.disconnect();
-        if (code == 401) throw new IOException("server rejected reader token (401)");
-        return code >= 200 && code < 300;
+        return code;
     }
 
-    /** Verifies server + token; returns the server's description of this reader. */
-    public String ping() throws IOException {
-        HttpURLConnection conn = open("/api/ingest/ping", "GET");
-        int code = conn.getResponseCode();
+    private static String readBody(HttpURLConnection conn, int code) throws IOException {
         InputStream is = code < 400 ? conn.getInputStream() : conn.getErrorStream();
         StringBuilder sb = new StringBuilder();
         if (is != null) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
             try {
                 String line;
-                while ((line = reader.readLine()) != null && sb.length() < 4096) sb.append(line);
+                while ((line = reader.readLine()) != null && sb.length() < 262144) sb.append(line);
             } finally {
                 reader.close();
             }
         }
-        conn.disconnect();
-        if (code != 200) throw new IOException("HTTP " + code + ": " + sb);
         return sb.toString();
+    }
+
+    private static String jsonString(String s) {
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"' || c == '\\') sb.append('\\').append(c);
+            else if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
+            else sb.append(c);
+        }
+        return sb.append('"').toString();
     }
 
     private HttpURLConnection open(String path, String method) throws IOException {

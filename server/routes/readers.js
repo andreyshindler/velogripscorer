@@ -98,6 +98,61 @@ router.post('/ingest/reads', (req, res) => {
   res.json({ ok: true, accepted: accepted.length, rejected: reads.length - accepted.length });
 });
 
+// Start-list download for the offline timing app (reader-token auth):
+// everything the phone needs to run the race with no connectivity.
+router.get('/ingest/startlist', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const contest = getContest(reader.contest_id);
+  const tags = db
+    .prepare(
+      `SELECT a.epc, a.bib, a.participant, a.category, w.name AS wave
+       FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
+       WHERE a.contest_id = ? ORDER BY a.bib, a.epc`
+    )
+    .all(contest.id);
+  const waves = db.prepare('SELECT name, started_at FROM waves WHERE contest_id = ? ORDER BY id').all(contest.id);
+  res.json({
+    contest: { id: contest.id, title: contest.title },
+    suppress_secs: contest.suppress_secs,
+    min_lap_gap_secs: contest.min_lap_gap_secs,
+    waves,
+    racers: tags,
+  });
+});
+
+// Gun-time upload from the offline timing app (reader-token auth). Waves are
+// matched by name and created if the start list originated on the phone.
+router.post('/ingest/wave-start', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const name = String(req.body?.name || '').trim();
+  const startedAt = req.body?.started_at;
+  if (!name) return res.status(400).json({ error: 'wave name required' });
+  if (!startedAt || Number.isNaN(Date.parse(startedAt))) {
+    return res.status(400).json({ error: 'valid started_at required' });
+  }
+  const at = new Date(startedAt).toISOString();
+  let wave = db.prepare('SELECT * FROM waves WHERE contest_id = ? AND name = ?').get(reader.contest_id, name);
+  if (!wave) {
+    const info = db.prepare('INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)').run(reader.contest_id, name, at);
+    wave = { id: info.lastInsertRowid, started_at: at };
+  } else if (!wave.started_at || req.body?.force) {
+    db.prepare('UPDATE waves SET started_at = ? WHERE id = ?').run(at, wave.id);
+  } else {
+    // already started on the server; keep the earlier gun time
+    return res.json({ ok: true, started_at: wave.started_at, kept_existing: true });
+  }
+  auditLog(null, 'wave.start_sync', 'contest', reader.contest_id, `${name} @ ${at} via reader ${reader.id}`);
+  sseBroadcast(reader.contest_id, 'wave_start', { wave_id: wave.id, name, started_at: at });
+  res.json({ ok: true, started_at: at });
+});
+
+function readerFromToken(req) {
+  const token = req.headers['x-reader-token'] || req.body?.token;
+  return token ? db.prepare('SELECT * FROM readers WHERE token = ?').get(String(token)) : null;
+}
+
 // Lightweight connectivity check for the app's "Test connection" button.
 router.get('/ingest/ping', (req, res) => {
   const token = req.headers['x-reader-token'];
