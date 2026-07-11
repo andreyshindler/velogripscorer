@@ -204,6 +204,14 @@ CREATE TABLE IF NOT EXISTS tag_assignments (
   PRIMARY KEY (contest_id, epc)
 );
 
+CREATE TABLE IF NOT EXISTS waves (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  contest_id INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  started_at TEXT,                     -- ISO with milliseconds; null until the gun goes off
+  UNIQUE (contest_id, name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);
 CREATE INDEX IF NOT EXISTS idx_entries_contest   ON entries(contest_id);
@@ -212,6 +220,20 @@ CREATE INDEX IF NOT EXISTS idx_comments_entry    ON comments(entry_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_usr ON notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_history_entry     ON score_history(entry_id);
 `);
+
+// Idempotent column migrations for databases created before these fields existed.
+for (const stmt of [
+  `ALTER TABLE tag_assignments ADD COLUMN wave_id INTEGER REFERENCES waves(id)`,
+  `ALTER TABLE tag_assignments ADD COLUMN category TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE contests ADD COLUMN suppress_secs INTEGER NOT NULL DEFAULT 10`,
+  `ALTER TABLE contests ADD COLUMN min_lap_gap_secs INTEGER NOT NULL DEFAULT 30`,
+]) {
+  try {
+    db.exec(stmt);
+  } catch (err) {
+    if (!/duplicate column/.test(String(err.message))) throw err;
+  }
+}
 
 function auditLog(userId, action, targetType, targetId, details) {
   db.prepare(

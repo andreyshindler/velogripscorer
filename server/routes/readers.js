@@ -164,7 +164,13 @@ router.get('/contests/:id/passings', requireAuth, (req, res) => {
 router.get('/contests/:id/tags', requireAuth, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
-  res.json({ tags: db.prepare('SELECT epc, bib, participant, user_id FROM tag_assignments WHERE contest_id = ? ORDER BY bib, epc').all(contest.id) });
+  res.json({
+    tags: db.prepare(
+      `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.wave_id, w.name AS wave_name
+       FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
+       WHERE a.contest_id = ? ORDER BY a.bib, a.epc`
+    ).all(contest.id),
+  });
 });
 
 router.post('/contests/:id/tags', requireAuth, (req, res) => {
@@ -174,10 +180,19 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
   const participant = String(req.body?.participant || '').trim();
   if (!EPC_RE.test(epc)) return res.status(400).json({ error: 'epc must be a 4-64 char hex string' });
   if (!participant) return res.status(400).json({ error: 'participant name required' });
+  let waveId = null;
+  if (req.body?.wave_id) {
+    const wave = db.prepare('SELECT id FROM waves WHERE id = ? AND contest_id = ?').get(req.body.wave_id, contest.id);
+    if (!wave) return res.status(400).json({ error: 'unknown wave for this contest' });
+    waveId = wave.id;
+  }
   db.prepare(
-    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id) VALUES (?,?,?,?,?)
-     ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant, user_id = excluded.user_id`
-  ).run(contest.id, epc, String(req.body?.bib || '').trim(), participant, req.body?.user_id ?? null);
+    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category)
+     VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
+       user_id = excluded.user_id, wave_id = excluded.wave_id, category = excluded.category`
+  ).run(contest.id, epc, String(req.body?.bib || '').trim(), participant, req.body?.user_id ?? null,
+    waveId, String(req.body?.category || '').trim());
   auditLog(req.user.id, 'tag.assign', 'contest', contest.id, `${epc} -> ${participant}`);
   res.status(201).json({ ok: true });
 });
@@ -187,6 +202,203 @@ router.delete('/contests/:id/tags/:epc', requireAuth, (req, res) => {
   if (!contest) return;
   db.prepare('DELETE FROM tag_assignments WHERE contest_id = ? AND epc = ?').run(contest.id, String(req.params.epc).toUpperCase());
   res.json({ ok: true });
+});
+
+// ---- Waves & race start (Webscorer-style: gun time per wave) ----
+
+router.get('/contests/:id/waves', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const waves = db
+    .prepare(
+      `SELECT w.*, (SELECT COUNT(*) FROM tag_assignments a WHERE a.wave_id = w.id) AS racer_count
+       FROM waves w WHERE w.contest_id = ? ORDER BY w.id`
+    )
+    .all(contest.id);
+  res.json({ waves, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
+});
+
+router.post('/contests/:id/waves', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'wave name required' });
+  try {
+    const info = db.prepare('INSERT INTO waves (contest_id, name) VALUES (?, ?)').run(contest.id, name);
+    auditLog(req.user.id, 'wave.create', 'contest', contest.id, name);
+    res.status(201).json({ id: info.lastInsertRowid, name, started_at: null });
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'wave name already exists' });
+    throw err;
+  }
+});
+
+// Start the wave: records the gun time (millisecond ISO). Re-starting is
+// rejected unless force=true, so a stray double-tap can't wipe race times.
+router.post('/contests/:id/waves/:wid/start', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const wave = db.prepare('SELECT * FROM waves WHERE id = ? AND contest_id = ?').get(req.params.wid, contest.id);
+  if (!wave) return res.status(404).json({ error: 'wave not found' });
+  if (wave.started_at && !req.body?.force) {
+    return res.status(409).json({ error: 'wave already started (pass force=true to restart)' });
+  }
+  const at = req.body?.at && !Number.isNaN(Date.parse(req.body.at))
+    ? new Date(req.body.at).toISOString()
+    : new Date().toISOString();
+  db.prepare('UPDATE waves SET started_at = ? WHERE id = ?').run(at, wave.id);
+  auditLog(req.user.id, 'wave.start', 'contest', contest.id, `${wave.name} @ ${at}`);
+  sseBroadcast(contest.id, 'wave_start', { wave_id: wave.id, name: wave.name, started_at: at });
+  res.json({ ok: true, started_at: at });
+});
+
+router.delete('/contests/:id/waves/:wid', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  db.prepare('UPDATE tag_assignments SET wave_id = NULL WHERE contest_id = ? AND wave_id = ?').run(contest.id, req.params.wid);
+  const info = db.prepare('DELETE FROM waves WHERE id = ? AND contest_id = ?').run(req.params.wid, contest.id);
+  if (!info.changes) return res.status(404).json({ error: 'wave not found' });
+  res.json({ ok: true });
+});
+
+router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const suppress = Number(req.body?.suppress_secs);
+  const lapGap = Number(req.body?.min_lap_gap_secs);
+  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ? WHERE id = ?').run(
+    Number.isFinite(suppress) && suppress >= 0 ? Math.round(suppress) : contest.suppress_secs,
+    Number.isFinite(lapGap) && lapGap >= 0 ? Math.round(lapGap) : contest.min_lap_gap_secs,
+    contest.id
+  );
+  res.json({ ok: true });
+});
+
+// ---- Race results: elapsed = first read after wave start + suppression ----
+//
+// For every assigned tag whose wave has started:
+//   - reads inside the suppression window (start .. start+suppress_secs) are
+//     ignored (racers crossing the start-line antenna at the gun);
+//   - the first valid read is the finish (single-crossing race) and each
+//     subsequent read spaced >= min_lap_gap_secs starts a new lap;
+//   - no valid reads => still on course (or DNS).
+router.get('/contests/:id/race-results', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+
+  const waves = new Map(db.prepare('SELECT * FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));
+  const assignments = db
+    .prepare('SELECT * FROM tag_assignments WHERE contest_id = ? ORDER BY bib, epc')
+    .all(contest.id)
+    .filter((a) => !req.query.category || a.category === req.query.category);
+  const allReads = db
+    .prepare('SELECT epc, read_at FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
+    .all(contest.id);
+  const readsByEpc = new Map();
+  for (const r of allReads) {
+    if (!readsByEpc.has(r.epc)) readsByEpc.set(r.epc, []);
+    readsByEpc.get(r.epc).push(Date.parse(r.read_at));
+  }
+
+  const suppressMs = contest.suppress_secs * 1000;
+  const lapGapMs = contest.min_lap_gap_secs * 1000;
+
+  const results = assignments.map((a) => {
+    const wave = a.wave_id ? waves.get(a.wave_id) : null;
+    const base = {
+      epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
+      wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
+    };
+    if (!wave || !wave.started_at) return { ...base, status: 'not_started', laps: 0 };
+    const startMs = Date.parse(wave.started_at);
+    const valid = (readsByEpc.get(a.epc) || []).filter((t) => t >= startMs + suppressMs);
+    if (!valid.length) return { ...base, status: 'on_course', laps: 0 };
+
+    const crossings = [];
+    for (const t of valid) {
+      if (!crossings.length || t - crossings[crossings.length - 1] >= lapGapMs) crossings.push(t);
+    }
+    const lastMs = crossings[crossings.length - 1];
+    return {
+      ...base,
+      status: 'finished',
+      laps: crossings.length,
+      first_crossing_at: new Date(crossings[0]).toISOString(),
+      last_crossing_at: new Date(lastMs).toISOString(),
+      elapsed_ms: lastMs - startMs,
+      elapsed: formatElapsed(lastMs - startMs),
+    };
+  });
+
+  // Fastest time first (Webscorer default); more laps beats fewer for lap races.
+  results.sort((x, y) => {
+    if (x.status !== 'finished' && y.status !== 'finished') return 0;
+    if (x.status !== 'finished') return 1;
+    if (y.status !== 'finished') return -1;
+    return y.laps - x.laps || x.elapsed_ms - y.elapsed_ms;
+  });
+  results.forEach((r, i) => { if (r.status === 'finished') r.rank = i + 1; });
+
+  if (req.query.format === 'csv') {
+    const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
+    const header = 'rank,bib,participant,category,wave,laps,elapsed,status';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`);
+    return res.send([header, ...results.map((r) =>
+      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', r.status].join(','))].join('\n') + '\n');
+  }
+  res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
+});
+
+function formatElapsed(ms) {
+  const tenths = Math.round(ms / 100);
+  const h = Math.floor(tenths / 36000);
+  const m = Math.floor((tenths % 36000) / 600);
+  const s = Math.floor((tenths % 600) / 10);
+  const t = tenths % 10;
+  return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}.${t}`;
+}
+
+// ---- Manual passing (tap-to-record fallback, by bib) ----
+
+router.post('/contests/:id/manual-read', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const bib = String(req.body?.bib || '').trim();
+  if (!bib) return res.status(400).json({ error: 'bib required' });
+
+  let assignment = db
+    .prepare('SELECT * FROM tag_assignments WHERE contest_id = ? AND bib = ?')
+    .get(contest.id, bib);
+  if (!assignment) {
+    if (!/^\d{1,10}$/.test(bib)) return res.status(400).json({ error: 'no tag assignment for that bib' });
+    // Synthesize an EPC for bib-only racers: decimal digits are valid hex.
+    const epc = 'AA' + bib.padStart(4, '0');
+    db.prepare(
+      `INSERT INTO tag_assignments (contest_id, epc, bib, participant) VALUES (?,?,?,?)
+       ON CONFLICT (contest_id, epc) DO NOTHING`
+    ).run(contest.id, epc, bib, `Bib ${bib}`);
+    assignment = db.prepare('SELECT * FROM tag_assignments WHERE contest_id = ? AND epc = ?').get(contest.id, epc);
+  }
+
+  let manual = db.prepare(`SELECT * FROM readers WHERE contest_id = ? AND name = 'Manual entry'`).get(contest.id);
+  if (!manual) {
+    const info = db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+      .run(contest.id, 'Manual entry', `vgr_${crypto.randomBytes(24).toString('hex')}`, 'manual');
+    manual = { id: info.lastInsertRowid, name: 'Manual entry', location: 'manual' };
+  }
+
+  const at = req.body?.at && !Number.isNaN(Date.parse(req.body.at))
+    ? new Date(req.body.at).toISOString()
+    : new Date().toISOString();
+  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, read_at) VALUES (?,?,?,?,?)')
+    .run(manual.id, contest.id, assignment.epc, null, at);
+  auditLog(req.user.id, 'read.manual', 'contest', contest.id, `bib ${bib} @ ${at}`);
+  sseBroadcast(contest.id, 'tag_reads', {
+    reader: { id: manual.id, name: manual.name, location: manual.location },
+    reads: [{ epc: assignment.epc, rssi: null, read_at: at, bib: assignment.bib, participant: assignment.participant }],
+  });
+  res.status(201).json({ ok: true, epc: assignment.epc, read_at: at });
 });
 
 module.exports = { router };

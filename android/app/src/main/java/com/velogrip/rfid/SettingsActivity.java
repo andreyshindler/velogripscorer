@@ -59,6 +59,39 @@ public class SettingsActivity extends Activity {
             finish();
         });
 
+        // Selecting LLRP defaults the port to the standard 5084 (like the
+        // "RFID-LLRP" option in commercial timing apps).
+        protocol.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view,
+                                       int position, long id) {
+                String port = readerPort.getText().toString().trim();
+                if (position == 1 && (port.isEmpty() || "6000".equals(port))) readerPort.setText("5084");
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+
+        Button scanReader = findViewById(R.id.scanReader);
+        scanReader.setOnClickListener(v -> {
+            scanReader.setEnabled(false);
+            Toast.makeText(this, R.string.scan_started, Toast.LENGTH_SHORT).show();
+            int port = intOf(text(readerPort), 5084);
+            new Thread(() -> {
+                String found = ReaderScanner.scan(this, text(readerHost), port);
+                runOnUiThread(() -> {
+                    scanReader.setEnabled(true);
+                    if (found != null) {
+                        readerHost.setText(found);
+                        Toast.makeText(this, getString(R.string.scan_found, found), Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(this, R.string.scan_not_found, Toast.LENGTH_LONG).show();
+                    }
+                });
+            }).start();
+        });
+
         Button testServer = findViewById(R.id.testServer);
         testServer.setOnClickListener(v -> {
             save(prefs);
@@ -104,14 +137,16 @@ public class SettingsActivity extends Activity {
     }
 
     private static int indexOfProtocol(String value) {
-        if (Prefs.PROTOCOL_UHF.equals(value)) return 1;
-        if (Prefs.PROTOCOL_DEMO.equals(value)) return 2;
+        if (Prefs.PROTOCOL_LLRP.equals(value)) return 1;
+        if (Prefs.PROTOCOL_UHF.equals(value)) return 2;
+        if (Prefs.PROTOCOL_DEMO.equals(value)) return 3;
         return 0;
     }
 
     private static String protocolValue(int index) {
-        if (index == 1) return Prefs.PROTOCOL_UHF;
-        if (index == 2) return Prefs.PROTOCOL_DEMO;
+        if (index == 1) return Prefs.PROTOCOL_LLRP;
+        if (index == 2) return Prefs.PROTOCOL_UHF;
+        if (index == 3) return Prefs.PROTOCOL_DEMO;
         return Prefs.PROTOCOL_ASCII;
     }
 }

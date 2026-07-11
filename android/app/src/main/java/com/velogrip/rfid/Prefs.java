@@ -8,6 +8,7 @@ public final class Prefs {
 
     public static final String PROTOCOL_ASCII = "ascii";
     public static final String PROTOCOL_UHF = "uhf";
+    public static final String PROTOCOL_LLRP = "llrp";
     public static final String PROTOCOL_DEMO = "demo";
 
     private final SharedPreferences sp;

@@ -59,8 +59,14 @@
     <string name="log_upload_error">שגיאת העלאה (ינוסה שוב): %1$s</string>
     <string name="log_demo">מצב הדגמה: נוצרות קריאות תגים מדומות</string>
 
+    <string name="scan_reader">סרוק לאיתור קורא</string>
+    <string name="scan_started">סורק את רשת ה-WiFi לאיתור הקורא…</string>
+    <string name="scan_found">נמצא קורא בכתובת %1$s</string>
+    <string name="scan_not_found">לא נמצא קורא. התחבר ל-WiFi של נתב ה-RFID ובדוק את הפורט.</string>
+
     <string-array name="protocols">
         <item>שורות ASCII (EPC בכל שורה)</item>
+        <item>RFID-LLRP (Impinj/Zebra, פורט 5084)</item>
         <item>מסגרות UHF בינאריות (0xA0…)</item>
         <item>מצב הדגמה (קריאות מדומות)</item>
     </string-array>

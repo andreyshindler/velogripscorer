@@ -62,6 +62,12 @@ const I18N = {
     passings: 'Passings summary', passes: 'passes', first_read: 'First read',
     last_read: 'Last read', elapsed: 'Elapsed', reader_col: 'Reader',
     timing_help: 'Register a reader, then enter its device token and this server address in the VeloGrip RFID Android app. Tag reads will stream here live.',
+    waves: 'Waves & race start', add_wave: 'Add wave', wave: 'Wave', start_wave: 'Start',
+    started_at: 'Started', not_started: 'Not started', race_clock: 'Race clock',
+    race_results: 'Race results', laps: 'Laps', elapsed_col: 'Time', status_col: 'Status',
+    status_finished_r: 'Finished', status_on_course: 'On course', status_not_started: 'Wave not started',
+    manual_entry: 'Manual entry (bib)', record: 'Record', suppress: 'Start suppression (s)',
+    lap_gap: 'Min lap gap (s)', save_settings: 'Save', restart_wave_confirm: 'Wave already started. Restart and reset its gun time?',
   },
   he: {
     dir: 'rtl',
@@ -123,6 +129,12 @@ const I18N = {
     passings: 'סיכום מעברים', passes: 'מעברים', first_read: 'קריאה ראשונה',
     last_read: 'קריאה אחרונה', elapsed: 'זמן שחלף', reader_col: 'קורא',
     timing_help: 'רשום קורא, ואז הזן את אסימון המכשיר ואת כתובת השרת באפליקציית VeloGrip RFID לאנדרואיד. קריאות התגים יוזרמו לכאן בזמן אמת.',
+    waves: 'מקצים וזינוק', add_wave: 'הוסף מקצה', wave: 'מקצה', start_wave: 'זנק',
+    started_at: 'זונק', not_started: 'לא זונק', race_clock: 'שעון מרוץ',
+    race_results: 'תוצאות המרוץ', laps: 'הקפות', elapsed_col: 'זמן', status_col: 'סטטוס',
+    status_finished_r: 'סיים', status_on_course: 'במסלול', status_not_started: 'המקצה לא זונק',
+    manual_entry: 'הזנה ידנית (מספר חזה)', record: 'רשום', suppress: 'השהיית זינוק (שנ׳)',
+    lap_gap: 'מרווח הקפה מזערי (שנ׳)', save_settings: 'שמור', restart_wave_confirm: 'המקצה כבר זונק. לזנק מחדש ולאפס את זמן הזינוק?',
   },
 };
 

@@ -46,6 +46,12 @@
             android:hint="@string/hint_reader_host"
             android:inputType="textUri" />
 
+        <Button
+            android:id="@+id/scanReader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/scan_reader" />
+
         <TextView style="@style/SettingsLabel" android:text="@string/label_reader_port" />
         <EditText
             android:id="@+id/readerPort"

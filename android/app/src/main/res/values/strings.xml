@@ -59,8 +59,14 @@
     <string name="log_upload_error">Upload error (will retry): %1$s</string>
     <string name="log_demo">Demo mode: emitting fake tag reads</string>
 
+    <string name="scan_reader">Scan for reader(s)</string>
+    <string name="scan_started">Scanning the WiFi subnet for the reader…</string>
+    <string name="scan_found">Reader found at %1$s</string>
+    <string name="scan_not_found">No reader found. Join the RFID router\'s WiFi and check the port.</string>
+
     <string-array name="protocols">
         <item>ASCII lines (EPC per line)</item>
+        <item>RFID-LLRP (Impinj/Zebra, port 5084)</item>
         <item>UHF binary frames (0xA0…)</item>
         <item>Demo mode (fake reads)</item>
     </string-array>

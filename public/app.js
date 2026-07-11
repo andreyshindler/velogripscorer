@@ -389,10 +389,15 @@ function viewCreate() {
 
 // ---------- contest page ----------
 
+let renderGeneration = 0;
+
 async function viewContest(id, tab) {
+  const generation = ++renderGeneration;
   const c = await api(`/contests/${id}`);
+  if (generation !== renderGeneration) return; // a newer render superseded this one
   const tabs = ['details', 'entries', 'vote', 'leaderboard', 'comments'];
   if (c.is_organizer) tabs.push('timing');
+  if (!tabs.includes(tab)) tab = 'details';
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
@@ -776,10 +781,15 @@ async function drawHistoryChart(c) {
 // ---------- timing tab: RFID readers, live reads, tag assignment ----------
 
 async function renderTiming(box, c) {
-  const [{ readers }, { tags }] = await Promise.all([
+  const generation = renderGeneration;
+  const [{ readers }, { tags }, wavesData] = await Promise.all([
     api(`/contests/${c.id}/readers`),
     api(`/contests/${c.id}/tags`),
+    api(`/contests/${c.id}/waves`),
   ]);
+  if (generation !== renderGeneration) return; // superseded while fetching
+  const waves = wavesData.waves;
+  const $ = (sel) => box.querySelector(sel);
   box.innerHTML = `
     <p class="muted">${t('timing_help')}</p>
     <div class="detail-grid">
@@ -810,18 +820,79 @@ async function renderTiming(box, c) {
           <input name="epc" placeholder="${t('epc')}" required pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
           <input name="bib" placeholder="${t('bib')}" style="width:70px">
           <input name="participant" placeholder="${t('participant')}" required style="flex:2;min-width:110px">
+          <input name="category" placeholder="${t('category')}" style="flex:1;min-width:80px">
+          <select name="wave_id" aria-label="${t('wave')}" style="flex:1;min-width:90px">
+            <option value="">${t('wave')} —</option>
+            ${waves.map((w) => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
+          </select>
           <button class="btn small">${t('assign')}</button>
         </form>
         <div id="tags-list" class="mt" style="max-height:220px;overflow:auto">
           ${tags.map((a) => `
             <div class="comment" style="display:flex;gap:8px;align-items:center">
               <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
+              ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
+              ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
               <code style="font-size:0.7rem;overflow-wrap:anywhere">${esc(a.epc)}</code>
               <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}" style="margin-inline-start:auto">🗑</button>
             </div>`).join('') || `<p class="muted">—</p>`}
         </div>
       </div>
     </div>
+
+    <div class="card mt">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0">${t('waves')}</h3>
+        <form id="timing-settings" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:0.85rem">
+          <label style="margin:0;font-weight:400">${t('suppress')}</label>
+          <input name="suppress" type="number" min="0" value="${wavesData.suppress_secs}" style="width:70px">
+          <label style="margin:0;font-weight:400">${t('lap_gap')}</label>
+          <input name="lapgap" type="number" min="0" value="${wavesData.min_lap_gap_secs}" style="width:70px">
+          <button class="btn small secondary">${t('save_settings')}</button>
+        </form>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="board"><thead><tr>
+          <th>${t('wave')}</th><th>${t('participant')}</th><th>${t('started_at')}</th><th>${t('race_clock')}</th><th></th>
+        </tr></thead><tbody id="waves-body">
+          ${waves.map((w) => `
+            <tr data-wave="${w.id}" data-started="${w.started_at || ''}">
+              <td><strong>${esc(w.name)}</strong></td>
+              <td>${w.racer_count}</td>
+              <td>${w.started_at ? fmtDate(w.started_at) : `<span class="muted">${t('not_started')}</span>`}</td>
+              <td class="wave-clock" style="font-weight:700;font-variant-numeric:tabular-nums">—</td>
+              <td style="display:flex;gap:6px">
+                <button class="btn small ${w.started_at ? 'secondary' : ''} wave-start" data-id="${w.id}" data-started="${w.started_at ? 1 : 0}">▶ ${t('start_wave')}</button>
+                <button class="ghost wave-del" data-id="${w.id}" aria-label="${t('delete')}">🗑</button>
+              </td>
+            </tr>`).join('')}
+        </tbody></table>
+      </div>
+      <form id="wave-form" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <input name="name" placeholder="${t('wave')}" required style="max-width:220px">
+        <button class="btn small">+ ${t('add_wave')}</button>
+      </form>
+    </div>
+
+    <div class="card mt">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0">${t('race_results')} <span class="live-indicator">● ${t('live')}</span></h3>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <form id="manual-form" style="display:flex;gap:6px">
+            <input name="bib" placeholder="${t('manual_entry')}" pattern="[0-9A-Za-z\\-]+" required style="width:160px">
+            <button class="btn small">⏱ ${t('record')}</button>
+          </form>
+          <a class="btn small secondary" href="#" id="results-csv">⬇ ${t('export_csv')}</a>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="board"><thead><tr>
+          <th>${t('rank')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
+          <th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('status_col')}</th>
+        </tr></thead><tbody id="results-body"></tbody></table>
+      </div>
+    </div>
+
     <div class="card mt">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <h3 style="margin:0">${t('live_reads')} <span class="live-indicator">● ${t('live')}</span></h3>
@@ -841,7 +912,7 @@ async function renderTiming(box, c) {
     </div>`;
 
   // CSV link needs the auth token — fetch and download via blob instead.
-  document.getElementById('reads-csv').onclick = async (e) => {
+  $('#reads-csv').onclick = async (e) => {
     e.preventDefault();
     const res = await fetch(`/api/contests/${c.id}/reads?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
     const blob = await res.blob();
@@ -851,7 +922,7 @@ async function renderTiming(box, c) {
     a.click();
   };
 
-  document.getElementById('reader-form').onsubmit = async (e) => {
+  $('#reader-form').onsubmit = async (e) => {
     e.preventDefault();
     try {
       await api(`/contests/${c.id}/readers`, { method: 'POST', body: { name: e.target.name.value, location: e.target.location.value } });
@@ -871,11 +942,12 @@ async function renderTiming(box, c) {
       catch { prompt(t('copy'), btn.dataset.token); }
     };
   });
-  document.getElementById('tag-form').onsubmit = async (e) => {
+  $('#tag-form').onsubmit = async (e) => {
     e.preventDefault();
     try {
       await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
         epc: e.target.epc.value, bib: e.target.bib.value, participant: e.target.participant.value,
+        category: e.target.category.value, wave_id: e.target.wave_id.value ? Number(e.target.wave_id.value) : null,
       }});
       viewContest(c.id, 'timing');
     } catch (err) { toast(err.message, true); }
@@ -887,6 +959,91 @@ async function renderTiming(box, c) {
     };
   });
 
+  // ---- waves & race start ----
+  $('#wave-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/contests/${c.id}/waves`, { method: 'POST', body: { name: e.target.name.value } });
+      viewContest(c.id, 'timing');
+    } catch (err) { toast(err.message, true); }
+  };
+  box.querySelectorAll('.wave-start').forEach((btn) => {
+    btn.onclick = async () => {
+      const restart = btn.dataset.started === '1';
+      if (restart && !confirm(t('restart_wave_confirm'))) return;
+      try {
+        await api(`/contests/${c.id}/waves/${btn.dataset.id}/start`, { method: 'POST', body: restart ? { force: true } : {} });
+        viewContest(c.id, 'timing');
+      } catch (err) { toast(err.message, true); }
+    };
+  });
+  box.querySelectorAll('.wave-del').forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm(t('delete') + '?')) return;
+      await api(`/contests/${c.id}/waves/${btn.dataset.id}`, { method: 'DELETE' });
+      viewContest(c.id, 'timing');
+    };
+  });
+  $('#timing-settings').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/contests/${c.id}/timing-settings`, { method: 'PATCH', body: {
+        suppress_secs: Number(e.target.suppress.value), min_lap_gap_secs: Number(e.target.lapgap.value),
+      }});
+      toast('✓');
+      refreshResults();
+    } catch (err) { toast(err.message, true); }
+  };
+  $('#manual-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/contests/${c.id}/manual-read`, { method: 'POST', body: { bib: e.target.bib.value } });
+      e.target.bib.value = '';
+      toast('⏱ ✓');
+    } catch (err) { toast(err.message, true); }
+  };
+  $('#results-csv').onclick = async (e) => {
+    e.preventDefault();
+    const res = await fetch(`/api/contests/${c.id}/race-results?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = `race-results-${c.id}.csv`;
+    a.click();
+  };
+
+  // per-wave race clocks tick every second
+  const clockTimer = setInterval(() => {
+    const rows = box.querySelectorAll('#waves-body tr');
+    if (!rows.length) return clearInterval(clockTimer);
+    rows.forEach((tr) => {
+      const started = tr.dataset.started;
+      if (!started) return;
+      const secs = Math.max(0, Math.floor((Date.now() - Date.parse(started)) / 1000));
+      const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+      tr.querySelector('.wave-clock').textContent =
+        `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    });
+  }, 1000);
+
+  const STATUS_LABEL = { finished: t('status_finished_r'), on_course: t('status_on_course'), not_started: t('status_not_started') };
+  async function refreshResults() {
+    const { results } = await api(`/contests/${c.id}/race-results`);
+    const body = $('#results-body');
+    if (!body) return;
+    body.innerHTML = results.map((r) => `
+      <tr class="${r.rank <= 3 ? 'top' + r.rank : ''}">
+        <td>${r.rank ? MEDALS[r.rank] || r.rank : ''}</td>
+        <td><strong>${esc(r.bib || '')}</strong></td>
+        <td>${esc(r.participant)}</td>
+        <td>${esc(r.category || '')}</td>
+        <td>${esc(r.wave || '')}</td>
+        <td>${r.laps}</td>
+        <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed || '—'}</strong></td>
+        <td class="${r.status === 'finished' ? '' : 'muted'}">${STATUS_LABEL[r.status] || r.status}</td>
+      </tr>`).join('') || `<tr><td colspan="8" class="muted">—</td></tr>`;
+  }
+  refreshResults();
+
   const readRow = (r) => `
     <tr><td>${fmtDate(r.read_at)}</td><td><code style="font-size:0.75rem">${esc(r.epc)}</code></td>
     <td>${esc(r.bib || '')}</td><td>${r.participant ? esc(r.participant) : `<span class="muted">${t('unassigned')}</span>`}</td>
@@ -894,7 +1051,7 @@ async function renderTiming(box, c) {
 
   const refreshPassings = async () => {
     const { passings } = await api(`/contests/${c.id}/passings`);
-    const body = document.getElementById('passings-body');
+    const body = $('#passings-body');
     if (!body) return;
     body.innerHTML = passings.map((p) => `
       <tr><td><code style="font-size:0.75rem">${esc(p.epc)}</code></td><td>${esc(p.bib || '')}</td>
@@ -905,7 +1062,7 @@ async function renderTiming(box, c) {
   };
 
   const { reads } = await api(`/contests/${c.id}/reads?limit=100`);
-  const tbody = document.getElementById('reads-body');
+  const tbody = $('#reads-body');
   tbody.innerHTML = reads.map(readRow).join('') || `<tr><td colspan="6" class="muted">${t('no_reads')}</td></tr>`;
   refreshPassings();
 
@@ -918,6 +1075,10 @@ async function renderTiming(box, c) {
     tbody.insertAdjacentHTML('afterbegin', rows);
     while (tbody.children.length > 100) tbody.removeChild(tbody.lastChild);
     refreshPassings();
+    refreshResults();
+  });
+  state.sse.addEventListener('wave_start', () => {
+    viewContest(c.id, 'timing');
   });
 }
 

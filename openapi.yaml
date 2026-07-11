@@ -340,3 +340,38 @@ paths:
       responses: { '201': { description: OK } }
   /contests/{id}/tags/{epc}:
     delete: { summary: Remove an EPC assignment, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: epc, in: path, required: true, schema: { type: string } }], responses: { '200': { description: OK } } }
+  /contests/{id}/waves:
+    get: { summary: List waves with racer counts and timing settings (organizer only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+    post:
+      summary: Create a start wave
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string } } } } } }
+      responses: { '201': { description: Created }, '409': { description: Duplicate wave name } }
+  /contests/{id}/waves/{wid}/start:
+    post:
+      summary: Record the wave's gun time (now, or `at`); re-start requires force=true
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: wid, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { at: { type: string, format: date-time }, force: { type: boolean } } } } } }
+      responses: { '200': { description: Started }, '409': { description: Already started } }
+  /contests/{id}/waves/{wid}:
+    delete: { summary: Delete a wave (unassigns its racers), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: wid, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK } } }
+  /contests/{id}/timing-settings:
+    patch:
+      summary: Set start suppression and minimum lap gap (seconds)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { suppress_secs: { type: integer }, min_lap_gap_secs: { type: integer } } } } } }
+      responses: { '200': { description: OK } }
+  /contests/{id}/race-results:
+    get:
+      summary: 'Ranked race results: elapsed = last crossing − gun time, laps via min lap gap, suppression window applied; `?format=csv` exports, `?category=` filters'
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+      responses: { '200': { description: OK } }
+  /contests/{id}/manual-read:
+    post:
+      summary: Record a manual passing by bib (tap-to-record fallback); synthesizes an assignment for unknown numeric bibs
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [bib], properties: { bib: { type: string }, at: { type: string, format: date-time } } } } } }
+      responses: { '201': { description: Recorded } }

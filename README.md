@@ -106,10 +106,15 @@ reads to this server:
    - **Server URL** + **reader device token** (from step 1) — *Test server connection*
      verifies both.
    - **Reader IP/port** — the RFID reader's address on the router's LAN.
-   - **Protocol** — `ASCII lines` for readers/timing boxes that stream an EPC per line,
-     `UHF binary frames` for the common `0xA0`-framed UHF reader modules
-     (Chafon/Rodinbell/Impinj-module clones, real-time inventory `cmd 0x89/0x8B`,
-     RSSI = byte − 129), or `Demo mode` to test the whole pipeline with fake reads.
+   - **Protocol** — `RFID-LLRP` for Impinj/Zebra-class readers (standard port 5084;
+     the app performs the full LLRP handshake — DELETE/ADD/ENABLE/START ROSpec —
+     puts the reader into continuous inventory, decodes EPC-96/EPCData + PeakRSSI
+     from RO_ACCESS_REPORTs and answers KEEPALIVEs), `ASCII lines` for timing boxes
+     that stream an EPC per line, `UHF binary frames` for the common `0xA0`-framed
+     UHF reader modules (real-time inventory `cmd 0x89/0x8B`, RSSI = byte − 129),
+     or `Demo mode` to test the whole pipeline with fake reads.
+   - **Scan for reader(s)** — join the RFID router's WiFi and the app sweeps the
+     /24 subnet probing the reader port to discover its IP automatically.
    - Optional **on-connect / poll hex commands** (e.g. to kick the reader into
      real-time inventory) and a per-tag duplicate window.
    - Optional **reader WiFi SSID/password** — on Android 10+ the app joins the RFID
@@ -121,8 +126,27 @@ reads to this server:
    live via SSE, maps EPCs to participants/bibs, computes passings (first/last read,
    elapsed), and exports CSV.
 
+### Race timing (waves, gun times, results)
+
+The Timing tab is a full race console:
+
+- **Waves & race start** — create waves (mass/wave starts), hit **Start** to record
+  the gun time (millisecond precision), watch the per-wave race clock. Restarting a
+  wave requires confirmation so a double-tap can't wipe times.
+- **Start suppression** — reads within N seconds of the gun (default 10) are ignored,
+  so racers crossing the start antenna don't get phantom finishes.
+- **Race results** — live-ranked table: elapsed = last valid crossing − gun time,
+  laps counted with a configurable minimum lap gap (default 30 s), fastest time first
+  (more laps ranks higher for lap races), statuses `finished` / `on course` /
+  `wave not started`, 0.1 s display precision, CSV export.
+- **Tag assignments** carry bib, participant, category, and wave; results can be
+  filtered by category (`?category=`).
+- **Manual entry** — type a bib and hit Record for racers whose chip failed;
+  unknown numeric bibs get a synthetic assignment automatically.
+
 Reader management, ingestion (`POST /api/ingest/reads` with `X-Reader-Token`),
-tag assignment, and passings endpoints are documented in `openapi.yaml`.
+tag assignment, waves, race-results and passings endpoints are documented in
+`openapi.yaml`.
 
 ## API
 

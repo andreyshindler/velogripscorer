@@ -19,6 +19,7 @@ import android.os.PowerManager;
 import com.velogrip.rfid.db.ReadQueue;
 import com.velogrip.rfid.net.Uploader;
 import com.velogrip.rfid.protocol.AsciiLineParser;
+import com.velogrip.rfid.protocol.LlrpEngine;
 import com.velogrip.rfid.protocol.TagParser;
 import com.velogrip.rfid.protocol.UhfFrameParser;
 
@@ -216,8 +217,11 @@ public class BridgeService extends Service {
     }
 
     private void connectAndRead() throws Exception {
-        TagParser parser = Prefs.PROTOCOL_UHF.equals(prefs.protocol())
-                ? new UhfFrameParser() : new AsciiLineParser();
+        boolean isLlrp = Prefs.PROTOCOL_LLRP.equals(prefs.protocol());
+        LlrpEngine llrp = isLlrp ? new LlrpEngine() : null;
+        TagParser parser = isLlrp ? llrp
+                : Prefs.PROTOCOL_UHF.equals(prefs.protocol()) ? new UhfFrameParser()
+                : new AsciiLineParser();
 
         Network network = readerNetwork.get();
         Socket socket = network != null
@@ -233,15 +237,21 @@ public class BridgeService extends Service {
         InputStream in = socket.getInputStream();
         OutputStream out = socket.getOutputStream();
 
-        byte[] onConnect = hexToBytes(prefs.onConnectHex());
-        if (onConnect.length > 0) {
-            out.write(onConnect);
+        if (isLlrp) {
+            // LLRP handshake: clear old ROSpecs, install ours, start inventory.
+            out.write(llrp.onConnect());
             out.flush();
+        } else {
+            byte[] onConnect = hexToBytes(prefs.onConnectHex());
+            if (onConnect.length > 0) {
+                out.write(onConnect);
+                out.flush();
+            }
         }
-        byte[] poll = hexToBytes(prefs.pollHex());
+        byte[] poll = isLlrp ? new byte[0] : hexToBytes(prefs.pollHex());
         long lastPoll = 0;
 
-        byte[] buf = new byte[2048];
+        byte[] buf = new byte[4096];
         while (running.get() && !socket.isClosed()) {
             if (poll.length > 0 && System.currentTimeMillis() - lastPoll >= prefs.pollIntervalMs()) {
                 out.write(poll);
@@ -255,7 +265,16 @@ public class BridgeService extends Service {
                 continue; // idle: loop to honor poll schedule and running flag
             }
             if (n < 0) throw new java.io.EOFException("reader closed the connection");
-            if (n > 0) handleReads(parser.feed(buf, n));
+            if (n > 0) {
+                handleReads(parser.feed(buf, n));
+                if (isLlrp) {
+                    byte[] pending = llrp.takeOutbound(); // keepalive ACKs
+                    if (pending.length > 0) {
+                        out.write(pending);
+                        out.flush();
+                    }
+                }
+            }
         }
     }
 
