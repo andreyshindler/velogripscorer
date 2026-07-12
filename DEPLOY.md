@@ -35,9 +35,22 @@ Set in `.env`:
 
 ## 3. Launch
 
+**Behind an existing nginx/Apache** (the default — the app publishes on
+127.0.0.1:3000 only):
+
 ```bash
 docker compose up -d --build
 docker compose logs -f app    # Ctrl-C to stop watching
+```
+
+Then add the `location` block from [`deploy/nginx-veloscorer.conf`](deploy/nginx-veloscorer.conf)
+to your existing HTTPS `server { ... }` and `sudo nginx -t && sudo systemctl reload nginx`.
+
+**Fresh VPS with no web server** — start the bundled Caddy proxy too
+(automatic HTTPS when `DOMAIN` is set in `.env`):
+
+```bash
+docker compose --profile caddy up -d --build
 ```
 
 Open `https://scores.yourdomain.com` (or `http://YOUR-VPS-IP`). Log in as
@@ -92,9 +105,6 @@ BASE_PATH=/veloscorer
 
 and rebuild (`docker compose up -d --build`). All pages, API routes and the
 Android sync endpoints then live under the prefix — set the app's *Server URL*
-to `https://your-host/veloscorer`. If an existing reverse proxy (nginx/Apache)
-already owns ports 80/443 on the VPS, remove the `caddy` service from
-`docker-compose.yml`, publish the app port instead (`ports: ["3000:3000"]` on
-the app service) and proxy `location /veloscorer/ { proxy_pass http://127.0.0.1:3000/veloscorer/; }`
-— keep the prefix in both places and enable proxy buffering off for
-`/veloscorer/api/contests/` SSE streams.
+to `https://your-host/veloscorer`. With an existing nginx, use the snippet in
+[`deploy/nginx-veloscorer.conf`](deploy/nginx-veloscorer.conf) — it keeps the
+prefix on both sides and disables buffering for the live SSE streams.

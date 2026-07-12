@@ -9,13 +9,17 @@ services:
       BASE_PATH: ${BASE_PATH:-}
     volumes:
       - vgs_data:/data
-    expose:
-      - "3000"
+    # Published on localhost only: your reverse proxy (nginx/Caddy/Apache)
+    # forwards to it; the app is never directly exposed to the internet.
+    ports:
+      - "127.0.0.1:3000:3000"
 
-  # Reverse proxy with automatic HTTPS. Set DOMAIN in .env to your hostname
-  # (e.g. scores.example.com) for a Let's Encrypt certificate; leave it unset
-  # to serve plain HTTP on port 80 (fine for a first test by IP address).
+  # OPTIONAL bundled reverse proxy with automatic HTTPS, for a VPS with no
+  # web server of its own. Start it with:  docker compose --profile caddy up -d
+  # Set DOMAIN in .env for a Let's Encrypt certificate; leave unset for HTTP.
+  # Skip this entirely if nginx/Apache already runs on the machine.
   caddy:
+    profiles: ["caddy"]
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
