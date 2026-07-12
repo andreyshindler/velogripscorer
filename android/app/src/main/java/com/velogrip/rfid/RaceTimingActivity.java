@@ -281,28 +281,77 @@ public class RaceTimingActivity extends Activity {
 
     private void raceControl() {
         final String[] options = {
-                getString(R.string.rc_restart), getString(R.string.rc_finish), getString(R.string.rc_live)};
+                getString(R.string.rc_restart), getString(R.string.rc_finish), getString(R.string.rc_live),
+                getString(R.string.rc_progress), getString(R.string.rc_settings)};
         new android.app.AlertDialog.Builder(this)
                 .setTitle(R.string.choose_race_control)
                 .setItems(options, (d, which) -> {
-                    if (which == 0) {          // Restart race (false start)
-                        long now = System.currentTimeMillis();
-                        store.startWave("", now, true);
-                        for (RaceStore.Wave w : store.waves())
-                            if (!w.name.isEmpty()) store.startWave(w.name, now, true);
-                        lastSplitMs = -1;
-                        Toast.makeText(this, R.string.race_restarted, Toast.LENGTH_LONG).show();
-                        render();
-                    } else if (which == 1) {   // Finish race (race completed)
-                        startActivity(new Intent(this, RaceArchiveActivity.class));
-                    } else {                   // Live results view/update
-                        boolean on = !prefs.liveResults();
-                        prefs.setLiveResults(on);
-                        Toast.makeText(this, getString(on ? R.string.live_results_on : R.string.live_results_off),
-                                Toast.LENGTH_LONG).show();
+                    switch (which) {
+                        case 0:   // Restart race (false start)
+                            restartRace();
+                            break;
+                        case 1:   // Finish race (race completed)
+                            startActivity(new Intent(this, RaceArchiveActivity.class));
+                            break;
+                        case 2:   // Live results view / update
+                            boolean on = !prefs.liveResults();
+                            prefs.setLiveResults(on);
+                            Toast.makeText(this, getString(on ? R.string.live_results_on : R.string.live_results_off),
+                                    Toast.LENGTH_LONG).show();
+                            break;
+                        case 3:   // Race progress (view)
+                            showRaceProgress();
+                            break;
+                        default:  // Settings
+                            startActivity(new Intent(this, SettingsActivity.class));
                     }
                 })
                 .setNegativeButton(R.string.close, null)
+                .show();
+    }
+
+    /** Restart (false start): keep or discard the already-recorded times, then re-gun. */
+    private void restartRace() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.restart_results_prompt)
+                .setItems(new String[]{getString(R.string.restart_save), getString(R.string.restart_discard)},
+                        (d, which) -> {
+                            if (which == 1) store.clearPassings(); // Discard
+                            long now = System.currentTimeMillis();
+                            store.startWave("", now, true);
+                            for (RaceStore.Wave w : store.waves())
+                                if (!w.name.isEmpty()) store.startWave(w.name, now, true);
+                            lastSplitMs = -1;
+                            page = 0;
+                            Toast.makeText(this, R.string.race_restarted, Toast.LENGTH_LONG).show();
+                            render();
+                        })
+                .setNegativeButton(R.string.cancel_popup, null)
+                .show();
+    }
+
+    private void showRaceProgress() {
+        List<RaceEngine.Result> results = RaceEngine.compute(
+                store.racers(), store.waves(), store.allPassings(),
+                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets());
+        int finished = 0, onCourse = 0, notStarted = 0, dns = 0;
+        long lastElapsed = 0;
+        for (RaceEngine.Result r : results) {
+            switch (r.status) {
+                case "finished": finished++; lastElapsed = Math.max(lastElapsed, r.elapsedMs); break;
+                case "on_course": onCourse++; break;
+                case "not_started": notStarted++; break;
+                default: dns++;
+            }
+        }
+        int noBib = store.passingsForEpc(NO_BIB).size();
+        String body = getString(R.string.race_progress_body,
+                store.racerCount(), finished, onCourse, notStarted, dns, noBib,
+                RaceEngine.formatElapsed(lastElapsed, prefs.timingDecimals()));
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.rc_progress)
+                .setMessage(body)
+                .setPositiveButton(android.R.string.ok, null)
                 .show();
     }
 

@@ -150,6 +150,11 @@ public final class RaceStore extends SQLiteOpenHelper {
         getWritableDatabase().execSQL("DELETE FROM passings WHERE id = ?", new Object[]{id});
     }
 
+    /** Clears every recorded passing (Restart race -> Discard). */
+    public void clearPassings() {
+        getWritableDatabase().execSQL("DELETE FROM passings");
+    }
+
     public void markUploaded(long maxIdInclusive) {
         getWritableDatabase().execSQL("UPDATE passings SET uploaded = 1 WHERE id <= ? AND uploaded = 0",
                 new Object[]{maxIdInclusive});

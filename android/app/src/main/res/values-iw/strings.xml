@@ -116,7 +116,14 @@
     <string name="rc_restart">התחל מחדש (זינוק שגוי)</string>
     <string name="rc_finish">סיים מרוץ (הושלם)</string>
     <string name="rc_live">תוצאות חיות (צפייה / עדכון)</string>
+    <string name="rc_progress">התקדמות המרוץ (צפייה)</string>
+    <string name="rc_settings">הגדרות (צפייה / עדכון)</string>
+    <string name="race_progress_body">רוכבים: %1$d\n\nסיימו: %2$d\nעל המסלול: %3$d\nלא התחילו: %4$d\nDNS/DNF/DSQ: %5$d\nלא משויכים (ללא מספר): %6$d\n\nזמן המוביל: %7$s</string>
     <string name="race_restarted">המרוץ הותחל מחדש — השעון אופס.</string>
+    <string name="restart_results_prompt">מה ברצונך לעשות עם התוצאות שכבר נרשמו למרוץ זה?</string>
+    <string name="restart_save">שמור</string>
+    <string name="restart_discard">מחק</string>
+    <string name="cancel_popup">ביטול</string>
     <string name="live_results_on">תוצאות חיות פעילות — הדירוג יועלה במהלך המרוץ.</string>
     <string name="live_results_off">תוצאות חיות כבויות.</string>
     <string name="close">סגור</string>

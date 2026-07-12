@@ -116,7 +116,14 @@
     <string name="rc_restart">Restart race (false start)</string>
     <string name="rc_finish">Finish race (race completed)</string>
     <string name="rc_live">Live results (view / update)</string>
+    <string name="rc_progress">Race progress (view)</string>
+    <string name="rc_settings">Settings (view / update)</string>
+    <string name="race_progress_body">Racers: %1$d\n\nFinished: %2$d\nOn course: %3$d\nNot started: %4$d\nDNS/DNF/DSQ: %5$d\nUnassigned (No Bib): %6$d\n\nLeader time: %7$s</string>
     <string name="race_restarted">Race restarted — clock reset.</string>
+    <string name="restart_results_prompt">What do you want to do with the already recorded results for this race?</string>
+    <string name="restart_save">Save</string>
+    <string name="restart_discard">Discard</string>
+    <string name="cancel_popup">Cancel popup</string>
     <string name="live_results_on">Live results ON — standings upload as the race runs.</string>
     <string name="live_results_off">Live results OFF.</string>
     <string name="close">Close</string>
