@@ -64,6 +64,15 @@
     <string name="lap_setup_hint">הזן פרטי מרוץ</string>
     <string name="no_distance">ללא מרחק</string>
 
+    <string name="distance_setup_title">הגדרת מרחקים</string>
+    <string name="col_distance">מרחק</string>
+    <string name="col_laps">הקפות</string>
+    <string name="distances_hint">%1$d מרחקים | הקש על מרחק לקביעת מספר ההקפות</string>
+    <string name="select_lap_count">בחירת מספר הקפות</string>
+    <string name="time_limited">מוגבל בזמן</string>
+    <string name="lap_1">הקפה אחת</string>
+    <string name="laps_n">%1$d הקפות</string>
+
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
     <string name="connect_reader">▶ חיבור קורא</string>

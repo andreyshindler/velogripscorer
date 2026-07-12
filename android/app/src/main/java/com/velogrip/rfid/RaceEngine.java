@@ -45,6 +45,18 @@ public final class RaceEngine {
     public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
                                        List<RaceStore.Passing> passings,
                                        int suppressSecs, int minLapGapSecs, boolean recordLaps) {
+        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps, null);
+    }
+
+    /**
+     * lapTargets maps distance -> laps to finish (default 1 per distance);
+     * null means the legacy unlimited mode where any crossing finishes and
+     * every further crossing counts as another lap.
+     */
+    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
+                                       List<RaceStore.Passing> passings,
+                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
+                                       Map<String, Integer> lapTargets) {
         Map<String, Long> gunByWave = new HashMap<>();
         for (RaceStore.Wave w : waves) {
             if (w.startedAtMs != null) gunByWave.put(w.name, w.startedAtMs);
@@ -84,20 +96,32 @@ public final class RaceEngine {
                 List<Long> reads = readsByEpc.get(member.epc);
                 if (reads != null) raw.addAll(reads);
             }
+            int target;
+            if (!recordLaps) target = 1;
+            else if (lapTargets == null) target = Integer.MAX_VALUE; // unlimited
+            else {
+                Integer t = lapTargets.get(racer.distance);
+                target = Math.max(1, t == null ? 1 : t);
+            }
             List<Long> crossings = new ArrayList<>();
             if (!raw.isEmpty()) {
                 Collections.sort(raw);
                 for (long at : raw) {
                     if (at < gun + suppressMs) continue;
-                    if (!recordLaps && !crossings.isEmpty()) break; // finish line only
+                    if (crossings.size() >= target) break; // race done for this racer
                     if (crossings.isEmpty() || at - crossings.get(crossings.size() - 1) >= lapGapMs) {
                         crossings.add(at);
                     }
                 }
             }
+            boolean unlimited = target == Integer.MAX_VALUE;
             if (crossings.isEmpty()) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, "on_course", 0, 0));
+            } else if (!unlimited && crossings.size() < target) {
+                // laps completed so far, still on course to the lap target
+                results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
+                        racer.distance, "on_course", crossings.size(), 0));
             } else {
                 long last = crossings.get(crossings.size() - 1);
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
@@ -110,7 +134,7 @@ public final class RaceEngine {
             public int compare(Result a, Result b) {
                 boolean fa = "finished".equals(a.status), fb = "finished".equals(b.status);
                 if (fa != fb) return fa ? -1 : 1;
-                if (!fa) return 0;
+                if (!fa) return b.laps - a.laps; // on-course: most laps done first
                 if (a.laps != b.laps) return b.laps - a.laps;
                 return Long.compare(a.elapsedMs, b.elapsedMs);
             }

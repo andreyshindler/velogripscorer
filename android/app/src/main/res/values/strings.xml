@@ -64,6 +64,15 @@
     <string name="lap_setup_hint">Enter race details</string>
     <string name="no_distance">No distance</string>
 
+    <string name="distance_setup_title">Distance Setup</string>
+    <string name="col_distance">Distance</string>
+    <string name="col_laps">Laps</string>
+    <string name="distances_hint">%1$d distances | Tap a distance to set its laps</string>
+    <string name="select_lap_count">Select Lap Count</string>
+    <string name="time_limited">Time-limited</string>
+    <string name="lap_1">1 lap</string>
+    <string name="laps_n">%1$d laps</string>
+
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>
     <string name="connect_reader">▶ Connect reader</string>

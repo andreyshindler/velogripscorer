@@ -29,7 +29,7 @@ public class LapSetupActivity extends Activity {
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(android.view.View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v ->
-                startActivity(new Intent(this, RaceActivity.class)));
+                startActivity(new Intent(this, DistanceSetupActivity.class)));
 
         Switch multi = findViewById(R.id.swMultiDistance);
         multi.setChecked(prefs.multiDistance(hasMultipleDistances()));

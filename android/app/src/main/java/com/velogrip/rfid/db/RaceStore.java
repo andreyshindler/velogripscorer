@@ -59,7 +59,7 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 2);
+        super(ctx, "race.db", null, 3);
     }
 
     @Override
@@ -70,6 +70,7 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE waves (name TEXT PRIMARY KEY, started_at INTEGER, synced INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
                 " rssi REAL, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
+        db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE INDEX idx_passings_epc ON passings(epc, read_at)");
         db.execSQL("CREATE INDEX idx_passings_uploaded ON passings(uploaded, id)");
     }
@@ -78,6 +79,9 @@ public final class RaceStore extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE racers ADD COLUMN distance TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 3) {
+            db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
         }
     }
 
@@ -126,6 +130,37 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM passings");
         db.execSQL("DELETE FROM waves");
         db.execSQL("DELETE FROM racers");
+        db.execSQL("DELETE FROM distances");
+    }
+
+    // ---- lap targets per distance ("" = whole race when no distances) ----
+
+    public int lapsFor(String distance) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT laps FROM distances WHERE name = ?", new String[]{distance});
+        try {
+            return c.moveToNext() ? Math.max(1, c.getInt(0)) : 1;
+        } finally {
+            c.close();
+        }
+    }
+
+    public java.util.Map<String, Integer> lapTargets() {
+        java.util.Map<String, Integer> out = new java.util.HashMap<>();
+        Cursor c = getReadableDatabase().rawQuery("SELECT name, laps FROM distances", null);
+        try {
+            while (c.moveToNext()) out.put(c.getString(0), Math.max(1, c.getInt(1)));
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
+    public void setLaps(String distance, int laps) {
+        ContentValues values = new ContentValues();
+        values.put("name", distance);
+        values.put("laps", Math.max(1, laps));
+        getWritableDatabase().insertWithOnConflict("distances", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public List<Passing> allPassings() {
