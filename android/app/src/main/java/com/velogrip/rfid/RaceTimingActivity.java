@@ -49,6 +49,13 @@ public class RaceTimingActivity extends Activity {
     };
     private GestureDetector swipe;
 
+    /** Reader reads arrive as passings written by BridgeService; refresh on each. */
+    private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, Intent i) {
+            render(); // a new crossing (or status change) landed in the store
+        }
+    };
+
     /** Horizontal swipe anywhere pages the bib grid, mirroring the ‹ › buttons. */
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
@@ -101,6 +108,20 @@ public class RaceTimingActivity extends Activity {
         int[] stubs = {R.id.aNormal, R.id.aKeypad, R.id.bPause, R.id.bDist, R.id.bCat};
         for (int id : stubs) findViewById(id).setOnClickListener(v ->
                 Toast.makeText(this, R.string.view_option_unsupported, Toast.LENGTH_SHORT).show());
+
+        startReader(); // connect to the RFID reader and capture crossings for this race
+    }
+
+    /** Start the foreground bridge that reads the RFID reader into the store. */
+    private void startReader() {
+        Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_START);
+        startForegroundService(i); // minSdk 26: always a foreground service
+    }
+
+    /** Stop capturing when the race is finished or reset. */
+    private void stopReader() {
+        Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_STOP);
+        startService(i);
     }
 
     private void togglePage(boolean showB) {
@@ -492,6 +513,7 @@ public class RaceTimingActivity extends Activity {
                     for (RaceEngine.Result r : noTime) {
                         if (!r.bib.isEmpty()) store.setRacerStatus(r.bib, "DNS"); // no time -> DNS
                     }
+                    stopReader(); // race over: stop capturing
                     startActivity(new Intent(this, ViewResultsActivity.class));
                 })
                 .setNegativeButton(R.string.cancel_popup, null)
@@ -509,6 +531,7 @@ public class RaceTimingActivity extends Activity {
                             store.clearPending();
                             store.clearGunTimes();                 // un-start every wave
                             prefs.setRaceFinalized(false);
+                            stopReader();                          // reset: stop capturing until re-started
                             Intent i = new Intent(this, RaceStartActivity.class);
                             i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                             startActivity(i);
@@ -562,12 +585,14 @@ public class RaceTimingActivity extends Activity {
         super.onResume();
         render();
         handler.post(ticker);
+        registerReceiver(bridgeReceiver, new android.content.IntentFilter(BridgeService.ACTION_STATUS));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         handler.removeCallbacks(ticker);
+        unregisterReceiver(bridgeReceiver);
     }
 
     @Override
