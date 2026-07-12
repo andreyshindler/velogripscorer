@@ -52,6 +52,11 @@ public final class Prefs {
     public boolean recordLaps() { return sp.getBoolean("recordLaps", true); }
     public void setRecordLaps(boolean on) { sp.edit().putBoolean("recordLaps", on).apply(); }
 
+    // Hardware setup: whether an RFID reader is used for this race. Off means
+    // manual-only timing (no reader connection shown in the race console).
+    public boolean chipTiming() { return sp.getBoolean("chipTiming", true); }
+    public void setChipTiming(boolean on) { sp.edit().putBoolean("chipTiming", on).apply(); }
+
     // Racer setup: which fields each racer requires, and the bib format.
     public boolean requireName() { return sp.getBoolean("reqName", true); }
     public boolean requireBib() { return sp.getBoolean("reqBib", true); }

@@ -89,6 +89,19 @@
     <string name="racer_field_unsupported">שדה זה אינו נתמך עדיין.</string>
     <string name="configure_racer_settings">הגדר הגדרות רוכב</string>
 
+    <string name="hardware_setup_title">הגדרת חומרה</string>
+    <string name="chip_timing">מדידת שבבים:</string>
+    <string name="chip_timing_system">מערכת מדידת שבבים:</string>
+    <string name="external_timer">שעון חיצוני:</string>
+    <string name="qr_scanner">סורק QR / ברקוד:</string>
+    <string name="time_trigger">טריגר זמן ומזניק מרוץ:</string>
+    <string name="hardware_option_unsupported">אפשרות חומרה זו אינה נתמכת עדיין.</string>
+    <string name="hardware_hint">בחר אפשרויות חומרה חיצונית</string>
+    <string name="proto_llrp">RFID-LLRP</string>
+    <string name="proto_ascii">שורות ASCII</string>
+    <string name="proto_uhf">UHF בינארי</string>
+    <string name="proto_demo">מצב הדגמה</string>
+
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
     <string name="connect_reader">▶ חיבור קורא</string>

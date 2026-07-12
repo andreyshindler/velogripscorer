@@ -99,6 +99,10 @@ public class RaceActivity extends Activity {
 
         readerStatus = findViewById(R.id.readerStatus);
         connectButton = findViewById(R.id.connectReader);
+        // Hardware Setup can turn chip timing off -> manual-only, no reader row
+        int readerVisibility = prefs.chipTiming() ? View.VISIBLE : View.GONE;
+        readerStatus.setVisibility(readerVisibility);
+        connectButton.setVisibility(readerVisibility);
         connectButton.setOnClickListener(v -> {
             if (!bridgeRunning && !prefs.isConfigured()) {
                 Toast.makeText(this, R.string.reader_needs_config, Toast.LENGTH_LONG).show();

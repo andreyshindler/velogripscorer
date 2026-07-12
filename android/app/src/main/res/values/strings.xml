@@ -89,6 +89,19 @@
     <string name="racer_field_unsupported">This field is not supported yet.</string>
     <string name="configure_racer_settings">Configure racer settings</string>
 
+    <string name="hardware_setup_title">Hardware Setup</string>
+    <string name="chip_timing">Chip timing:</string>
+    <string name="chip_timing_system">Chip timing system:</string>
+    <string name="external_timer">External timer:</string>
+    <string name="qr_scanner">QR code / Barcode scanner:</string>
+    <string name="time_trigger">Time trigger &amp; race starter:</string>
+    <string name="hardware_option_unsupported">This hardware option is not supported yet.</string>
+    <string name="hardware_hint">Select external hardware options</string>
+    <string name="proto_llrp">RFID-LLRP</string>
+    <string name="proto_ascii">ASCII lines</string>
+    <string name="proto_uhf">UHF binary</string>
+    <string name="proto_demo">Demo mode</string>
+
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>
     <string name="connect_reader">▶ Connect reader</string>
