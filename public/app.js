@@ -898,6 +898,12 @@ async function viewAdmin(section) {
 
 // ---------- boot ----------
 
+// Public results deep link: /race-results/<id> -> the spectator results view.
+const rr = location.pathname.match(/\/race-results\/(\d+)/);
+if (rr) {
+  history.replaceState(null, '', BASE + '/#/contest/' + rr[1] + '/results');
+}
+
 setLang(LANG);
 renderChrome();
 route();

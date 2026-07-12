@@ -167,7 +167,7 @@ public class DownloadRacesActivity extends Activity {
     }
 
     private void pairAndDownload(JSONObject race, String email, boolean clearFirst) {
-        prefs.savePairing(race.optString("app_token"), race.optString("title"), email);
+        prefs.savePairing(race.optString("app_token"), race.optString("title"), email, race.optInt("id"));
         new Thread(() -> {
             String message;
             boolean ok = false;

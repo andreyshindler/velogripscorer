@@ -93,6 +93,23 @@ public final class Prefs {
     public boolean liveResults() { return sp.getBoolean("liveResults", false); }
     public void setLiveResults(boolean on) { sp.edit().putBoolean("liveResults", on).apply(); }
 
+    // Live-results screen.
+    public int contestId() { return sp.getInt("contestId", 0); }
+    public void setContestId(int id) { sp.edit().putInt("contestId", id).apply(); }
+    public boolean resultsPrivate() { return sp.getBoolean("resultsPrivate", false); }
+    public void setResultsPrivate(boolean on) { sp.edit().putBoolean("resultsPrivate", on).apply(); }
+    public String sport() { return sp.getString("sport", ""); }
+    public void setSport(String s) { sp.edit().putString("sport", s.trim()).apply(); }
+    public boolean emailParticipants() { return sp.getBoolean("emailParticipants", false); }
+    public void setEmailParticipants(boolean on) { sp.edit().putBoolean("emailParticipants", on).apply(); }
+
+    /** Public live-results link at the deployment's /race-results/<id> path. */
+    public String publicResultsUrl() {
+        String base = serverUrl().replaceAll("/+$", "");
+        int id = contestId();
+        return id > 0 ? base + "/race-results/" + id : base + "/race-results/";
+    }
+
     // Results options.
     public static final String ORDER_TIME = "time";
     public static final String ORDER_BIB = "bib";
@@ -144,11 +161,12 @@ public final class Prefs {
     }
 
     /** Called when the user picks a race after logging in: wires the pairing. */
-    public void savePairing(String readerToken, String contestTitle, String email) {
+    public void savePairing(String readerToken, String contestTitle, String email, int contestId) {
         sp.edit()
                 .putString("readerToken", readerToken.trim())
                 .putString("contestTitle", contestTitle)
                 .putString("accountEmail", email.trim())
+                .putInt("contestId", contestId)
                 .apply();
     }
 

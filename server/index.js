@@ -36,6 +36,13 @@ app.use('/api', readers.router);
 app.get('/openapi.yaml', (_req, res) => res.sendFile(path.join(__dirname, '..', 'openapi.yaml')));
 app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+// Public results deep link -> the spectator results view. Redirecting (rather
+// than serving the shell here) keeps the app's relative asset URLs correct and
+// works whether or not a BASE_PATH prefix is in use.
+app.get('/race-results/:id', (req, res) => {
+  const base = req.originalUrl.replace(/\/race-results\/[^/?#]+.*$/, '');
+  res.redirect(302, `${base}/#/contest/${encodeURIComponent(req.params.id)}/results`);
+});
 // SPA fallback: any non-API GET serves the app shell.
 app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

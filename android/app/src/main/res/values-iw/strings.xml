@@ -371,6 +371,36 @@
     <string name="program_instructions">הוראות:\n• הנח שבב מול האנטנה\n• הקש \'קרא\' כדי לגלות את מזהה השבב הקיים\n• הזן מזהה שבב חדש\n• הקש \'כתוב\' כדי לתכנת את השבב\n• לאחר מכן ניתן להקיש \'קרא\' שוב כדי לאמת שהכתיבה הצליחה</string>
     <string name="program_notes">הערות:\n• מזהי שבב RFID הם בדרך כלל באורך 24 תווים\n• מזהים חדשים ירופדו באפסים מובילים\n• עבור מזהים עשרוניים, המזהה הבא מוגדל אוטומטית\n• מזהי שבב הקסדצימליים יש להזין ידנית</string>
 
+    <string name="live_results_title">תוצאות חיות</string>
+    <string name="post_live_results">פרסום תוצאות חיות:</string>
+    <string name="keep_private">שמור תוצאות פרטיות:</string>
+    <string name="keep_private_hint">(הפעל בעת בדיקה)</string>
+    <string name="sport_label">ענף:</string>
+    <string name="sport_running">ריצה</string>
+    <string name="email_on_finish">שלח אימייל למשתתפים בסיום המרוץ:</string>
+    <string name="email_unsupported">שליחת אימיילים בסיום אינה נתמכת עדיין.</string>
+    <string name="url_label">כתובת:</string>
+    <string name="last_update_label">עדכון אחרון:</string>
+    <string name="last_update_none">—</string>
+    <string name="pair_race_first">חבר מרוץ תחילה כדי לקבל את הקישור.</string>
+    <string name="share_link">שיתוף קישור</string>
+    <string name="copy">העתק</string>
+    <string name="copied">הועתק</string>
+    <string name="open">פתח</string>
+    <string name="no_browser">אין דפדפן לפתיחת הקישור.</string>
+    <string name="live_results_hint">הגדר אפשרויות תוצאות חיות</string>
+
+    <string-array name="sports">
+        <item>ריצה</item>
+        <item>ריצת שטח</item>
+        <item>אופניים — כביש</item>
+        <item>אופניים — MTB XCO</item>
+        <item>אופניים — גראבל</item>
+        <item>טריאתלון</item>
+        <item>דואתלון</item>
+        <item>מוטוקרוס</item>
+    </string-array>
+
     <string-array name="protocols">
         <item>שורות ASCII (EPC בכל שורה)</item>
         <item>RFID-LLRP (Impinj/Zebra, פורט 5084)</item>

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/post_live_results" />
+                <Switch android:id="@+id/swPost" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="12dp">
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="@string/keep_private" android:textColor="#111111"
+                        android:textSize="20sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="@string/keep_private_hint" android:textColor="#777777" android:textSize="13sp" />
+                </LinearLayout>
+                <Switch android:id="@+id/swPrivate" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/sport_label" />
+                <LinearLayout android:id="@+id/sportBox" style="@style/RaceStartValue">
+                    <TextView android:id="@+id/sportValue" style="@style/RaceStartValueText" />
+                    <TextView style="@style/RaceStartChevron" android:text="❯" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/email_on_finish" />
+                <Switch android:id="@+id/swEmail" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:layout_marginVertical="10dp" android:background="@color/menu_divider" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/url_label" android:textColor="#111111"
+                    android:textSize="17sp" android:textStyle="bold" />
+                <TextView android:id="@+id/urlValue" android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:layout_marginStart="8dp"
+                    android:autoLink="web" android:textColor="#1E6FBF" android:textSize="16sp"
+                    android:textIsSelectable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+                <Button android:id="@+id/copyUrl" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/copy" android:textAllCaps="false" />
+                <Button android:id="@+id/shareUrl" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" android:text="@string/share_link" android:textAllCaps="false" />
+                <Button android:id="@+id/openUrl" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" android:text="@string/open" android:textAllCaps="false" />
+            </LinearLayout>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:text="@string/last_update_label"
+                android:textColor="#111111" android:textSize="16sp" />
+            <TextView android:id="@+id/lastUpdate" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#555555" android:textSize="15sp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="@string/live_results_hint"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+</LinearLayout>

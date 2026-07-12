@@ -294,10 +294,7 @@ public class RaceTimingActivity extends Activity {
                             finishRace();
                             break;
                         case 2:   // Live results view / update
-                            boolean on = !prefs.liveResults();
-                            prefs.setLiveResults(on);
-                            Toast.makeText(this, getString(on ? R.string.live_results_on : R.string.live_results_off),
-                                    Toast.LENGTH_LONG).show();
+                            startActivity(new Intent(this, LiveResultsActivity.class));
                             break;
                         case 3:   // Race progress (view)
                             showRaceProgress();

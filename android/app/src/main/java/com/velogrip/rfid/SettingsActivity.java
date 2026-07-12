@@ -114,7 +114,7 @@ public class SettingsActivity extends Activity {
                                 .setTitle(R.string.choose_race)
                                 .setItems(titles, (dialog, which) -> {
                                     JSONObject race = races.optJSONObject(which);
-                                    prefs.savePairing(race.optString("app_token"), race.optString("title"), email);
+                                    prefs.savePairing(race.optString("app_token"), race.optString("title"), email, race.optInt("id"));
                                     readerToken.setText(race.optString("app_token"));
                                     selectedRace.setText(race.optString("title"));
                                     Toast.makeText(this,

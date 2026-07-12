@@ -371,6 +371,36 @@
     <string name="program_instructions">Instructions:\n• Place chip in front of the antenna\n• Tap \'Read\' to discover existing chip ID\n• Enter new chip ID\n• Tap \'Write\' to program the chip\n• You can then tap \'Read\' again to verify write worked</string>
     <string name="program_notes">Notes:\n• RFID chip IDs are (typically) 24 characters long\n• New chip IDs will be padded by leading zeros\n• For decimal IDs, the next ID is auto-incremented\n• Hexadecimal chip IDs must be entered manually</string>
 
+    <string name="live_results_title">Live Results</string>
+    <string name="post_live_results">Post live results:</string>
+    <string name="keep_private">Keep results private:</string>
+    <string name="keep_private_hint">(Turn on when testing)</string>
+    <string name="sport_label">Sport:</string>
+    <string name="sport_running">Running</string>
+    <string name="email_on_finish">Send email to participants when they finish the race:</string>
+    <string name="email_unsupported">Finisher emails are not supported yet.</string>
+    <string name="url_label">URL:</string>
+    <string name="last_update_label">Last update:</string>
+    <string name="last_update_none">—</string>
+    <string name="pair_race_first">Pair a race first to get its link.</string>
+    <string name="share_link">Share link</string>
+    <string name="copy">Copy</string>
+    <string name="copied">Copied</string>
+    <string name="open">Open</string>
+    <string name="no_browser">No browser to open the link.</string>
+    <string name="live_results_hint">Configure live results options</string>
+
+    <string-array name="sports">
+        <item>Running</item>
+        <item>Trail running</item>
+        <item>Cycling — Road</item>
+        <item>Cycling — MTB XCO</item>
+        <item>Cycling — Gravel</item>
+        <item>Triathlon</item>
+        <item>Duathlon</item>
+        <item>Motocross</item>
+    </string-array>
+
     <string-array name="protocols">
         <item>ASCII lines (EPC per line)</item>
         <item>RFID-LLRP (Impinj/Zebra, port 5084)</item>
