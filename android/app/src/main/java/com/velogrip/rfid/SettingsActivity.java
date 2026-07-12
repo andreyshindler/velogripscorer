@@ -24,6 +24,7 @@ public class SettingsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
+        if (getActionBar() != null) getActionBar().setDisplayHomeAsUpEnabled(true);
 
         serverUrl = findViewById(R.id.serverUrl);
         readerToken = findViewById(R.id.readerToken);
@@ -208,5 +209,11 @@ public class SettingsActivity extends Activity {
         if (index == 2) return Prefs.PROTOCOL_UHF;
         if (index == 3) return Prefs.PROTOCOL_DEMO;
         return Prefs.PROTOCOL_ASCII;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == android.R.id.home) { finish(); return true; }
+        return super.onOptionsItemSelected(item);
     }
 }

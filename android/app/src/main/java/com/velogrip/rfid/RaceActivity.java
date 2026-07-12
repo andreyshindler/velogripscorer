@@ -48,6 +48,7 @@ public class RaceActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_race);
+        if (getActionBar() != null) getActionBar().setDisplayHomeAsUpEnabled(true);
         store = new RaceStore(this);
         prefs = new Prefs(this);
 
@@ -284,5 +285,11 @@ public class RaceActivity extends Activity {
         super.onPause();
         handler.removeCallbacks(ticker);
         unregisterReceiver(bridgeReceiver);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == android.R.id.home) { finish(); return true; }
+        return super.onOptionsItemSelected(item);
     }
 }

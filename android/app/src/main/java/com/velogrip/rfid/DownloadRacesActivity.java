@@ -35,6 +35,7 @@ public class DownloadRacesActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_download);
+        if (getActionBar() != null) getActionBar().setDisplayHomeAsUpEnabled(true);
         prefs = new Prefs(this);
 
         form = findViewById(R.id.dlForm);
@@ -180,11 +181,17 @@ public class DownloadRacesActivity extends Activity {
             final boolean openRace = ok;
             runOnUiThread(() -> {
                 Toast.makeText(this, toastText, Toast.LENGTH_LONG).show();
+                // stay on the stack: back from the race returns here
                 if (openRace) {
                     startActivity(new android.content.Intent(this, RaceActivity.class));
-                    finish();
                 }
             });
         }).start();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == android.R.id.home) { finish(); return true; }
+        return super.onOptionsItemSelected(item);
     }
 }
