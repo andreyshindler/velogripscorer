@@ -120,7 +120,7 @@ router.get('/ingest/startlist', (req, res) => {
   const contest = getContest(reader.contest_id);
   const tags = db
     .prepare(
-      `SELECT a.epc, a.bib, a.participant, a.category, w.name AS wave
+      `SELECT a.epc, a.bib, a.participant, a.category, a.distance, w.name AS wave
        FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
        WHERE a.contest_id = ? ORDER BY a.bib, a.epc`
     )

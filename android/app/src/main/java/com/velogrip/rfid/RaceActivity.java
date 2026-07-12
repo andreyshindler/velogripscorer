@@ -19,8 +19,10 @@ import com.velogrip.rfid.net.Uploader;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * The race console — fully offline. Start waves (gun time is recorded on the
@@ -329,22 +331,47 @@ public class RaceActivity extends Activity {
 
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs());
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4s %-9s %s%n",
-                "#", getString(R.string.bib_col), getString(R.string.name_col),
-                getString(R.string.laps_col), getString(R.string.time_col), ""));
+                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps());
+
+        // Multiple distances: standings split per distance with its own places
+        java.util.LinkedHashMap<String, List<RaceEngine.Result>> sections = new java.util.LinkedHashMap<>();
+        java.util.TreeSet<String> distances = new java.util.TreeSet<>();
         for (RaceEngine.Result r : results) {
-            String status = "finished".equals(r.status) ? ""
-                    : "on_course".equals(r.status) ? getString(R.string.on_course)
-                    : getString(R.string.not_started_wave);
-            sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4d %-9s %s%n",
-                    r.rank > 0 ? String.valueOf(r.rank) : "–",
-                    r.bib,
-                    r.name.length() > 16 ? r.name.substring(0, 16) : r.name,
-                    r.laps,
-                    "finished".equals(r.status) ? RaceEngine.formatElapsed(r.elapsedMs) : "–",
-                    status));
+            if (!r.distance.isEmpty()) distances.add(r.distance);
+        }
+        if (distances.size() > 1 && prefs.multiDistance(true)) {
+            for (String d : distances) sections.put(d, new ArrayList<>());
+            sections.put("", new ArrayList<>());
+            for (RaceEngine.Result r : results) sections.get(r.distance).add(r);
+            if (sections.get("").isEmpty()) sections.remove("");
+        } else {
+            sections.put("", results);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, List<RaceEngine.Result>> section : sections.entrySet()) {
+            if (!section.getKey().isEmpty() || sections.size() > 1) {
+                sb.append("── ").append(section.getKey().isEmpty()
+                        ? getString(R.string.no_distance) : section.getKey()).append(" ──\n");
+            }
+            sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4s %-9s %s%n",
+                    "#", getString(R.string.bib_col), getString(R.string.name_col),
+                    getString(R.string.laps_col), getString(R.string.time_col), ""));
+            int place = 1;
+            for (RaceEngine.Result r : section.getValue()) {
+                String status = "finished".equals(r.status) ? ""
+                        : "on_course".equals(r.status) ? getString(R.string.on_course)
+                        : getString(R.string.not_started_wave);
+                boolean finished = "finished".equals(r.status);
+                sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4d %-9s %s%n",
+                        finished ? String.valueOf(place++) : "–",
+                        r.bib,
+                        r.name.length() > 16 ? r.name.substring(0, 16) : r.name,
+                        r.laps,
+                        finished ? RaceEngine.formatElapsed(r.elapsedMs) : "–",
+                        status));
+            }
+            sb.append('\n');
         }
         if (results.isEmpty()) sb.append(getString(R.string.no_racers));
         resultsView.setText(sb.toString());

@@ -175,7 +175,7 @@ public class DownloadRacesActivity extends Activity {
                 RaceStore store = new RaceStore(this);
                 if (clearFirst) {
                     store.clearRace();
-                    prefs.setStartType(""); // new race starts from the Mass default
+                    prefs.resetRaceSetup(); // new race starts from the defaults
                 }
                 StartListSync.Result r = StartListSync.download(prefs, store);
                 store.close();

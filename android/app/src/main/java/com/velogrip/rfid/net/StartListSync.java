@@ -45,7 +45,8 @@ public final class StartListSync {
             distinct.add(bib.isEmpty() ? "e:" + r.getString("epc") : "b:" + bib);
             store.upsertRacer(new RaceStore.Racer(
                     r.getString("epc"), bib, r.optString("participant", ""),
-                    r.optString("category", ""), r.isNull("wave") ? "" : r.optString("wave", "")));
+                    r.optString("category", ""), r.isNull("wave") ? "" : r.optString("wave", ""),
+                    r.isNull("distance") ? "" : r.optString("distance", "")));
         }
         return new Result(distinct.size(), waves.length());
     }

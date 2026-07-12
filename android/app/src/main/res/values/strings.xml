@@ -52,6 +52,18 @@
     <string name="proceed_hint">Use the top right navigation button to proceed</string>
     <string name="mass_race_label">Race</string>
 
+    <string name="lap_setup_title">Lap Setup</string>
+    <string name="multiple_distances">Multiple distances:</string>
+    <string name="fixed_relay">Fixed relay:</string>
+    <string name="flexible_relay">Flexible relay:</string>
+    <string name="record_lap_times">Record lap times:</string>
+    <string name="exclude_laps">Exclude laps:</string>
+    <string name="skip_laps">Skip laps:</string>
+    <string name="customize_lap_names">Customize lap names:</string>
+    <string name="lap_option_unsupported">This option is not supported yet.</string>
+    <string name="lap_setup_hint">Enter race details</string>
+    <string name="no_distance">No distance</string>
+
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>
     <string name="connect_reader">▶ Connect reader</string>

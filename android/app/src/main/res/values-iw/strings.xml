@@ -52,6 +52,18 @@
     <string name="proceed_hint">השתמש בכפתור הניווט הימני העליון כדי להמשיך</string>
     <string name="mass_race_label">מרוץ</string>
 
+    <string name="lap_setup_title">הגדרת הקפות</string>
+    <string name="multiple_distances">מספר מרחקים:</string>
+    <string name="fixed_relay">שליחים קבוע:</string>
+    <string name="flexible_relay">שליחים גמיש:</string>
+    <string name="record_lap_times">רישום זמני הקפות:</string>
+    <string name="exclude_laps">החרגת הקפות:</string>
+    <string name="skip_laps">דילוג על הקפות:</string>
+    <string name="customize_lap_names">שמות הקפות מותאמים:</string>
+    <string name="lap_option_unsupported">אפשרות זו אינה נתמכת עדיין.</string>
+    <string name="lap_setup_hint">הזן פרטי מרוץ</string>
+    <string name="no_distance">ללא מרחק</string>
+
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
     <string name="connect_reader">▶ חיבור קורא</string>

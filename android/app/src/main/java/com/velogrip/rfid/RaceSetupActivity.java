@@ -33,7 +33,7 @@ public class RaceSetupActivity extends Activity {
         findViewById(R.id.nextButton).setVisibility(android.view.View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {
             prefs.setStartType(selected);
-            startActivity(new Intent(this, RaceActivity.class));
+            startActivity(new Intent(this, LapSetupActivity.class));
         });
 
         TextView name = findViewById(R.id.raceName);

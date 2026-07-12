@@ -93,7 +93,7 @@ public class SelectStartListActivity extends Activity {
                 RaceStore store = new RaceStore(this);
                 if (clearFirst) {
                     store.clearRace();
-                    new Prefs(this).setStartType(""); // new race starts from the Mass default
+                    new Prefs(this).resetRaceSetup(); // new race starts from the defaults
                 }
                 StartListFile.ImportResult r = StartListFile.importInto(store, rows);
                 store.close();

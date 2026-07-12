@@ -45,6 +45,7 @@ test('app downloads the start list with only its reader token', async () => {
   assert.equal(res.body.racers.length, 1);
   assert.deepEqual(res.body.racers[0], {
     epc: 'AAAA0500', bib: '500', participant: 'Offline Rider', category: 'עד 44', wave: 'elite',
+    distance: '',
   });
   assert.equal(res.body.waves[0].name, 'elite');
   assert.equal(res.body.waves[0].started_at, null);

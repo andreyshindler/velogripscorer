@@ -45,6 +45,18 @@ public final class Prefs {
     public void setStartType(String type) { sp.edit().putString("startType", type).apply(); }
     public void setContestTitle(String title) { sp.edit().putString("contestTitle", title.trim()).apply(); }
 
+    // Lap setup: results split per distance, and whether extra crossings
+    // count as laps (off = first valid crossing is the finish).
+    public boolean multiDistance(boolean fallback) { return sp.getBoolean("multiDistance", fallback); }
+    public void setMultiDistance(boolean on) { sp.edit().putBoolean("multiDistance", on).apply(); }
+    public boolean recordLaps() { return sp.getBoolean("recordLaps", true); }
+    public void setRecordLaps(boolean on) { sp.edit().putBoolean("recordLaps", on).apply(); }
+
+    /** A different race was loaded: race-specific choices return to defaults. */
+    public void resetRaceSetup() {
+        sp.edit().remove("startType").remove("multiDistance").remove("recordLaps").apply();
+    }
+
     /** Remembered after the first successful login so race downloads are one tap. */
     public void saveAccount(String email, String password) {
         sp.edit().putString("accountEmail", email.trim())

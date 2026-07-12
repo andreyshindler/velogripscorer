@@ -25,10 +25,15 @@ import java.util.List;
 public final class RaceStore extends SQLiteOpenHelper {
 
     public static final class Racer {
-        public final String epc, bib, name, category, wave;
+        public final String epc, bib, name, category, wave, distance;
 
         public Racer(String epc, String bib, String name, String category, String wave) {
+            this(epc, bib, name, category, wave, "");
+        }
+
+        public Racer(String epc, String bib, String name, String category, String wave, String distance) {
             this.epc = epc; this.bib = bib; this.name = name; this.category = category; this.wave = wave;
+            this.distance = distance;
         }
     }
 
@@ -54,14 +59,14 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 1);
+        super(ctx, "race.db", null, 2);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE racers (epc TEXT PRIMARY KEY, bib TEXT NOT NULL DEFAULT ''," +
                 " name TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT ''," +
-                " wave TEXT NOT NULL DEFAULT '')");
+                " wave TEXT NOT NULL DEFAULT '', distance TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE TABLE waves (name TEXT PRIMARY KEY, started_at INTEGER, synced INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
                 " rssi REAL, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
@@ -71,7 +76,9 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // v1: nothing to migrate yet
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE racers ADD COLUMN distance TEXT NOT NULL DEFAULT ''");
+        }
     }
 
     // ---- passings ----
@@ -145,16 +152,18 @@ public final class RaceStore extends SQLiteOpenHelper {
         values.put("name", racer.name);
         values.put("category", racer.category);
         values.put("wave", racer.wave);
+        values.put("distance", racer.distance);
         getWritableDatabase().insertWithOnConflict("racers", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public List<Racer> racers() {
         List<Racer> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave FROM racers ORDER BY bib, epc", null);
+                "SELECT epc, bib, name, category, wave, distance FROM racers ORDER BY bib, epc", null);
         try {
             while (c.moveToNext()) {
-                out.add(new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4)));
+                out.add(new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+                        c.getString(4), c.getString(5)));
             }
         } finally {
             c.close();
@@ -164,10 +173,11 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     public Racer racerByBib(String bib) {
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
+                "SELECT epc, bib, name, category, wave, distance FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
         try {
             return c.moveToNext()
-                    ? new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4))
+                    ? new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+                            c.getString(4), c.getString(5))
                     : null;
         } finally {
             c.close();

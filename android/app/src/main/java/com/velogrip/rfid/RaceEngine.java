@@ -21,14 +21,15 @@ public final class RaceEngine {
 
     public static final class Result {
         public int rank;                 // 0 = unranked
-        public final String bib, name, category, wave;
+        public final String bib, name, category, wave, distance;
         public final String status;     // finished | on_course | not_started
         public final int laps;
         public final long elapsedMs;    // 0 unless finished
 
-        Result(String bib, String name, String category, String wave,
+        Result(String bib, String name, String category, String wave, String distance,
                String status, int laps, long elapsedMs) {
             this.bib = bib; this.name = name; this.category = category; this.wave = wave;
+            this.distance = distance;
             this.status = status; this.laps = laps; this.elapsedMs = elapsedMs;
         }
     }
@@ -38,6 +39,12 @@ public final class RaceEngine {
     public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
                                        List<RaceStore.Passing> passings,
                                        int suppressSecs, int minLapGapSecs) {
+        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, true);
+    }
+
+    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
+                                       List<RaceStore.Passing> passings,
+                                       int suppressSecs, int minLapGapSecs, boolean recordLaps) {
         Map<String, Long> gunByWave = new HashMap<>();
         for (RaceStore.Wave w : waves) {
             if (w.startedAtMs != null) gunByWave.put(w.name, w.startedAtMs);
@@ -69,7 +76,7 @@ public final class RaceEngine {
             Long gun = gunByWave.get(racer.wave);
             if (gun == null) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        "not_started", 0, 0));
+                        racer.distance, "not_started", 0, 0));
                 continue;
             }
             List<Long> raw = new ArrayList<>();
@@ -82,6 +89,7 @@ public final class RaceEngine {
                 Collections.sort(raw);
                 for (long at : raw) {
                     if (at < gun + suppressMs) continue;
+                    if (!recordLaps && !crossings.isEmpty()) break; // finish line only
                     if (crossings.isEmpty() || at - crossings.get(crossings.size() - 1) >= lapGapMs) {
                         crossings.add(at);
                     }
@@ -89,11 +97,11 @@ public final class RaceEngine {
             }
             if (crossings.isEmpty()) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        "on_course", 0, 0));
+                        racer.distance, "on_course", 0, 0));
             } else {
                 long last = crossings.get(crossings.size() - 1);
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        "finished", crossings.size(), last - gun));
+                        racer.distance, "finished", crossings.size(), last - gun));
             }
         }
 
