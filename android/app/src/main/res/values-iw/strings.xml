@@ -26,6 +26,15 @@
     <string name="archive_counts">%1$d רוכבים · %2$d מקצים · %3$d מעברים שהוקלטו</string>
     <string name="archive_open">פתח את מסך המרוץ</string>
 
+    <string name="select_startlist_title">בחירת רשימת זינוק</string>
+    <string name="back">חזרה</string>
+    <string name="option_download_from">הורדת רשימת זינוק מ-%1$s</string>
+    <string name="option_file">שימוש בקובץ רשימת זינוק שהועתק למכשיר</string>
+    <string name="choose_setup_option">בחר אפשרות הגדרה</string>
+    <string name="replace_startlist_confirm">לטעון קובץ זה כמרוץ חדש? נתוני המרוץ המקומיים הנוכחיים יימחקו.</string>
+    <string name="file_import_failed">לא ניתן לקרוא את הקובץ: %1$s</string>
+    <string name="rows_skipped">%1$d שורות דולגו — ללא שבב וללא מספר חזה מספרי</string>
+
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
     <string name="connect_reader">▶ חיבור קורא</string>

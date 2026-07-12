@@ -26,17 +26,8 @@ public class MainActivity extends Activity {
         } catch (PackageManager.NameNotFoundException ignored) { }
         version.setText(getString(R.string.chip_timing_version, name));
 
-        findViewById(R.id.rowRaceWithList).setOnClickListener(v -> {
-            RaceStore store = new RaceStore(this);
-            boolean hasStartList = !store.racers().isEmpty();
-            store.close();
-            if (hasStartList) {
-                startActivity(new Intent(this, RaceActivity.class));
-            } else {
-                Toast.makeText(this, R.string.no_startlist_yet, Toast.LENGTH_LONG).show();
-                startActivity(new Intent(this, DownloadRacesActivity.class));
-            }
-        });
+        findViewById(R.id.rowRaceWithList).setOnClickListener(v ->
+                startActivity(new Intent(this, SelectStartListActivity.class)));
         findViewById(R.id.rowRaceNoList).setOnClickListener(v ->
                 startActivity(new Intent(this, RaceActivity.class)));
         findViewById(R.id.rowArchive).setOnClickListener(v ->

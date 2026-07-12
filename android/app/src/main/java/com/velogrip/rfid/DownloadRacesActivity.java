@@ -123,19 +123,25 @@ public class DownloadRacesActivity extends Activity {
         prefs.savePairing(race.optString("app_token"), race.optString("title"), email);
         new Thread(() -> {
             String message;
+            boolean ok = false;
             try {
                 RaceStore store = new RaceStore(this);
                 if (clearFirst) store.clearRace();
                 StartListSync.Result r = StartListSync.download(prefs, store);
                 store.close();
                 message = getString(R.string.sync_done, r.racers, r.waves);
+                ok = true;
             } catch (Exception e) {
                 message = getString(R.string.sync_failed, e.getMessage());
             }
             final String toastText = message;
+            final boolean openRace = ok;
             runOnUiThread(() -> {
                 Toast.makeText(this, toastText, Toast.LENGTH_LONG).show();
-                finish();
+                if (openRace) {
+                    startActivity(new android.content.Intent(this, RaceActivity.class));
+                    finish();
+                }
             });
         }).start();
     }

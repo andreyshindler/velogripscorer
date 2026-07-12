@@ -26,6 +26,15 @@
     <string name="archive_counts">%1$d racers · %2$d waves · %3$d recorded passings</string>
     <string name="archive_open">Open race console</string>
 
+    <string name="select_startlist_title">Select Start List</string>
+    <string name="back">Back</string>
+    <string name="option_download_from">Download start list from %1$s</string>
+    <string name="option_file">Use start list file copied to device</string>
+    <string name="choose_setup_option">Choose a setup option</string>
+    <string name="replace_startlist_confirm">Load this file as a new race? The current local race data will be cleared.</string>
+    <string name="file_import_failed">Could not read the file: %1$s</string>
+    <string name="rows_skipped">%1$d rows skipped — no chip and no numeric bib</string>
+
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>
     <string name="connect_reader">▶ Connect reader</string>
