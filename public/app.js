@@ -948,6 +948,57 @@ async function renderStartlist(box, c) {
     </div>`;
 }
 
+// CSV start list: header row optional; recognizes bib/name/category/wave/epc
+// column names in English and Hebrew, or positional columns in that order.
+function parseStartListCsv(text) {
+  const delimiter = [',', ';', '\t'].reduce((best, d) =>
+    text.split('\n')[0].split(d).length > text.split('\n')[0].split(best).length ? d : best, ',');
+  const parseLine = (line) => {
+    const cells = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') inQ = false;
+        else cur += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === delimiter) { cells.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    cells.push(cur);
+    return cells.map((s) => s.trim());
+  };
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return [];
+
+  const HEADER_MAP = {
+    bib: ['bib', 'number', 'num', '#', 'מספר', 'מספר חזה', 'חזה'],
+    participant: ['name', 'participant', 'racer', 'שם', 'שם מלא'],
+    category: ['category', 'cat', 'קטגוריה'],
+    wave: ['wave', 'heat', 'מקצה'],
+    epc: ['epc', 'chip', 'tag', 'chip id', 'שבב', 'תג'],
+  };
+  const first = parseLine(lines[0]).map((h) => h.toLowerCase());
+  const cols = {};
+  let hasHeader = false;
+  for (const [field, names] of Object.entries(HEADER_MAP)) {
+    const idx = first.findIndex((h) => names.includes(h));
+    if (idx >= 0) { cols[field] = idx; hasHeader = true; }
+  }
+  if (!hasHeader) {
+    // positional: bib, name, category, wave, epc
+    Object.assign(cols, { bib: 0, participant: 1, category: 2, wave: 3, epc: 4 });
+  }
+  return lines.slice(hasHeader ? 1 : 0).map(parseLine).map((cells) => ({
+    bib: cells[cols.bib] ?? '',
+    participant: cells[cols.participant] ?? '',
+    category: cols.category !== undefined ? cells[cols.category] ?? '' : '',
+    wave: cols.wave !== undefined ? cells[cols.wave] ?? '' : '',
+    epc: cols.epc !== undefined ? cells[cols.epc] ?? '' : '',
+  })).filter((r) => r.participant || r.bib);
+}
+
 // ---------- timing tab: RFID readers, live reads, tag assignment ----------
 
 async function renderTiming(box, c) {
@@ -985,7 +1036,14 @@ async function renderTiming(box, c) {
         </form>
       </div>
       <div class="card">
-        <h3 style="margin-top:0">${t('tag_assignments')}</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h3 style="margin-top:0">${t('tag_assignments')}</h3>
+          <div>
+            <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+            <button class="btn small secondary" id="import-csv" title="${t('csv_help')}">⬆ ${t('import_csv')}</button>
+          </div>
+        </div>
+        <p class="muted" style="font-size:0.78rem;margin:2px 0 8px">${t('csv_help')}</p>
         <form id="tag-form" style="display:flex;gap:6px;flex-wrap:wrap">
           <input name="epc" placeholder="${t('epc')}" required pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
           <input name="bib" placeholder="${t('bib')}" style="width:70px">
@@ -1143,6 +1201,24 @@ async function renderTiming(box, c) {
       } catch (err) { toast(err.message, true); }
     };
   });
+
+  // ---- CSV start-list import ----
+  const csvFile = $('#csv-file');
+  $('#import-csv').onclick = () => csvFile.click();
+  csvFile.onchange = async () => {
+    const file = csvFile.files[0];
+    if (!file) return;
+    try {
+      const text = (await file.text()).replace(/^\uFEFF/, ''); // strip Excel BOM
+      const racers = parseStartListCsv(text);
+      if (!racers.length) throw new Error(t('csv_help'));
+      const result = await api(`/contests/${c.id}/tags/bulk`, { method: 'POST', body: { racers } });
+      toast(t('import_done', { n: result.imported, s: result.skipped })
+        + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
+      viewContest(c.id, 'timing');
+    } catch (err) { toast(err.message, true); }
+    csvFile.value = '';
+  };
 
   // ---- waves & race start ----
   $('#wave-form').onsubmit = async (e) => {

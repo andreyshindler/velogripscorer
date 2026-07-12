@@ -203,3 +203,48 @@ test('DNS/DNF/DSQ statuses override results and sink below finishers', async () 
   assert.equal(dns.status, 'DNS');
   assert.ok(rows.indexOf(dnf) > 1 && rows.indexOf(dns) > 1, 'statuses sink below finishers');
 });
+
+test('bulk start-list import creates racers, waves, and synthetic EPCs', async () => {
+  const bulkOrg = await register('bulk-org@test.co', 'Bulk Org');
+  const race = (await request(app).post('/api/contests').set(auth(bulkOrg)).send({
+    kind: 'race', title: 'Bulk import race', start_at: past, end_at: future,
+  })).body;
+
+  const res = await request(app).post(`/api/contests/${race.id}/tags/bulk`).set(auth(bulkOrg)).send({
+    racers: [
+      { bib: '100', participant: 'עידן אדמון', category: 'עד 44', wave: 'wave1', epc: 'E28011606000020100000100' },
+      { bib: '101', participant: 'ניר לוי', category: 'עד 44', wave: 'wave1', epc: '' },   // synthetic EPC
+      { bib: '102', participant: 'זהר גנאטק', category: '45+', wave: 'wave2' },            // new wave
+      { bib: '', participant: '' },                                                        // bad row skipped
+      { bib: 'X9', participant: 'No Epc NonNumeric' },                                     // bad row skipped
+    ],
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.imported, 3);
+  assert.equal(res.body.skipped, 2);
+  assert.equal(res.body.errors.length, 2);
+
+  const tags = (await request(app).get(`/api/contests/${race.id}/tags`).set(auth(bulkOrg))).body.tags;
+  assert.equal(tags.length, 3);
+  const r101 = tags.find((a) => a.bib === '101');
+  assert.equal(r101.epc, 'AA0101', 'synthetic EPC from bib');
+  assert.equal(r101.wave_name, 'wave1');
+
+  const waves = (await request(app).get(`/api/contests/${race.id}/waves`).set(auth(bulkOrg))).body.waves;
+  assert.deepEqual(waves.map((w) => w.name).sort(), ['wave1', 'wave2'], 'waves auto-created');
+
+  // re-import updates rather than duplicates
+  const again = await request(app).post(`/api/contests/${race.id}/tags/bulk`).set(auth(bulkOrg)).send({
+    racers: [{ bib: '100', participant: 'עידן אדמון (עודכן)', category: 'עד 44', wave: 'wave1', epc: 'E28011606000020100000100' }],
+  });
+  assert.equal(again.body.imported, 1);
+  const after = (await request(app).get(`/api/contests/${race.id}/tags`).set(auth(bulkOrg))).body.tags;
+  assert.equal(after.length, 3, 'no duplicates on re-import');
+  assert.ok(after.some((a) => a.participant.includes('עודכן')));
+
+  // organizer-only
+  const outsider = await register('bulk-outsider@test.co', 'Bulk Outsider');
+  const denied = await request(app).post(`/api/contests/${race.id}/tags/bulk`).set(auth(outsider))
+    .send({ racers: [{ bib: '1', participant: 'x' }] });
+  assert.equal(denied.status, 403);
+});

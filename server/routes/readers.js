@@ -271,6 +271,56 @@ router.delete('/contests/:id/tags/:epc', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Bulk start-list import (CSV upload parsed client-side). Waves are matched
+// by name and created on the fly; rows without an EPC get a synthetic one
+// derived from the bib so manual/chip timing interoperate.
+router.post('/contests/:id/tags/bulk', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const racers = Array.isArray(req.body?.racers) ? req.body.racers.slice(0, 2000) : null;
+  if (!racers || !racers.length) return res.status(400).json({ error: 'racers array required' });
+
+  const waveIdByName = new Map(
+    db.prepare('SELECT id, name FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.name, w.id])
+  );
+  const upsert = db.prepare(
+    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id, category, racer_status)
+     VALUES (?,?,?,?,?,?,'')
+     ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
+       wave_id = excluded.wave_id, category = excluded.category`
+  );
+  const newWave = db.prepare('INSERT INTO waves (contest_id, name) VALUES (?, ?)');
+
+  let imported = 0;
+  const errors = [];
+  const tx = db.transaction(() => {
+    racers.forEach((row, i) => {
+      const bib = String(row?.bib ?? '').trim();
+      const participant = String(row?.participant ?? row?.name ?? '').trim();
+      let epc = String(row?.epc ?? '').trim().toUpperCase();
+      if (!participant) { errors.push(`row ${i + 1}: name missing`); return; }
+      if (!epc) {
+        if (!/^\d{1,10}$/.test(bib)) { errors.push(`row ${i + 1}: needs an EPC or a numeric bib`); return; }
+        epc = 'AA' + bib.padStart(4, '0');
+      }
+      if (!EPC_RE.test(epc)) { errors.push(`row ${i + 1}: invalid EPC "${epc}"`); return; }
+      let waveId = null;
+      const waveName = String(row?.wave ?? '').trim();
+      if (waveName) {
+        if (!waveIdByName.has(waveName)) {
+          waveIdByName.set(waveName, newWave.run(contest.id, waveName).lastInsertRowid);
+        }
+        waveId = waveIdByName.get(waveName);
+      }
+      upsert.run(contest.id, epc, bib, participant, waveId, String(row?.category ?? '').trim());
+      imported++;
+    });
+  });
+  tx();
+  auditLog(req.user.id, 'tag.bulk_import', 'contest', contest.id, `${imported} racers`);
+  res.json({ imported, skipped: racers.length - imported, errors: errors.slice(0, 20) });
+});
+
 // ---- Waves & race start (Webscorer-style: gun time per wave) ----
 
 router.get('/contests/:id/waves', requireAuth, (req, res) => {
