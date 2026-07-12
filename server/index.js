@@ -41,7 +41,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // works whether or not a BASE_PATH prefix is in use.
 app.get('/race-results/:id', (req, res) => {
   const base = req.originalUrl.replace(/\/race-results\/[^/?#]+.*$/, '');
-  res.redirect(302, `${base}/#/contest/${encodeURIComponent(req.params.id)}/results`);
+  res.redirect(302, `${base}/#/results/${encodeURIComponent(req.params.id)}`);
 });
 // SPA fallback: any non-API GET serves the app shell.
 app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {

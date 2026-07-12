@@ -177,3 +177,16 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
   .topbar { gap: 8px; }
   .container { padding: 14px 10px 50px; }
 }
+
+/* Public results page (the shareable race-results link) */
+.pubresults { max-width: 980px; margin: 0 auto; }
+.pubtabs { display: flex; gap: 4px; justify-content: center; margin: 14px 0 6px; flex-wrap: wrap; }
+.pubtab {
+  padding: 10px 22px; border-radius: 4px; background: #ededed; color: #555;
+  text-decoration: none; font-weight: 600;
+}
+.pubtab.active { background: var(--ok); color: #fff; }
+.board.winners th:first-child, .board.winners td:first-child { text-align: start; }
+.board.winners .cat-link, .board.winners .live-link { color: var(--ok); font-weight: 700; text-decoration: none; }
+.board.winners .cat-link:hover, .board.winners .live-link:hover { text-decoration: underline; }
+.board.winners tbody tr:nth-child(even) { background: #f4f4f4; }

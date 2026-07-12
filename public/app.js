@@ -134,6 +134,7 @@ async function route() {
     if (page === 'login') return viewLogin();
     if (page === 'create') return viewCreate();
     if (page === 'startlists') return viewStartLists();
+    if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
     if (page === 'admin') return viewAdmin(arg || 'reports');
@@ -563,6 +564,136 @@ async function renderRaceResults(box, c) {
   state.sse.addEventListener('wave_start', refetch);
 }
 
+// ---------- public results page (the shareable /race-results/<id> link) ----------
+
+async function viewPublicResults(id, tab) {
+  closeSse();
+  const c = await api(`/contests/${id}`).catch(() => null);
+  if (!c) { main.innerHTML = `<div class="card">${t('no_results_yet')}</div>`; return; }
+  const data = await api(`/contests/${id}/race-results`);
+
+  const tabs = [['winners', 'race_winners'], ['top3', 'top3_finishers'], ['full', 'full_results']];
+  main.innerHTML = `
+    <div class="pubresults">
+      <h1 style="text-align:center">${esc(c.title)}</h1>
+      <div class="pubtabs">
+        ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
+      </div>
+      <div id="pubbody"></div>
+    </div>`;
+
+  const render = (results) => {
+    const body = document.getElementById('pubbody');
+    if (!body) return;
+    if (tab === 'full') body.innerHTML = fullResultsTable(results);
+    else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
+    else body.innerHTML = raceWinnersTables(id, results);
+  };
+  render(data.results);
+
+  state.sse = new EventSource(`${BASE}/api/contests/${id}/stream`);
+  const refetch = async () => { const fresh = await api(`/contests/${id}/race-results`); render(fresh.results); };
+  state.sse.addEventListener('tag_reads', refetch);
+  state.sse.addEventListener('wave_start', refetch);
+}
+
+// distance -> ordered category groups (Overall first, then each category)
+function groupByDistance(results) {
+  const byDist = new Map();
+  for (const r of results) {
+    const d = r.distance || '';
+    if (!byDist.has(d)) byDist.set(d, []);
+    byDist.get(d).push(r);
+  }
+  return byDist;
+}
+
+function leaderOf(rows) {
+  const finished = rows.filter((r) => r.status === 'finished')
+    .sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
+  return finished[0] || null;
+}
+
+function raceWinnersTables(id, results) {
+  const byDist = groupByDistance(results);
+  const dists = [...byDist.keys()].sort();
+  return `<p class="muted" style="margin:8px 0">▸ ${t('click_green_category')}</p>` + dists.map((d) => {
+    const rows = byDist.get(d);
+    const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+    const line = (label, scope, indent, catFilter) => {
+      const leader = leaderOf(scope);
+      const link = `#/results/${id}/full`;
+      return `<tr>
+        <td style="padding-left:${indent}px">${catFilter
+          ? `<a href="${link}" class="cat-link" data-dist="${esc(d)}" data-cat="${esc(catFilter)}">▸ ${esc(label)}</a>`
+          : `<a href="${link}" class="cat-link" data-dist="${esc(d)}" data-cat="">▸ ${esc(label)}</a>`}</td>
+        <td>${leader ? esc(leader.participant) : '–'}</td>
+        <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
+        <td><strong>${scope.length}</strong></td>
+        <td><a href="${link}" class="live-link" data-dist="${esc(d)}" data-cat="${esc(catFilter || '')}">▸ ${t('live_race')}</a></td>
+      </tr>`;
+    };
+    return `
+      <table class="board winners mt">
+        <thead><tr>
+          <th>${esc(d || t('overall'))}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
+          <th>${t('total_racers')}</th><th>${t('progress_view')}</th>
+        </tr></thead>
+        <tbody>
+          ${line(t('overall'), rows, 0, '')}
+          ${cats.map((cat) => line(cat, rows.filter((r) => r.category === cat), 20, cat)).join('')}
+        </tbody>
+      </table>`;
+  }).join('');
+}
+
+function topFinishersTables(results, n) {
+  const byDist = groupByDistance(results);
+  const dists = [...byDist.keys()].sort();
+  return dists.map((d) => {
+    const rows = byDist.get(d);
+    const cats = ['', ...[...new Set(rows.map((r) => r.category).filter(Boolean))].sort()];
+    return cats.map((cat) => {
+      const scope = (cat ? rows.filter((r) => r.category === cat) : rows)
+        .filter((r) => r.status === 'finished')
+        .sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9))
+        .slice(0, n);
+      if (!scope.length) return '';
+      return `
+        <table class="board mt">
+          <thead><tr><th colspan="4">${esc(d || t('overall'))}${cat ? ' — ' + esc(cat) : ' — ' + t('overall')}</th></tr>
+          <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('elapsed_col')}</th></tr></thead>
+          <tbody>${scope.map((r, i) => `<tr class="top${i + 1}">
+            <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
+            <td>${esc(r.participant)}</td>
+            <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td></tr>`).join('')}</tbody>
+        </table>`;
+    }).join('');
+  }).join('') || `<p class="muted">${t('no_results_yet')}</p>`;
+}
+
+function fullResultsTable(results) {
+  const finished = results.filter((r) => r.status === 'finished');
+  const others = results.filter((r) => r.status !== 'finished');
+  const rows = [
+    ...finished.map((r) => `<tr class="${r.rank <= 3 ? 'top' + r.rank : ''}">
+      <td><strong>${MEDALS[r.rank] || r.rank}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
+      <td>${esc(r.participant)}</td><td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td>
+      <td>${esc(r.distance || '')}</td><td>${r.laps}</td>
+      <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
+      <td class="muted" style="font-variant-numeric:tabular-nums">${esc(r.behind || '')}</td></tr>`),
+    ...others.map((r) => `<tr>
+      <td class="muted">–</td><td><strong>${esc(r.bib || '')}</strong></td>
+      <td>${esc(r.participant)}</td><td>${esc(r.category || '')}</td><td></td>
+      <td>${esc(r.distance || '')}</td><td>${r.laps || ''}</td>
+      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td></tr>`),
+  ].join('') || `<tr><td colspan="9" class="muted">${t('no_results_yet')}</td></tr>`;
+  return `<div style="overflow-x:auto"><table class="board mt"><thead><tr>
+    <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
+    <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('laps')}</th>
+    <th>${t('elapsed_col')}</th><th>${t('behind')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 async function renderStartlist(box, c) {
   const { racers, waves } = await api(`/contests/${c.id}/startlist`);
   box.innerHTML = `
@@ -901,7 +1032,7 @@ async function viewAdmin(section) {
 // Public results deep link: /race-results/<id> -> the spectator results view.
 const rr = location.pathname.match(/\/race-results\/(\d+)/);
 if (rr) {
-  history.replaceState(null, '', BASE + '/#/contest/' + rr[1] + '/results');
+  history.replaceState(null, '', BASE + '/#/results/' + rr[1]);
 }
 
 setLang(LANG);
