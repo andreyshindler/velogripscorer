@@ -25,8 +25,12 @@ public final class Prefs {
     public String serverUrl() { return sp.getString("serverUrl", DEFAULT_SERVER_URL); }
     public String readerToken() { return sp.getString("readerToken", ""); }
     public String readerHost() { return sp.getString("readerHost", ""); }
-    public int readerPort() { return sp.getInt("readerPort", 6000); }
-    public String protocol() { return sp.getString("protocol", PROTOCOL_ASCII); }
+    public int readerPort() { return sp.getInt("readerPort", 5084); }
+    // Deployment reader is RFID-LLRP, so that's the default protocol.
+    public String protocol() { return sp.getString("protocol", PROTOCOL_LLRP); }
+    public void setProtocol(String protocol) {
+        sp.edit().putString("protocol", protocol).apply();
+    }
     public String onConnectHex() { return sp.getString("onConnectHex", ""); }
     public String pollHex() { return sp.getString("pollHex", ""); }
     public int pollIntervalMs() { return sp.getInt("pollIntervalMs", 1000); }
@@ -56,6 +60,26 @@ public final class Prefs {
     // manual-only timing (no reader connection shown in the race console).
     public boolean chipTiming() { return sp.getBoolean("chipTiming", true); }
     public void setChipTiming(boolean on) { sp.edit().putBoolean("chipTiming", on).apply(); }
+
+    // Chip Timing detail screen.
+    public boolean chipIdEqualsBib() { return sp.getBoolean("chipIdEqualsBib", false); }
+    public int chipsPerRacer() { return sp.getInt("chipsPerRacer", 2); }
+    public int antennaPower() { return sp.getInt("antennaPower", 100); }
+    public boolean beepUnknownChip() { return sp.getBoolean("beepUnknownChip", true); }
+    public void saveReaderHostPort(String host, int port) {
+        sp.edit().putString("readerHost", host.trim()).putInt("readerPort", port).apply();
+    }
+    public void saveChipTiming(boolean idEqualsBib, int chipsPerRacer, int suppressSecs,
+                              int lapGapSecs, int antennaPower, boolean beepUnknown) {
+        sp.edit()
+                .putBoolean("chipIdEqualsBib", idEqualsBib)
+                .putInt("chipsPerRacer", Math.max(1, chipsPerRacer))
+                .putInt("suppressSecs", Math.max(0, suppressSecs))
+                .putInt("lapGapSecs", Math.max(0, lapGapSecs))
+                .putInt("antennaPower", Math.min(100, Math.max(1, antennaPower)))
+                .putBoolean("beepUnknownChip", beepUnknown)
+                .apply();
+    }
 
     // Racer setup: which fields each racer requires, and the bib format.
     public boolean requireName() { return sp.getBoolean("reqName", true); }

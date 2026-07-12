@@ -99,8 +99,29 @@
     <string name="hardware_hint">Select external hardware options</string>
     <string name="proto_llrp">RFID-LLRP</string>
     <string name="proto_ascii">ASCII lines</string>
-    <string name="proto_uhf">UHF binary</string>
+    <string name="proto_uhf">UHF binary frame</string>
     <string name="proto_demo">Demo mode</string>
+
+    <string name="chip_timing_title">Chip Timing</string>
+    <string name="rfid_readers">RFID readers:</string>
+    <string name="chip_id_bib">Chip ID = Bib:</string>
+    <string name="chips_per_racer">Chip IDs per racer:</string>
+    <string name="use_partial_chip">Use partial chip ID:</string>
+    <string name="no_detect_after_start">Do not detect any chips after start for:</string>
+    <string name="no_redetect_after_lap">Do not redetect same racer after lap for:</string>
+    <string name="chip_start_time">Chip start time:</string>
+    <string name="chip_checkin">Chip check-in:</string>
+    <string name="beep_unknown_chip">Audible beep for chips not on start list:</string>
+    <string name="antenna_power">Antenna power (%):</string>
+    <string name="show_chip_popup">Show chip detect popup:</string>
+    <string name="program_chips">Program RFID chips:</string>
+    <string name="chip_timing_hint">Configure chip timing settings</string>
+    <string name="chip_option_unsupported">This option is not supported yet.</string>
+    <string name="test_connection">Test\nconnection</string>
+    <string name="test_connecting">Connecting to reader…</string>
+    <string name="test_reader_ok">Reader answered at %1$s:%2$d ✓</string>
+    <string name="test_reader_failed">Reader did not answer: %1$s</string>
+    <string name="test_demo_ok">Demo mode — no reader needed ✓</string>
 
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>

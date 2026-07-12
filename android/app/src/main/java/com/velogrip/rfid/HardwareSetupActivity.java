@@ -29,8 +29,11 @@ public class HardwareSetupActivity extends Activity {
         ((TextView) findViewById(R.id.headerTitle)).setText(R.string.hardware_setup_title);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
-        findViewById(R.id.nextButton).setOnClickListener(v ->
-                startActivity(new Intent(this, RaceActivity.class)));
+        findViewById(R.id.nextButton).setOnClickListener(v -> {
+            // chip timing on -> configure the reader next; off -> straight to the race
+            startActivity(new Intent(this, prefs.chipTiming()
+                    ? ChipTimingActivity.class : RaceActivity.class));
+        });
 
         Switch chip = findViewById(R.id.swChipTiming);
         chip.setChecked(prefs.chipTiming());
@@ -42,10 +45,30 @@ public class HardwareSetupActivity extends Activity {
         });
         systemRow.setAlpha(prefs.chipTiming() ? 1f : 0.4f);
 
+        // "Chip timing system" is a dropdown of the supported protocols.
         systemValue = findViewById(R.id.chipSystemValue);
         findViewById(R.id.chipSystemBox).setOnClickListener(v -> {
             if (!prefs.chipTiming()) return;
-            startActivity(new Intent(this, SettingsActivity.class));
+            final String[] keys = {Prefs.PROTOCOL_ASCII, Prefs.PROTOCOL_LLRP,
+                    Prefs.PROTOCOL_UHF, Prefs.PROTOCOL_DEMO};
+            final String[] labels = {
+                    getString(R.string.proto_ascii), getString(R.string.proto_llrp),
+                    getString(R.string.proto_uhf), getString(R.string.proto_demo)};
+            int current = 1; // RFID-LLRP default
+            for (int i = 0; i < keys.length; i++) if (keys[i].equals(prefs.protocol())) current = i;
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.chip_timing_system)
+                    .setSingleChoiceItems(labels, current, (dialog, which) -> {
+                        prefs.setProtocol(keys[which]);
+                        if (Prefs.PROTOCOL_LLRP.equals(keys[which])
+                                && (prefs.readerPort() == 6000)) {
+                            prefs.saveReaderHostPort(prefs.readerHost(), 5084);
+                        }
+                        systemValue.setText(labels[which]);
+                        dialog.dismiss();
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
         });
 
         int[] unsupported = {R.id.swExternalTimer, R.id.swQrScanner, R.id.swTimeTrigger};

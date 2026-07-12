@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Chip timing system (read-only, chosen in Hardware Setup) -->
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/chip_timing_system" />
+                <TextView
+                    android:id="@+id/systemValue"
+                    style="@style/ChipValueBox"
+                    android:textStyle="normal" />
+            </LinearLayout>
+
+            <!-- RFID reader IP -->
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/rfid_readers" />
+                <EditText
+                    android:id="@+id/readerHost"
+                    style="@style/ChipValueBox"
+                    android:hint="@string/hint_reader_host"
+                    android:inputType="text" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/scanReader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/velogrip_green"
+                android:text="@string/scan_reader"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/chip_id_bib" />
+                <Switch android:id="@+id/swChipIdBib" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/chips_per_racer" />
+                <EditText
+                    android:id="@+id/chipsPerRacer"
+                    style="@style/ChipValueBox"
+                    android:inputType="number" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/use_partial_chip" />
+                <Switch android:id="@+id/swPartialChip" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/no_detect_after_start" />
+                <EditText
+                    android:id="@+id/suppress"
+                    style="@style/ChipValueBox"
+                    android:inputType="datetime"
+                    android:digits="0123456789:" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/no_redetect_after_lap" />
+                <EditText
+                    android:id="@+id/lapGap"
+                    style="@style/ChipValueBox"
+                    android:inputType="datetime"
+                    android:digits="0123456789:" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/chip_start_time" />
+                <Switch android:id="@+id/swChipStartTime" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/chip_checkin" />
+                <Switch android:id="@+id/swChipCheckin" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/beep_unknown_chip" />
+                <Switch android:id="@+id/swBeepUnknown" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/antenna_power" />
+                <EditText
+                    android:id="@+id/antennaPower"
+                    style="@style/ChipValueBox"
+                    android:inputType="number" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/show_chip_popup" />
+                <Switch android:id="@+id/swShowPopup" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/rowProgramChips"
+                style="@style/ChipRow"
+                android:background="?android:attr/selectableItemBackground">
+                <TextView style="@style/ChipLabel" android:text="@string/program_chips" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_chevron"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="❯"
+                    android:textColor="@color/velogrip_green"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="@string/chip_timing_hint"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <!-- Bottom bar: Settings · Test connection -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="8dp">
+
+        <LinearLayout
+            android:id="@+id/navSettings"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚙️"
+                android:textSize="20sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_title"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navTest"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📶"
+                android:textSize="20sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/test_connection"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

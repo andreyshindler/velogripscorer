@@ -81,6 +81,12 @@
             android:exported="false" />
 
         <activity
+            android:name=".ChipTimingActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:exported="false" />
+
+        <activity
             android:name=".DownloadRacesActivity"
             android:label="@string/download_title"
             android:parentActivityName=".MainActivity"

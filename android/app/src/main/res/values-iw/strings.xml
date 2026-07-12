@@ -99,8 +99,29 @@
     <string name="hardware_hint">בחר אפשרויות חומרה חיצונית</string>
     <string name="proto_llrp">RFID-LLRP</string>
     <string name="proto_ascii">שורות ASCII</string>
-    <string name="proto_uhf">UHF בינארי</string>
+    <string name="proto_uhf">מסגרת UHF בינארית</string>
     <string name="proto_demo">מצב הדגמה</string>
+
+    <string name="chip_timing_title">מדידת שבבים</string>
+    <string name="rfid_readers">קוראי RFID:</string>
+    <string name="chip_id_bib">מזהה שבב = מספר חזה:</string>
+    <string name="chips_per_racer">מספר שבבים לרוכב:</string>
+    <string name="use_partial_chip">שימוש במזהה שבב חלקי:</string>
+    <string name="no_detect_after_start">אל תזהה שבבים אחרי הזינוק למשך:</string>
+    <string name="no_redetect_after_lap">אל תזהה שוב רוכב אחרי הקפה למשך:</string>
+    <string name="chip_start_time">זמן זינוק לפי שבב:</string>
+    <string name="chip_checkin">צ׳ק-אין לפי שבב:</string>
+    <string name="beep_unknown_chip">צפצוף לשבבים שלא ברשימת הזינוק:</string>
+    <string name="antenna_power">עוצמת אנטנה (%):</string>
+    <string name="show_chip_popup">הצג חלונית זיהוי שבב:</string>
+    <string name="program_chips">תכנות שבבי RFID:</string>
+    <string name="chip_timing_hint">הגדר הגדרות מדידת שבבים</string>
+    <string name="chip_option_unsupported">אפשרות זו אינה נתמכת עדיין.</string>
+    <string name="test_connection">בדיקת\nחיבור</string>
+    <string name="test_connecting">מתחבר לקורא…</string>
+    <string name="test_reader_ok">הקורא ענה בכתובת %1$s:%2$d ✓</string>
+    <string name="test_reader_failed">הקורא לא ענה: %1$s</string>
+    <string name="test_demo_ok">מצב הדגמה — אין צורך בקורא ✓</string>
 
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
