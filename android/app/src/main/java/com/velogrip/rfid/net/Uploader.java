@@ -53,10 +53,13 @@ public final class Uploader {
         return code >= 200 && code < 300;
     }
 
-    /** Uploads a locally recorded gun time; the server keeps an earlier one unless forced. */
+    /** Uploads a locally recorded gun time. The phone is the authoritative timer,
+     *  so we force the server to take this gun time even if it already had one
+     *  (e.g. after a race restart re-guns the wave a few minutes later). */
     public boolean uploadWaveStart(String name, long startedAtMs) throws IOException {
         String json = "{\"name\":" + jsonString(name)
-                + ",\"started_at\":\"" + iso.format(new Date(startedAtMs)) + "\"}";
+                + ",\"started_at\":\"" + iso.format(new Date(startedAtMs)) + "\""
+                + ",\"force\":true}";
         int code = post("/api/ingest/wave-start", json);
         if (code == 401) throw new IOException("server rejected reader token (401)");
         return code >= 200 && code < 300;

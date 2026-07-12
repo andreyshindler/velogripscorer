@@ -103,8 +103,10 @@ public class PostResultsActivity extends Activity {
             String result;
             try {
                 Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
-                for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
-                    if (wave.name.isEmpty()) continue;
+                // Re-send every gun time (force) so the web clock matches the app,
+                // even for waves already synced with an out-of-date start.
+                for (RaceStore.Wave wave : store.waves()) {
+                    if (wave.name.isEmpty() || wave.startedAtMs == null) continue;
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) store.markWaveSynced(wave.name);
                 }
                 int sent = 0;
