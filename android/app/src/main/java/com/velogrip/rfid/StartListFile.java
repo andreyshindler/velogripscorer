@@ -25,7 +25,7 @@ import java.util.zip.ZipInputStream;
 public final class StartListFile {
 
     public static final class Row {
-        public String bib = "", name = "", category = "", wave = "", epc = "", epc2 = "", distance = "";
+        public String bib = "", name = "", category = "", wave = "", epc = "", epc2 = "", distance = "", gender = "";
     }
 
     public static final class ImportResult {
@@ -44,6 +44,7 @@ public final class StartListFile {
         HEADERS.put("epc", new String[]{"epc", "chip", "tag", "chip id", "chipid", "שבב", "תג"});
         HEADERS.put("epc2", new String[]{"chip id2", "chipid2", "epc2", "chip 2", "שבב 2"});
         HEADERS.put("distance", new String[]{"distance", "מרחק"});
+        HEADERS.put("gender", new String[]{"gender", "sex", "מין", "מגדר"});
     }
 
     private StartListFile() { }
@@ -71,10 +72,10 @@ public final class StartListFile {
                         : String.format(Locale.US, "%4s", r.bib).replace(' ', '0'));
             }
             if (!r.wave.isEmpty()) waves.add(r.wave);
-            store.upsertRacer(new RaceStore.Racer(epc, r.bib, r.name, r.category, r.wave, r.distance));
+            store.upsertRacer(new RaceStore.Racer(epc, r.bib, r.name, r.category, r.wave, r.distance, "", r.gender));
             String epc2 = r.epc2.toUpperCase(Locale.US).replaceAll("[^0-9A-F]", "");
             if (!epc2.isEmpty() && !r.bib.isEmpty()) {
-                store.upsertRacer(new RaceStore.Racer(epc2, r.bib, r.name, r.category, r.wave, r.distance));
+                store.upsertRacer(new RaceStore.Racer(epc2, r.bib, r.name, r.category, r.wave, r.distance, "", r.gender));
             }
             racers++;
         }
@@ -115,6 +116,7 @@ public final class StartListFile {
             r.epc = cell(cells, cols.get("epc"));
             r.epc2 = cell(cells, cols.get("epc2"));
             r.distance = cell(cells, cols.get("distance"));
+            r.gender = cell(cells, cols.get("gender"));
             if (!r.name.isEmpty() || !r.bib.isEmpty()) out.add(r);
         }
         return out;

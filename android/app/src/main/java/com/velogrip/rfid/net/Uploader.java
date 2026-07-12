@@ -45,6 +45,7 @@ public final class Uploader {
             if (i > 0) json.append(',');
             json.append("{\"epc\":\"").append(row.epc).append('"');
             if (row.rssi != null) json.append(",\"rssi\":").append(row.rssi);
+            if (row.antenna != null) json.append(",\"antenna\":").append(row.antenna);
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
         json.append("]}");

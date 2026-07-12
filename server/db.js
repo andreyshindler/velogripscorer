@@ -233,6 +233,8 @@ for (const stmt of [
   `ALTER TABLE tag_assignments ADD COLUMN racer_status TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tag_assignments ADD COLUMN distance TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tag_assignments ADD COLUMN team TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE tag_assignments ADD COLUMN gender TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE tag_reads ADD COLUMN antenna INTEGER`,
 ]) {
   try {
     db.exec(stmt);

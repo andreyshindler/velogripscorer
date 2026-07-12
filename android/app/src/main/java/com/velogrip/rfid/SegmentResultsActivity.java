@@ -28,10 +28,11 @@ public class SegmentResultsActivity extends Activity {
 
     public static final String EXTRA_DISTANCE = "distance";
     public static final String EXTRA_CATEGORY = "category";
+    public static final String EXTRA_GENDER = "gender";   // "", "F" or "M"
 
     private Prefs prefs;
     private RaceStore store;
-    private String distance = "", category = "";
+    private String distance = "", category = "", gender = "";
     private boolean sortByBib = false;
 
     @Override
@@ -42,6 +43,7 @@ public class SegmentResultsActivity extends Activity {
         store = new RaceStore(this);
         distance = orEmpty(getIntent().getStringExtra(EXTRA_DISTANCE));
         category = orEmpty(getIntent().getStringExtra(EXTRA_CATEGORY));
+        gender = orEmpty(getIntent().getStringExtra(EXTRA_GENDER));
 
         String contest = prefs.contestTitle();
         ((TextView) findViewById(R.id.contestTitle)).setText(
@@ -88,6 +90,8 @@ public class SegmentResultsActivity extends Activity {
         for (RaceEngine.Result r : all) {
             if (!r.distance.equals(distance)) continue;
             if (!category.isEmpty() && !r.category.equals(category)) continue;
+            if (gender.equals("F") && !ViewResultsActivity.isFemale(r.gender)) continue;
+            if (gender.equals("M") && !ViewResultsActivity.isMale(r.gender)) continue;
             out.add(r);
         }
         return out;
@@ -153,6 +157,8 @@ public class SegmentResultsActivity extends Activity {
 
         // Footer: "5k, 60+ Male | 6 racers" (distinct racers in the segment)
         String label = distance.isEmpty() ? getString(R.string.all_racers) : distance;
+        if (gender.equals("F")) label += ", " + getString(R.string.gender_female);
+        else if (gender.equals("M")) label += ", " + getString(R.string.gender_male);
         if (!category.isEmpty()) label += ", " + category;
         ((TextView) findViewById(R.id.segFooter)).setText(
                 getString(R.string.segment_footer, label, seg.size()));

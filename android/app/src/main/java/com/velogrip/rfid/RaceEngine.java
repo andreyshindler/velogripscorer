@@ -21,15 +21,15 @@ public final class RaceEngine {
 
     public static final class Result {
         public int rank;                 // 0 = unranked
-        public final String bib, name, category, wave, distance;
+        public final String bib, name, category, wave, distance, gender;
         public final String status;     // finished | on_course | not_started
         public final int laps;
         public final long elapsedMs;    // 0 unless finished
 
-        Result(String bib, String name, String category, String wave, String distance,
+        Result(String bib, String name, String category, String wave, String distance, String gender,
                String status, int laps, long elapsedMs) {
             this.bib = bib; this.name = name; this.category = category; this.wave = wave;
-            this.distance = distance;
+            this.distance = distance; this.gender = gender;
             this.status = status; this.laps = laps; this.elapsedMs = elapsedMs;
         }
     }
@@ -103,14 +103,14 @@ public final class RaceEngine {
             }
             if (!declared.isEmpty()) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, declared, 0, 0));
+                        racer.distance, racer.gender,declared, 0, 0));
                 continue;
             }
             // racers without a wave start with the mass gun (wave named "")
             Long gun = gunByWave.get(racer.wave);
             if (gun == null) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, "not_started", 0, 0));
+                        racer.distance, racer.gender,"not_started", 0, 0));
                 continue;
             }
             List<Long> raw = new ArrayList<>();
@@ -139,15 +139,15 @@ public final class RaceEngine {
             boolean unlimited = target == Integer.MAX_VALUE;
             if (crossings.isEmpty()) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, "on_course", 0, 0));
+                        racer.distance, racer.gender,"on_course", 0, 0));
             } else if (!unlimited && crossings.size() < target && !finalizeLapsDown) {
                 // laps completed so far, still on course to the lap target
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, "on_course", crossings.size(), 0));
+                        racer.distance, racer.gender,"on_course", crossings.size(), 0));
             } else {
                 long last = crossings.get(crossings.size() - 1);
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, "finished", crossings.size(), last - gun));
+                        racer.distance, racer.gender,"finished", crossings.size(), last - gun));
             }
         }
 

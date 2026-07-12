@@ -646,6 +646,8 @@ function raceWinnersTables(id, results) {
         </tr></thead>
         <tbody>
           ${line(t('overall'), rows, 0, '')}
+          ${rows.some((r) => r.gender === 'Female') ? line(t('female'), rows.filter((r) => r.gender === 'Female'), 20, '') : ''}
+          ${rows.some((r) => r.gender === 'Male') ? line(t('male'), rows.filter((r) => r.gender === 'Male'), 20, '') : ''}
           ${cats.map((cat) => line(cat, rows.filter((r) => r.category === cat), 20, cat)).join('')}
         </tbody>
       </table>`;

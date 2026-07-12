@@ -221,16 +221,19 @@ public final class LlrpEngine implements TagParser {
     private TagRead parseTagReportData(int pos, int end) {
         String epc = null;
         Double rssi = null;
+        Integer antenna = null;
         while (pos < end) {
             int first = buf[pos] & 0xFF;
             if ((first & 0x80) != 0) { // TV parameter
                 int tvType = first & 0x7F;
                 int valueLen = tvValueLength(tvType);
-                if (valueLen < 0 || pos + 1 + valueLen > end) return finishTag(epc, rssi);
+                if (valueLen < 0 || pos + 1 + valueLen > end) return finishTag(epc, rssi, antenna);
                 if (tvType == TV_EPC_96) {
                     epc = hex(pos + 1, 12);
                 } else if (tvType == TV_PEAK_RSSI) {
                     rssi = (double) buf[pos + 1]; // signed dBm
+                } else if (tvType == TV_ANTENNA_ID) {
+                    antenna = ((buf[pos + 1] & 0xFF) << 8) | (buf[pos + 2] & 0xFF); // u16
                 }
                 pos += 1 + valueLen;
             } else { // TLV parameter
@@ -246,12 +249,12 @@ public final class LlrpEngine implements TagParser {
                 pos += plen;
             }
         }
-        return finishTag(epc, rssi);
+        return finishTag(epc, rssi, antenna);
     }
 
-    private TagRead finishTag(String epc, Double rssi) {
+    private TagRead finishTag(String epc, Double rssi, Integer antenna) {
         if (epc == null || epc.length() < 4) return null;
-        return new TagRead(epc, rssi, System.currentTimeMillis());
+        return new TagRead(epc, rssi, System.currentTimeMillis(), antenna);
     }
 
     private static int tvValueLength(int type) {

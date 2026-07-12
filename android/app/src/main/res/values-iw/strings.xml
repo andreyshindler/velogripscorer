@@ -423,6 +423,8 @@
     <string name="post_results_title">פרסום תוצאות</string>
     <string name="all_racers">כל המשתתפים</string>
     <string name="overall">כללי</string>
+    <string name="gender_female">נשים</string>
+    <string name="gender_male">גברים</string>
     <string name="status_dns">DNS</string>
     <string name="post_to_web">פרסום לאתר</string>
     <string name="post_to_web_hint">פרסום ל‑srv1515969.hstgr.cloud/veloscorer</string>

@@ -88,7 +88,7 @@ router.post('/ingest/reads', (req, res) => {
 
   const accepted = [];
   const insert = db.prepare(
-    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, read_at) VALUES (?,?,?,?,?)'
+    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, read_at) VALUES (?,?,?,?,?,?)'
   );
   const tx = db.transaction(() => {
     for (const r of reads) {
@@ -96,7 +96,8 @@ router.post('/ingest/reads', (req, res) => {
       if (!EPC_RE.test(epc)) continue;
       const readAt = r.read_at && !Number.isNaN(Date.parse(r.read_at)) ? new Date(r.read_at).toISOString() : new Date().toISOString();
       const rssi = Number.isFinite(Number(r.rssi)) ? Number(r.rssi) : null;
-      const info = insert.run(reader.id, reader.contest_id, epc, rssi, readAt);
+      const antenna = r.antenna != null && Number.isInteger(Number(r.antenna)) ? Number(r.antenna) : null;
+      const info = insert.run(reader.id, reader.contest_id, epc, rssi, antenna, readAt);
       accepted.push({ id: info.lastInsertRowid, epc, rssi, read_at: readAt, ...(assignments.get(epc) || {}) });
     }
     db.prepare(`UPDATE readers SET last_seen = datetime('now') WHERE id = ?`).run(reader.id);
@@ -120,7 +121,7 @@ router.get('/ingest/startlist', (req, res) => {
   const contest = getContest(reader.contest_id);
   const tags = db
     .prepare(
-      `SELECT a.epc, a.bib, a.participant, a.category, a.distance, w.name AS wave
+      `SELECT a.epc, a.bib, a.participant, a.category, a.distance, a.gender, w.name AS wave
        FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
        WHERE a.contest_id = ? ORDER BY a.bib, a.epc`
     )
@@ -319,11 +320,11 @@ function importRacers(contest, racers, userId) {
     db.prepare('SELECT id, name FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.name, w.id])
   );
   const upsert = db.prepare(
-    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id, category, distance, team, racer_status)
-     VALUES (?,?,?,?,?,?,?,?,'')
+    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id, category, distance, team, gender, racer_status)
+     VALUES (?,?,?,?,?,?,?,?,?,'')
      ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
        wave_id = excluded.wave_id, category = excluded.category,
-       distance = excluded.distance, team = excluded.team`
+       distance = excluded.distance, team = excluded.team, gender = excluded.gender`
   );
   const newWave = db.prepare('INSERT INTO waves (contest_id, name) VALUES (?, ?)');
 
@@ -352,10 +353,11 @@ function importRacers(contest, racers, userId) {
       const category = String(row?.category ?? '').trim();
       const distance = String(row?.distance ?? '').trim();
       const team = String(row?.team ?? '').trim();
-      upsert.run(contest.id, epc, bib, participant, waveId, category, distance, team);
+      const gender = normalizeGender(row?.gender);
+      upsert.run(contest.id, epc, bib, participant, waveId, category, distance, team, gender);
       imported++;
       if (epc2 && EPC_RE.test(epc2) && epc2 !== epc) {
-        upsert.run(contest.id, epc2, bib, participant, waveId, category, distance, team);
+        upsert.run(contest.id, epc2, bib, participant, waveId, category, distance, team, gender);
       }
     });
   });
@@ -375,7 +377,16 @@ const FILE_HEADERS = {
   epc2: ['chip id2', 'chipid2', 'epc2', 'chip 2', 'שבב 2'],
   distance: ['distance', 'מרחק'],
   team: ['team', 'team name', 'קבוצה', 'שם קבוצה'],
+  gender: ['gender', 'sex', 'מין', 'מגדר'],
 };
+
+// Canonical 'Male' / 'Female' / '' from the many spellings seen in start lists.
+function normalizeGender(raw) {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (['m', 'male', 'man', 'זכר', 'גבר', 'בן'].includes(s)) return 'Male';
+  if (['f', 'female', 'woman', 'נקבה', 'אישה', 'בת'].includes(s)) return 'Female';
+  return '';
+}
 
 function rowsToRacers(rows) {
   if (!rows.length) return [];
@@ -395,7 +406,7 @@ function rowsToRacers(rows) {
     return {
       bib: get('bib'), participant: get('participant'), category: get('category'),
       wave: get('wave'), epc: get('epc'), epc2: get('epc2'),
-      distance: get('distance'), team: get('team'),
+      distance: get('distance'), team: get('team'), gender: get('gender'),
     };
   }).filter((r) => r.participant || r.bib);
 }
@@ -567,7 +578,7 @@ router.get('/contests/:id/race-results', (req, res) => {
     const wave = a.wave_id ? waves.get(a.wave_id) : null;
     const base = {
       epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
-      distance: a.distance || '', team: a.team || '',
+      distance: a.distance || '', team: a.team || '', gender: a.gender || '',
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
     };
     // organizer-declared statuses override everything (Webscorer-style)
@@ -622,11 +633,11 @@ router.get('/contests/:id/race-results', (req, res) => {
 
   if (req.query.format === 'csv') {
     const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
-    const header = 'rank,bib,participant,category,category_rank,distance,team,wave,laps,elapsed,behind,status';
+    const header = 'rank,bib,participant,category,category_rank,distance,team,gender,wave,laps,elapsed,behind,status';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`);
     return res.send([header, ...results.map((r) =>
-      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.distance ?? ''), cell(r.team ?? ''), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
+      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.distance ?? ''), cell(r.team ?? ''), cell(r.gender ?? ''), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
@@ -659,7 +670,7 @@ router.get('/contests/:id/taps', (req, res) => {
   const assignments = db.prepare('SELECT * FROM tag_assignments WHERE contest_id = ? ORDER BY bib, epc').all(contest.id);
   const reads = db
     .prepare(
-      `SELECT t.epc, t.rssi, t.read_at, r.name AS reader_name
+      `SELECT t.epc, t.rssi, t.antenna, t.read_at, r.name AS reader_name
        FROM tag_reads t JOIN readers r ON r.id = t.reader_id
        WHERE t.contest_id = ? ORDER BY t.read_at`
     )
@@ -708,7 +719,8 @@ router.get('/contests/:id/taps', (req, res) => {
         bib: g.bib, epc: r.epc, name: g.participant,
         tap, timeTap: formatElapsed(r.ms - startMs),
         distance: g.distance || '', category: g.category || '', team: g.team || '',
-        reader: r.reader_name || '', peak: r.rssi ?? '', timeOfDay: timeOfDay(r.read_at),
+        gender: g.gender || '', reader: r.reader_name || '', antenna: r.antenna ?? '',
+        peak: r.rssi ?? '', timeOfDay: timeOfDay(r.read_at),
         sortMs: r.ms,
       });
     });
@@ -720,7 +732,7 @@ router.get('/contests/:id/taps', (req, res) => {
     'Distance', 'Category', 'Team name', 'Gender', 'Reader', 'Antenna', 'Peak Signal', 'Time tap (time of day)'];
   const lines = rows.map((r, i) =>
     [i + 1, cell(r.bib), cell(r.epc), cell(r.name), r.tap, r.timeTap, '',
-      cell(r.distance), cell(r.category), cell(r.team), '', cell(r.reader), '', r.peak, r.timeOfDay].join(','));
+      cell(r.distance), cell(r.category), cell(r.team), cell(r.gender), cell(r.reader), r.antenna, r.peak, r.timeOfDay].join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="race-${contest.id}-taps.csv"`);
   res.send('﻿' + [header.join(','), ...lines].join('\n') + '\n'); // BOM so Excel reads Hebrew
@@ -732,7 +744,7 @@ router.get('/contests/:id/startlist', (req, res) => {
   if (!contest) return;
   const racers = db
     .prepare(
-      `SELECT a.bib, a.participant, a.category, a.distance, a.team, a.racer_status, w.name AS wave
+      `SELECT a.bib, a.participant, a.category, a.distance, a.team, a.gender, a.racer_status, w.name AS wave
        FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
        WHERE a.contest_id = ?
        GROUP BY CASE WHEN a.bib != '' THEN a.bib ELSE a.epc END

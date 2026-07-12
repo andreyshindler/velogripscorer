@@ -25,20 +25,25 @@ import java.util.List;
 public final class RaceStore extends SQLiteOpenHelper {
 
     public static final class Racer {
-        public final String epc, bib, name, category, wave, distance, status;
+        public final String epc, bib, name, category, wave, distance, status, gender;
 
         public Racer(String epc, String bib, String name, String category, String wave) {
-            this(epc, bib, name, category, wave, "", "");
+            this(epc, bib, name, category, wave, "", "", "");
         }
 
         public Racer(String epc, String bib, String name, String category, String wave, String distance) {
-            this(epc, bib, name, category, wave, distance, "");
+            this(epc, bib, name, category, wave, distance, "", "");
         }
 
         public Racer(String epc, String bib, String name, String category, String wave,
                      String distance, String status) {
+            this(epc, bib, name, category, wave, distance, status, "");
+        }
+
+        public Racer(String epc, String bib, String name, String category, String wave,
+                     String distance, String status, String gender) {
             this.epc = epc; this.bib = bib; this.name = name; this.category = category; this.wave = wave;
-            this.distance = distance; this.status = status;
+            this.distance = distance; this.status = status; this.gender = gender;
         }
     }
 
@@ -56,15 +61,20 @@ public final class RaceStore extends SQLiteOpenHelper {
         public final long id;
         public final String epc;
         public final Double rssi;
+        public final Integer antenna;
         public final long readAtMs;
 
         public Passing(long id, String epc, Double rssi, long readAtMs) {
-            this.id = id; this.epc = epc; this.rssi = rssi; this.readAtMs = readAtMs;
+            this(id, epc, rssi, null, readAtMs);
+        }
+
+        public Passing(long id, String epc, Double rssi, Integer antenna, long readAtMs) {
+            this.id = id; this.epc = epc; this.rssi = rssi; this.antenna = antenna; this.readAtMs = readAtMs;
         }
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 6);
+        super(ctx, "race.db", null, 7);
     }
 
     @Override
@@ -72,10 +82,10 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE racers (epc TEXT PRIMARY KEY, bib TEXT NOT NULL DEFAULT ''," +
                 " name TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT ''," +
                 " wave TEXT NOT NULL DEFAULT '', distance TEXT NOT NULL DEFAULT ''," +
-                " racer_status TEXT NOT NULL DEFAULT '')");
+                " racer_status TEXT NOT NULL DEFAULT '', gender TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE TABLE waves (name TEXT PRIMARY KEY, started_at INTEGER, synced INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
-                " rssi REAL, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
+                " rssi REAL, antenna INTEGER, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL DEFAULT ''," +
@@ -102,6 +112,10 @@ public final class RaceStore extends SQLiteOpenHelper {
             db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL DEFAULT ''," +
                     " bib TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', read_at INTEGER NOT NULL DEFAULT 0)");
         }
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE passings ADD COLUMN antenna INTEGER");
+            db.execSQL("ALTER TABLE racers ADD COLUMN gender TEXT NOT NULL DEFAULT ''");
+        }
     }
 
     // ---- passings ----
@@ -110,6 +124,7 @@ public final class RaceStore extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put("epc", read.epc);
         if (read.rssi != null) values.put("rssi", read.rssi);
+        if (read.antenna != null) values.put("antenna", read.antenna);
         values.put("read_at", read.readAtMs);
         getWritableDatabase().insert("passings", null, values);
     }
@@ -117,12 +132,13 @@ public final class RaceStore extends SQLiteOpenHelper {
     public List<Passing> pendingUpload(int limit) {
         List<Passing> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT id, epc, rssi, read_at FROM passings WHERE uploaded = 0 ORDER BY id LIMIT ?",
+                "SELECT id, epc, rssi, antenna, read_at FROM passings WHERE uploaded = 0 ORDER BY id LIMIT ?",
                 new String[]{String.valueOf(limit)});
         try {
             while (c.moveToNext()) {
                 out.add(new Passing(c.getLong(0), c.getString(1),
-                        c.isNull(2) ? null : c.getDouble(2), c.getLong(3)));
+                        c.isNull(2) ? null : c.getDouble(2),
+                        c.isNull(3) ? null : c.getInt(3), c.getLong(4)));
             }
         } finally {
             c.close();
@@ -394,17 +410,18 @@ public final class RaceStore extends SQLiteOpenHelper {
         values.put("wave", racer.wave);
         values.put("distance", racer.distance);
         values.put("racer_status", racer.status);
+        values.put("gender", racer.gender);
         getWritableDatabase().insertWithOnConflict("racers", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public List<Racer> racers() {
         List<Racer> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave, distance, racer_status FROM racers ORDER BY bib, epc", null);
+                "SELECT epc, bib, name, category, wave, distance, racer_status, gender FROM racers ORDER BY bib, epc", null);
         try {
             while (c.moveToNext()) {
                 out.add(new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                        c.getString(4), c.getString(5), c.getString(6)));
+                        c.getString(4), c.getString(5), c.getString(6), c.getString(7)));
             }
         } finally {
             c.close();
@@ -414,11 +431,11 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     public Racer racerByBib(String bib) {
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave, distance, racer_status FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
+                "SELECT epc, bib, name, category, wave, distance, racer_status, gender FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
         try {
             return c.moveToNext()
                     ? new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                            c.getString(4), c.getString(5), c.getString(6))
+                            c.getString(4), c.getString(5), c.getString(6), c.getString(7))
                     : null;
         } finally {
             c.close();

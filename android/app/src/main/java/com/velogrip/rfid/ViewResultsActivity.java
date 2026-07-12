@@ -96,7 +96,17 @@ public class ViewResultsActivity extends Activity {
             list.addView(sectionHeader(label));
 
             // Overall for this distance.
-            list.addView(segmentRow(getString(R.string.overall), () -> openSegment(distance, "")));
+            list.addView(segmentRow(getString(R.string.overall), () -> openSegment(distance, "", "")));
+
+            // Female / Male overall, when the roster carries gender.
+            boolean hasFemale = false, hasMale = false;
+            for (RaceEngine.Result r : results) {
+                if (!r.distance.equals(distance)) continue;
+                if (isFemale(r.gender)) hasFemale = true;
+                else if (isMale(r.gender)) hasMale = true;
+            }
+            if (hasFemale) list.addView(segmentRow(getString(R.string.gender_female), () -> openSegment(distance, "", "F")));
+            if (hasMale) list.addView(segmentRow(getString(R.string.gender_male), () -> openSegment(distance, "", "M")));
 
             // One row per category present in this distance.
             LinkedHashSet<String> cats = new LinkedHashSet<>();
@@ -104,16 +114,29 @@ public class ViewResultsActivity extends Activity {
                 if (r.distance.equals(distance) && !r.category.isEmpty()) cats.add(r.category);
             }
             for (String cat : cats) {
-                list.addView(segmentRow(cat, () -> openSegment(distance, cat)));
+                list.addView(segmentRow(cat, () -> openSegment(distance, cat, "")));
             }
         }
     }
 
+    static boolean isFemale(String g) {
+        if (g == null) return false;
+        String s = g.trim().toLowerCase(java.util.Locale.ROOT);
+        return s.equals("f") || s.equals("female") || s.equals("נקבה") || s.equals("אישה");
+    }
+
+    static boolean isMale(String g) {
+        if (g == null) return false;
+        String s = g.trim().toLowerCase(java.util.Locale.ROOT);
+        return s.equals("m") || s.equals("male") || s.equals("זכר") || s.equals("גבר");
+    }
+
     /** Open the segment's ranked racers on their own screen (SegmentResults). */
-    private void openSegment(String distance, String category) {
+    private void openSegment(String distance, String category, String gender) {
         Intent i = new Intent(this, SegmentResultsActivity.class);
         i.putExtra(SegmentResultsActivity.EXTRA_DISTANCE, distance);
         i.putExtra(SegmentResultsActivity.EXTRA_CATEGORY, category);
+        i.putExtra(SegmentResultsActivity.EXTRA_GENDER, gender);
         startActivity(i);
     }
 

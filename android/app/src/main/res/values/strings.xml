@@ -412,6 +412,8 @@
     <string name="post_results_title">Post Results</string>
     <string name="all_racers">All racers</string>
     <string name="overall">Overall</string>
+    <string name="gender_female">Female</string>
+    <string name="gender_male">Male</string>
     <string name="status_dns">DNS</string>
     <string name="post_to_web">Post to the web</string>
     <string name="post_to_web_hint">Publish to srv1515969.hstgr.cloud/veloscorer</string>
