@@ -63,6 +63,7 @@ const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 function renderChrome() {
   const authArea = document.getElementById('auth-area');
   document.getElementById('nav-create').hidden = !state.user;
+  document.getElementById('nav-startlists').hidden = !state.user;
   document.getElementById('nav-admin').hidden = !(state.user && state.user.role === 'admin');
   document.getElementById('bell').hidden = !state.user;
   if (state.user) {
@@ -132,6 +133,7 @@ async function route() {
     if (!page) return viewHome();
     if (page === 'login') return viewLogin();
     if (page === 'create') return viewCreate();
+    if (page === 'startlists') return viewStartLists();
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
     if (page === 'admin') return viewAdmin(arg || 'reports');
@@ -303,6 +305,103 @@ function viewCreate() {
   };
 }
 
+
+// ---------- my start lists ----------
+
+async function viewStartLists() {
+  if (!state.user) { location.hash = '#/login'; return; }
+  main.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h1 style="margin:0">${t('my_startlists')}</h1>
+      <button class="btn" id="add-list">➕ ${t('add_new_list')}</button>
+    </div>
+
+    <div class="card mt" id="new-list-card" hidden>
+      <h3 style="margin-top:0">${t('add_new_list')}</h3>
+      <form id="new-list-form">
+        <label for="l-title">${t('contest_title')}</label>
+        <input id="l-title" required maxlength="120">
+        <div class="row2">
+          <div><label for="l-date">${t('start_date')}</label><input id="l-date" type="date" required></div>
+          <div><label for="l-sport">${t('sport')}</label><input id="l-sport" placeholder="${t('sport_hint')}"></div>
+        </div>
+        <label for="l-location">${t('location')}</label>
+        <input id="l-location" placeholder="${t('location_hint')}">
+        <label for="l-file">${t('startlist_file_label')}</label>
+        <input id="l-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        <div class="mt"><button class="btn" type="submit">${t('create')}</button></div>
+      </form>
+    </div>
+
+    <p class="muted" id="races-found"></p>
+    <div class="card" style="overflow-x:auto;padding:0">
+      <table class="board" style="margin:0">
+        <thead><tr>
+          <th>${t('contest_title')}</th><th>${t('racers_count')}</th><th>${t('start_date')}</th>
+          <th>${t('location')}</th><th>${t('sport')}</th><th></th>
+        </tr></thead>
+        <tbody id="lists-body"></tbody>
+      </table>
+    </div>`;
+
+  const addBtn = document.getElementById('add-list');
+  const card = document.getElementById('new-list-card');
+  addBtn.onclick = () => { card.hidden = !card.hidden; if (!card.hidden) document.getElementById('l-title').focus(); };
+
+  document.getElementById('new-list-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const day = document.getElementById('l-date').value;
+    const body = {
+      kind: 'race',
+      title: document.getElementById('l-title').value,
+      sport: document.getElementById('l-sport').value,
+      location: document.getElementById('l-location').value,
+      category: 'other',
+      start_at: new Date(day + 'T00:00').toISOString(),
+      end_at: new Date(day + 'T23:59').toISOString(),
+    };
+    try {
+      const contest = await api('/contests', { method: 'POST', body });
+      const file = document.getElementById('l-file').files[0];
+      if (file) {
+        const form = new FormData();
+        form.set('file', file);
+        const result = await api(`/contests/${contest.id}/startlist-file`, { method: 'POST', form });
+        toast(t('import_done', { n: result.imported, s: result.skipped })
+          + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
+      }
+      location.hash = `#/contest/${contest.id}/manage`;
+    } catch (err) { toast(err.message, true); }
+  };
+
+  await loadStartLists();
+}
+
+async function loadStartLists() {
+  const { races } = await api('/my/races');
+  document.getElementById('races-found').textContent = t('races_found', { n: races.length });
+  const body = document.getElementById('lists-body');
+  body.innerHTML = races.map((r) => `
+    <tr>
+      <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
+      <td>${r.racer_count}</td>
+      <td>${new Date(r.start_at).toLocaleDateString(LANG === 'he' ? 'he-IL' : 'en-US',
+        { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+      <td>${esc(r.location || '')}</td>
+      <td>${esc(r.sport || '')}</td>
+      <td><button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button></td>
+    </tr>`).join('') || `<tr><td colspan="6" class="muted">${t('no_contests')}</td></tr>`;
+  body.querySelectorAll('.list-del').forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm(`${t('delete_race')}: ${btn.dataset.title}?`)) return;
+      try {
+        await api(`/contests/${btn.dataset.id}`, { method: 'DELETE' });
+        toast('✓');
+        loadStartLists();
+      } catch (err) { toast(err.message, true); }
+    };
+  });
+}
 
 // ---------- contest page ----------
 

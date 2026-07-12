@@ -10,42 +10,57 @@
         android:padding="16dp">
 
         <TextView
+            android:id="@+id/dlConnectedAs"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/download_help"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/label_email"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/dlEmail"
+        <LinearLayout
+            android:id="@+id/dlForm"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textEmailAddress" />
+            android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/label_password"
-            android:textStyle="bold" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/download_help"
+                android:textSize="14sp" />
 
-        <EditText
-            android:id="@+id/dlPassword"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="textPassword" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/label_email"
+                android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/dlLogin"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/login_button" />
+            <EditText
+                android:id="@+id/dlEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textEmailAddress" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_password"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/dlPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword" />
+
+            <Button
+                android:id="@+id/dlLogin"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/login_button" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/dlRacesHeader"

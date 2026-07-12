@@ -19,6 +19,9 @@
     <string name="download_help">Log in with your website account, then tap a race to load its start list onto this phone.</string>
     <string name="login_button">Log in</string>
     <string name="racers_n">%1$d racers</string>
+    <string name="connecting">Connecting…</string>
+    <string name="connected_as">Connected as %1$s</string>
+    <string name="races_found">%1$d races found — tap one to load it</string>
     <string name="switch_race_confirm">Switch to \"%1$s\"? The previous race\'s start list and recorded passings on this phone will be cleared.</string>
 
     <string name="archive_title">Race archive</string>

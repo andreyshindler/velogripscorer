@@ -38,6 +38,13 @@ public final class Prefs {
     public String contestTitle() { return sp.getString("contestTitle", ""); }
 
     public String accountEmail() { return sp.getString("accountEmail", DEFAULT_EMAIL); }
+    public String accountPass() { return sp.getString("accountPass", ""); }
+
+    /** Remembered after the first successful login so race downloads are one tap. */
+    public void saveAccount(String email, String password) {
+        sp.edit().putString("accountEmail", email.trim())
+                .putString("accountPass", password).apply();
+    }
 
     /** Called when the user picks a race after logging in: wires the pairing. */
     public void savePairing(String readerToken, String contestTitle, String email) {

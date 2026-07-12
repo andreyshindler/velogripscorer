@@ -16,13 +16,20 @@ import com.velogrip.rfid.net.Uploader;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Locale;
+
 /**
- * "Download races": log in with the website account, list the account's
- * races, and tap one to pair this phone and pull its start list.
+ * "Download races": connects with the saved website account automatically and
+ * lists the account's start lists; tap one to pair this phone and pull it.
+ * The login form only appears on first use or when the saved login fails.
  */
 public class DownloadRacesActivity extends Activity {
 
     private Prefs prefs;
+    private LinearLayout form;
+    private TextView connectedAs;
+    private EditText email, password;
+    private Button login;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,38 +37,58 @@ public class DownloadRacesActivity extends Activity {
         setContentView(R.layout.activity_download);
         prefs = new Prefs(this);
 
-        EditText email = findViewById(R.id.dlEmail);
-        EditText password = findViewById(R.id.dlPassword);
-        email.setText(prefs.accountEmail());
+        form = findViewById(R.id.dlForm);
+        connectedAs = findViewById(R.id.dlConnectedAs);
+        email = findViewById(R.id.dlEmail);
+        password = findViewById(R.id.dlPassword);
+        login = findViewById(R.id.dlLogin);
 
-        Button login = findViewById(R.id.dlLogin);
-        login.setOnClickListener(v -> {
-            String mail = email.getText().toString().trim();
-            String pass = password.getText().toString();
-            if (prefs.serverUrl().isEmpty() || mail.isEmpty() || pass.isEmpty()) {
-                Toast.makeText(this, R.string.login_needs_fields, Toast.LENGTH_LONG).show();
-                return;
-            }
-            login.setEnabled(false);
-            new Thread(() -> {
-                try {
-                    JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), mail, pass));
-                    String jwt = session.getString("token");
-                    JSONArray races = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt))
-                            .getJSONArray("races");
-                    runOnUiThread(() -> {
-                        login.setEnabled(true);
-                        showRaces(races, mail);
-                    });
-                } catch (Exception e) {
-                    final String msg = getString(R.string.test_failed) + " " + e.getMessage();
-                    runOnUiThread(() -> {
-                        login.setEnabled(true);
+        email.setText(prefs.accountEmail());
+        login.setOnClickListener(v ->
+                connect(email.getText().toString().trim(), password.getText().toString(), true));
+
+        // saved account -> connect without asking
+        if (!prefs.serverUrl().isEmpty() && !prefs.accountEmail().isEmpty()
+                && !prefs.accountPass().isEmpty()) {
+            form.setVisibility(View.GONE);
+            connect(prefs.accountEmail(), prefs.accountPass(), false);
+        }
+    }
+
+    private void connect(String mail, String pass, boolean fromForm) {
+        if (prefs.serverUrl().isEmpty() || mail.isEmpty() || pass.isEmpty()) {
+            Toast.makeText(this, R.string.login_needs_fields, Toast.LENGTH_LONG).show();
+            return;
+        }
+        login.setEnabled(false);
+        connectedAs.setText(getString(R.string.connecting));
+        connectedAs.setVisibility(View.VISIBLE);
+        new Thread(() -> {
+            try {
+                JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), mail, pass));
+                String jwt = session.getString("token");
+                JSONArray races = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt))
+                        .getJSONArray("races");
+                runOnUiThread(() -> {
+                    login.setEnabled(true);
+                    prefs.saveAccount(mail, pass);
+                    form.setVisibility(View.GONE);
+                    connectedAs.setText(getString(R.string.connected_as, mail));
+                    showRaces(races, mail);
+                });
+            } catch (Exception e) {
+                final String msg = getString(R.string.test_failed) + " " + e.getMessage();
+                runOnUiThread(() -> {
+                    login.setEnabled(true);
+                    // saved login failed -> fall back to the form
+                    connectedAs.setVisibility(View.GONE);
+                    form.setVisibility(View.VISIBLE);
+                    if (fromForm || !prefs.accountPass().isEmpty()) {
                         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-                    });
-                }
-            }).start();
-        });
+                    }
+                });
+            }
+        }).start();
     }
 
     private void showRaces(JSONArray races, String email) {
@@ -72,6 +99,7 @@ public class DownloadRacesActivity extends Activity {
             Toast.makeText(this, R.string.no_races_on_account, Toast.LENGTH_LONG).show();
             return;
         }
+        header.setText(getString(R.string.races_found, races.length()));
         header.setVisibility(View.VISIBLE);
         for (int i = 0; i < races.length(); i++) {
             final JSONObject race = races.optJSONObject(i);
@@ -85,11 +113,14 @@ public class DownloadRacesActivity extends Activity {
             TextView title = new TextView(this);
             title.setText(race.optString("title"));
             title.setTextSize(18);
+            title.setTextColor(0xFF76B82A);
             title.setTypeface(null, android.graphics.Typeface.BOLD);
             TextView sub = new TextView(this);
-            String location = race.optString("location");
-            sub.setText((location.isEmpty() ? "" : location + " · ")
-                    + getString(R.string.racers_n, race.optInt("racer_count")));
+            StringBuilder line = new StringBuilder(fmtDate(race.optString("start_at")));
+            if (!race.optString("location").isEmpty()) line.append(" · ").append(race.optString("location"));
+            if (!race.optString("sport").isEmpty()) line.append(" · ").append(race.optString("sport"));
+            line.append(" · ").append(getString(R.string.racers_n, race.optInt("racer_count")));
+            sub.setText(line);
             sub.setTextSize(14);
             row.addView(title);
             row.addView(sub);
@@ -101,6 +132,17 @@ public class DownloadRacesActivity extends Activity {
             divider.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);
+        }
+    }
+
+    private static String fmtDate(String iso) {
+        try {
+            java.text.SimpleDateFormat in =
+                    new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            java.util.Date d = in.parse(iso.substring(0, 10));
+            return java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(d);
+        } catch (Exception e) {
+            return iso;
         }
     }
 

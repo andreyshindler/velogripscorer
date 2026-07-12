@@ -19,6 +19,9 @@
     <string name="download_help">התחבר עם חשבון האתר, ואז הקש על מרוץ כדי לטעון את רשימת הזינוק שלו לטלפון.</string>
     <string name="login_button">התחברות</string>
     <string name="racers_n">%1$d רוכבים</string>
+    <string name="connecting">מתחבר…</string>
+    <string name="connected_as">מחובר כ-%1$s</string>
+    <string name="races_found">נמצאו %1$d מרוצים — הקש על מרוץ כדי לטעון אותו</string>
     <string name="switch_race_confirm">לעבור אל \"%1$s\"? רשימת הזינוק והמעברים שהוקלטו מהמרוץ הקודם יימחקו מהטלפון.</string>
 
     <string name="archive_title">ארכיון מרוצים</string>
