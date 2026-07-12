@@ -89,6 +89,9 @@
     <string name="racer_field_unsupported">This field is not supported yet.</string>
     <string name="configure_racer_settings">Configure racer settings</string>
 
+    <string name="nav_home">Home</string>
+    <string name="navigate_back_to">Navigate back to</string>
+
     <string name="results_options_title">Results Options</string>
     <string name="results_ordered_by">Results ordered by:</string>
     <string name="timing_precision">Timing precision:</string>

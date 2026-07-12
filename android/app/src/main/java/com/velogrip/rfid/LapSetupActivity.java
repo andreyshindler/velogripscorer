@@ -25,7 +25,7 @@ public class LapSetupActivity extends Activity {
         setContentView(R.layout.activity_lap_setup);
         prefs = new Prefs(this);
 
-        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.lap_setup_title);
+        WizardNav.attach(this, WizardNav.LAP_SETUP);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(android.view.View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v ->

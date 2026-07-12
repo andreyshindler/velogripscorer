@@ -30,7 +30,7 @@ public class ResultsOptionsActivity extends Activity {
         setContentView(R.layout.activity_results_options);
         prefs = new Prefs(this);
 
-        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.results_options_title);
+        WizardNav.attach(this, WizardNav.RESULTS_OPTIONS);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {

@@ -89,6 +89,9 @@
     <string name="racer_field_unsupported">שדה זה אינו נתמך עדיין.</string>
     <string name="configure_racer_settings">הגדר הגדרות רוכב</string>
 
+    <string name="nav_home">בית</string>
+    <string name="navigate_back_to">ניווט חזרה אל</string>
+
     <string name="results_options_title">אפשרויות תוצאות</string>
     <string name="results_ordered_by">התוצאות ממוינות לפי:</string>
     <string name="timing_precision">דיוק תזמון:</string>

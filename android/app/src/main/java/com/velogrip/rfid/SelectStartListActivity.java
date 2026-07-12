@@ -25,7 +25,7 @@ public class SelectStartListActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_select_startlist);
 
-        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.select_startlist_title);
+        WizardNav.attach(this, WizardNav.SELECT_START_LIST);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setOnClickListener(v ->
                 startActivity(new Intent(this, RaceSetupActivity.class)));

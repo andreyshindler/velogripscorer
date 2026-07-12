@@ -33,7 +33,7 @@ public class ChipTimingActivity extends Activity {
         setContentView(R.layout.activity_chip_timing);
         prefs = new Prefs(this);
 
-        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.chip_timing_title);
+        WizardNav.attach(this, WizardNav.CHIP_TIMING);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {

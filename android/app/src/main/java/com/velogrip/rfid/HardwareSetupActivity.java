@@ -26,7 +26,7 @@ public class HardwareSetupActivity extends Activity {
         setContentView(R.layout.activity_hardware_setup);
         prefs = new Prefs(this);
 
-        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.hardware_setup_title);
+        WizardNav.attach(this, WizardNav.HARDWARE_SETUP);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {

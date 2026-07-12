@@ -24,7 +24,7 @@ public class DistanceSetupActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_distance_setup);
 
-        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.distance_setup_title);
+        WizardNav.attach(this, WizardNav.DISTANCE_SETUP);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v ->
