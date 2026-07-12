@@ -89,6 +89,27 @@
     <string name="racer_field_unsupported">שדה זה אינו נתמך עדיין.</string>
     <string name="configure_racer_settings">הגדר הגדרות רוכב</string>
 
+    <string name="results_options_title">אפשרויות תוצאות</string>
+    <string name="results_ordered_by">התוצאות ממוינות לפי:</string>
+    <string name="timing_precision">דיוק תזמון:</string>
+    <string name="order_time">הזמן המהיר ביותר</string>
+    <string name="order_bib">מספר חזה</string>
+    <string name="order_name">שם</string>
+    <string name="precision_1s">שנייה 1</string>
+    <string name="precision_01">0.1 שנ׳</string>
+    <string name="precision_001">0.01 שנ׳</string>
+    <string name="precision_0001">0.001 שנ׳</string>
+    <string name="category_results">תוצאות לפי קטגוריה:</string>
+    <string name="overall_by_distance">כללי לפי מרחק:</string>
+    <string name="overall_by_gender">כללי לפי מין:</string>
+    <string name="overall_all_distances">כללי לכל המרחקים:</string>
+    <string name="exclude_top_x">החרג x מובילים כלליים מתוצאות הקטגוריה:</string>
+    <string name="team_scoring">ניקוד קבוצתי:</string>
+    <string name="penalties">עונשים:</string>
+    <string name="handicaps">הנדיקאפים:</string>
+    <string name="results_option_unsupported">אפשרות זו אינה נתמכת עדיין.</string>
+    <string name="results_options_hint">הגדר אפשרויות תוצאות</string>
+
     <string name="hardware_setup_title">הגדרת חומרה</string>
     <string name="chip_timing">מדידת שבבים:</string>
     <string name="chip_timing_system">מערכת מדידת שבבים:</string>

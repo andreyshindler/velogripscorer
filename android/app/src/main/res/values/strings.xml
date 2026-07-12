@@ -89,6 +89,27 @@
     <string name="racer_field_unsupported">This field is not supported yet.</string>
     <string name="configure_racer_settings">Configure racer settings</string>
 
+    <string name="results_options_title">Results Options</string>
+    <string name="results_ordered_by">Results ordered by:</string>
+    <string name="timing_precision">Timing precision:</string>
+    <string name="order_time">Fastest time</string>
+    <string name="order_bib">Bib number</string>
+    <string name="order_name">Name</string>
+    <string name="precision_1s">1 sec</string>
+    <string name="precision_01">0.1 secs</string>
+    <string name="precision_001">0.01 secs</string>
+    <string name="precision_0001">0.001 secs</string>
+    <string name="category_results">Category results:</string>
+    <string name="overall_by_distance">Overall by distance:</string>
+    <string name="overall_by_gender">Overall by gender:</string>
+    <string name="overall_all_distances">Overall all distances:</string>
+    <string name="exclude_top_x">Exclude top x overall from category results:</string>
+    <string name="team_scoring">Team scoring:</string>
+    <string name="penalties">Penalties:</string>
+    <string name="handicaps">Handicaps:</string>
+    <string name="results_option_unsupported">This option is not supported yet.</string>
+    <string name="results_options_hint">Configure results options</string>
+
     <string name="hardware_setup_title">Hardware Setup</string>
     <string name="chip_timing">Chip timing:</string>
     <string name="chip_timing_system">Chip timing system:</string>

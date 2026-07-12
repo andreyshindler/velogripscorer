@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/results_ordered_by" />
+                <LinearLayout
+                    android:id="@+id/orderBox"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.2"
+                    android:background="@drawable/bg_box"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="10dp">
+                    <TextView
+                        android:id="@+id/orderValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#111111"
+                        android:textSize="17sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="6dp"
+                        android:text="▾"
+                        android:textColor="@color/velogrip_green"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/timing_precision" />
+                <LinearLayout
+                    android:id="@+id/precisionBox"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.2"
+                    android:background="@drawable/bg_box"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="10dp">
+                    <TextView
+                        android:id="@+id/precisionValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#111111"
+                        android:textSize="17sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="6dp"
+                        android:text="▾"
+                        android:textColor="@color/velogrip_green"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:layout_marginVertical="6dp" android:background="@color/menu_divider" />
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/category_results" />
+                <Switch android:id="@+id/swCategory" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/overall_by_distance" />
+                <Switch android:id="@+id/swByDistance" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/overall_by_gender" />
+                <Switch android:id="@+id/swByGender" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/overall_all_distances" />
+                <Switch android:id="@+id/swAllDistances" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:layout_marginVertical="6dp" android:background="@color/menu_divider" />
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/exclude_top_x" />
+                <Switch android:id="@+id/swExcludeTop" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:layout_marginVertical="6dp" android:background="@color/menu_divider" />
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/team_scoring" />
+                <Switch android:id="@+id/swTeamScoring" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/penalties" />
+                <Switch android:id="@+id/swPenalties" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/handicaps" />
+                <Switch android:id="@+id/swHandicaps" style="@style/RacerSwitch" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="@string/results_options_hint"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+</LinearLayout>

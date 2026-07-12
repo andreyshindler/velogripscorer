@@ -92,7 +92,7 @@ public class RaceArchiveActivity extends Activity {
                     r.rank > 0 ? String.valueOf(r.rank) : "–",
                     r.bib,
                     r.name.length() > 18 ? r.name.substring(0, 18) : r.name,
-                    "finished".equals(r.status) ? RaceEngine.formatElapsed(r.elapsedMs) : "–"));
+                    "finished".equals(r.status) ? RaceEngine.formatElapsed(r.elapsedMs, prefs.timingDecimals()) : "–"));
         }
         standings.setText(sb.toString());
         box.addView(standings);

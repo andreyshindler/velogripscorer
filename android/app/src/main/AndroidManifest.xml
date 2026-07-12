@@ -75,6 +75,12 @@
             android:exported="false" />
 
         <activity
+            android:name=".ResultsOptionsActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:exported="false" />
+
+        <activity
             android:name=".HardwareSetupActivity"
             android:parentActivityName=".MainActivity"
             android:theme="@android:style/Theme.Material.Light.NoActionBar"

@@ -82,6 +82,28 @@ public final class Prefs {
                 .apply();
     }
 
+    // Results options.
+    public static final String ORDER_TIME = "time";
+    public static final String ORDER_BIB = "bib";
+    public static final String ORDER_NAME = "name";
+    public String resultsOrder() { return sp.getString("resultsOrder", ORDER_TIME); }
+    public int timingDecimals() { return sp.getInt("timingDecimals", 1); } // 0=1s,1=0.1,2=0.01,3=0.001
+    public boolean categoryResults() { return sp.getBoolean("categoryResults", true); }
+    public boolean overallByDistance() { return sp.getBoolean("overallByDistance", true); }
+    public boolean overallByGender() { return sp.getBoolean("overallByGender", false); }
+    public boolean overallAllDistances() { return sp.getBoolean("overallAllDistances", false); }
+    public void saveResultsOptions(String order, int decimals, boolean category,
+                                   boolean byDistance, boolean byGender, boolean allDistances) {
+        sp.edit()
+                .putString("resultsOrder", order)
+                .putInt("timingDecimals", Math.max(0, Math.min(3, decimals)))
+                .putBoolean("categoryResults", category)
+                .putBoolean("overallByDistance", byDistance)
+                .putBoolean("overallByGender", byGender)
+                .putBoolean("overallAllDistances", allDistances)
+                .apply();
+    }
+
     // Racer setup: which fields each racer requires, and the bib format.
     public boolean requireName() { return sp.getBoolean("reqName", true); }
     public boolean requireBib() { return sp.getBoolean("reqBib", true); }
@@ -98,7 +120,10 @@ public final class Prefs {
     public void resetRaceSetup() {
         sp.edit().remove("startType").remove("multiDistance").remove("recordLaps")
                 .remove("reqName").remove("reqBib").remove("bibAlpha")
-                .remove("reqCategory").remove("reqGender").apply();
+                .remove("reqCategory").remove("reqGender")
+                .remove("resultsOrder").remove("timingDecimals").remove("categoryResults")
+                .remove("overallByDistance").remove("overallByGender").remove("overallAllDistances")
+                .apply();
     }
 
     /** Remembered after the first successful login so race downloads are one tap. */

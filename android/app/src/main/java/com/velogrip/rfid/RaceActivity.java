@@ -362,7 +362,10 @@ public class RaceActivity extends Activity {
         for (RaceEngine.Result r : results) {
             if (!r.distance.isEmpty()) distances.add(r.distance);
         }
-        if (distances.size() > 1 && prefs.multiDistance(true)) {
+        // "Overall by distance" (Results Options) or multi-distance (Lap Setup)
+        boolean splitByDistance = distances.size() > 1
+                && (prefs.overallByDistance() || prefs.multiDistance(true));
+        if (splitByDistance) {
             for (String d : distances) sections.put(d, new ArrayList<>());
             sections.put("", new ArrayList<>());
             for (RaceEngine.Result r : results) sections.get(r.distance).add(r);
@@ -371,6 +374,7 @@ public class RaceActivity extends Activity {
             sections.put("", results);
         }
 
+        final int decimals = prefs.timingDecimals();
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, List<RaceEngine.Result>> section : sections.entrySet()) {
             if (!section.getKey().isEmpty() || sections.size() > 1) {
@@ -380,24 +384,55 @@ public class RaceActivity extends Activity {
             sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4s %-9s %s%n",
                     "#", getString(R.string.bib_col), getString(R.string.name_col),
                     getString(R.string.laps_col), getString(R.string.time_col), ""));
+            // competitive place from finish order, then re-order rows for display
+            List<RaceEngine.Result> rows = new ArrayList<>(section.getValue());
+            final java.util.Map<RaceEngine.Result, Integer> placeOf = new java.util.HashMap<>();
             int place = 1;
-            for (RaceEngine.Result r : section.getValue()) {
+            for (RaceEngine.Result r : rows) {
+                if ("finished".equals(r.status)) placeOf.put(r, place++);
+            }
+            orderForDisplay(rows);
+            for (RaceEngine.Result r : rows) {
                 String status = "finished".equals(r.status) ? ""
                         : "on_course".equals(r.status) ? getString(R.string.on_course)
                         : getString(R.string.not_started_wave);
                 boolean finished = "finished".equals(r.status);
                 sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4d %-9s %s%n",
-                        finished ? String.valueOf(place++) : "–",
+                        finished ? String.valueOf(placeOf.get(r)) : "–",
                         r.bib,
                         r.name.length() > 16 ? r.name.substring(0, 16) : r.name,
                         r.laps,
-                        finished ? RaceEngine.formatElapsed(r.elapsedMs) : "–",
+                        finished ? RaceEngine.formatElapsed(r.elapsedMs, decimals) : "–",
                         status));
             }
             sb.append('\n');
         }
         if (results.isEmpty()) sb.append(getString(R.string.no_racers));
         resultsView.setText(sb.toString());
+    }
+
+    /** "Results ordered by" (Results Options): fastest time keeps the engine's
+     *  finish order; bib / name re-order the displayed rows. */
+    private void orderForDisplay(List<RaceEngine.Result> rows) {
+        String order = prefs.resultsOrder();
+        if (Prefs.ORDER_BIB.equals(order)) {
+            java.util.Collections.sort(rows, (a, b) -> {
+                long na = bibNum(a.bib), nb = bibNum(b.bib);
+                if (na != nb) return Long.compare(na, nb);
+                return a.bib.compareTo(b.bib);
+            });
+        } else if (Prefs.ORDER_NAME.equals(order)) {
+            java.util.Collections.sort(rows, (a, b) ->
+                    a.name.compareToIgnoreCase(b.name));
+        }
+    }
+
+    private static long bibNum(String bib) {
+        try {
+            return Long.parseLong(bib.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return Long.MAX_VALUE;
+        }
     }
 
     @Override

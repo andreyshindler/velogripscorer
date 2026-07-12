@@ -148,15 +148,24 @@ public final class RaceEngine {
 
     /** 0.1-second precision, mm:ss.t or h:mm:ss.t — matches the web display. */
     public static String formatElapsed(long ms) {
-        long tenths = Math.round(ms / 100.0);
-        long h = tenths / 36000;
-        long m = (tenths % 36000) / 600;
-        long s = (tenths % 600) / 10;
-        long t = tenths % 10;
+        return formatElapsed(ms, 1);
+    }
+
+    /** Configurable timing precision: decimals 0 (1s), 1 (0.1s), 2, or 3. */
+    public static String formatElapsed(long ms, int decimals) {
+        decimals = Math.max(0, Math.min(3, decimals));
+        long scale = (long) Math.pow(10, decimals);          // fractional units per second
+        long units = Math.round(ms / (1000.0 / scale));      // total fractional units
+        long h = units / (3600 * scale);
+        long m = (units / (60 * scale)) % 60;
+        long s = (units / scale) % 60;
+        long frac = units % scale;
         String head = h > 0
                 ? String.format(Locale.US, "%d:%02d", h, m)
                 : String.valueOf(m);
-        return head + String.format(Locale.US, ":%02d.%d", s, t);
+        String body = head + String.format(Locale.US, ":%02d", s);
+        return decimals == 0 ? body
+                : body + "." + String.format(Locale.US, "%0" + decimals + "d", frac);
     }
 
     public static String formatClock(long ms) {

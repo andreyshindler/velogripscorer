@@ -31,7 +31,7 @@ public class RacerSetupActivity extends Activity {
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {
             save();
-            startActivity(new Intent(this, HardwareSetupActivity.class));
+            startActivity(new Intent(this, ResultsOptionsActivity.class));
         });
 
         ((Switch) findViewById(R.id.swName)).setChecked(prefs.requireName());
