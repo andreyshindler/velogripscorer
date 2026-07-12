@@ -395,7 +395,8 @@ public class RaceActivity extends Activity {
             for (RaceEngine.Result r : rows) {
                 String status = "finished".equals(r.status) ? ""
                         : "on_course".equals(r.status) ? getString(R.string.on_course)
-                        : getString(R.string.not_started_wave);
+                        : "not_started".equals(r.status) ? getString(R.string.not_started_wave)
+                        : r.status; // DNS / DNF / DSQ
                 boolean finished = "finished".equals(r.status);
                 sb.append(String.format(Locale.US, "%-4s %-5s %-16s %-4d %-9s %s%n",
                         finished ? String.valueOf(placeOf.get(r)) : "–",

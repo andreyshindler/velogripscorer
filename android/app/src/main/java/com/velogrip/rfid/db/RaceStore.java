@@ -25,15 +25,20 @@ import java.util.List;
 public final class RaceStore extends SQLiteOpenHelper {
 
     public static final class Racer {
-        public final String epc, bib, name, category, wave, distance;
+        public final String epc, bib, name, category, wave, distance, status;
 
         public Racer(String epc, String bib, String name, String category, String wave) {
-            this(epc, bib, name, category, wave, "");
+            this(epc, bib, name, category, wave, "", "");
         }
 
         public Racer(String epc, String bib, String name, String category, String wave, String distance) {
+            this(epc, bib, name, category, wave, distance, "");
+        }
+
+        public Racer(String epc, String bib, String name, String category, String wave,
+                     String distance, String status) {
             this.epc = epc; this.bib = bib; this.name = name; this.category = category; this.wave = wave;
-            this.distance = distance;
+            this.distance = distance; this.status = status;
         }
     }
 
@@ -59,14 +64,15 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 4);
+        super(ctx, "race.db", null, 5);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE racers (epc TEXT PRIMARY KEY, bib TEXT NOT NULL DEFAULT ''," +
                 " name TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT ''," +
-                " wave TEXT NOT NULL DEFAULT '', distance TEXT NOT NULL DEFAULT '')");
+                " wave TEXT NOT NULL DEFAULT '', distance TEXT NOT NULL DEFAULT ''," +
+                " racer_status TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE TABLE waves (name TEXT PRIMARY KEY, started_at INTEGER, synced INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
                 " rssi REAL, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
@@ -86,6 +92,9 @@ public final class RaceStore extends SQLiteOpenHelper {
         }
         if (oldVersion < 4) {
             db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
+        }
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE racers ADD COLUMN racer_status TEXT NOT NULL DEFAULT ''");
         }
     }
 
@@ -190,6 +199,46 @@ public final class RaceStore extends SQLiteOpenHelper {
         getWritableDatabase().execSQL("DELETE FROM categories WHERE name = ?", new Object[]{name});
     }
 
+    // ---- start-list roster (one entry per racer, grouped by bib) ----
+
+    /** Distinct racers for the Start List: two-chip racers appear once. */
+    public List<Racer> startListEntries() {
+        List<Racer> out = new ArrayList<>();
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        for (Racer r : racers()) {
+            String key = r.bib.isEmpty() ? "e:" + r.epc : "b:" + r.bib;
+            if (seen.add(key)) out.add(r);
+        }
+        return out;
+    }
+
+    public int racerCount() {
+        return startListEntries().size();
+    }
+
+    public void deleteRacerByBib(String bib) {
+        if (bib.isEmpty()) return;
+        getWritableDatabase().execSQL("DELETE FROM racers WHERE bib = ?", new Object[]{bib});
+    }
+
+    public void deleteRacerByEpc(String epc) {
+        getWritableDatabase().execSQL("DELETE FROM racers WHERE epc = ?", new Object[]{epc});
+    }
+
+    /** DNS/DNF/DSQ or "" — applied to every chip of the bib. */
+    public void setRacerStatus(String bib, String status) {
+        if (bib.isEmpty()) return;
+        getWritableDatabase().execSQL("UPDATE racers SET racer_status = ? WHERE bib = ?",
+                new Object[]{status, bib});
+    }
+
+    public void editRacer(String bib, String name, String category, String wave) {
+        if (bib.isEmpty()) return;
+        getWritableDatabase().execSQL(
+                "UPDATE racers SET name = ?, category = ?, wave = ? WHERE bib = ?",
+                new Object[]{name, category, wave, bib});
+    }
+
     // ---- lap targets per distance ("" = whole race when no distances) ----
 
     public int lapsFor(String distance) {
@@ -245,17 +294,18 @@ public final class RaceStore extends SQLiteOpenHelper {
         values.put("category", racer.category);
         values.put("wave", racer.wave);
         values.put("distance", racer.distance);
+        values.put("racer_status", racer.status);
         getWritableDatabase().insertWithOnConflict("racers", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public List<Racer> racers() {
         List<Racer> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave, distance FROM racers ORDER BY bib, epc", null);
+                "SELECT epc, bib, name, category, wave, distance, racer_status FROM racers ORDER BY bib, epc", null);
         try {
             while (c.moveToNext()) {
                 out.add(new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                        c.getString(4), c.getString(5)));
+                        c.getString(4), c.getString(5), c.getString(6)));
             }
         } finally {
             c.close();
@@ -265,11 +315,11 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     public Racer racerByBib(String bib) {
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave, distance FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
+                "SELECT epc, bib, name, category, wave, distance, racer_status FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
         try {
             return c.moveToNext()
                     ? new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                            c.getString(4), c.getString(5))
+                            c.getString(4), c.getString(5), c.getString(6))
                     : null;
         } finally {
             c.close();

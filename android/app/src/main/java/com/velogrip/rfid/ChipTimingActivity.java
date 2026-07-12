@@ -38,7 +38,7 @@ public class ChipTimingActivity extends Activity {
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {
             save();
-            startActivity(new Intent(this, RaceActivity.class));
+            startActivity(new Intent(this, StartListActivity.class));
         });
 
         systemValue = findViewById(R.id.systemValue);

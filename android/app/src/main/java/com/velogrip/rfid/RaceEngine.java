@@ -84,6 +84,16 @@ public final class RaceEngine {
         List<Result> results = new ArrayList<>();
         for (List<RaceStore.Racer> group : groups.values()) {
             RaceStore.Racer racer = group.get(0);
+            // organizer-declared status (DNS/DNF/DSQ) overrides everything
+            String declared = "";
+            for (RaceStore.Racer member : group) {
+                if (member.status != null && !member.status.isEmpty()) { declared = member.status; break; }
+            }
+            if (!declared.isEmpty()) {
+                results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
+                        racer.distance, declared, 0, 0));
+                continue;
+            }
             // racers without a wave start with the mass gun (wave named "")
             Long gun = gunByWave.get(racer.wave);
             if (gun == null) {

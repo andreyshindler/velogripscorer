@@ -27,6 +27,8 @@ public final class WizardNav {
             ResultsOptionsActivity.class,
             HardwareSetupActivity.class,
             ChipTimingActivity.class,
+            StartListActivity.class,
+            RaceStartActivity.class,
     };
     static final int[] TITLES = {
             R.string.nav_home,
@@ -39,6 +41,8 @@ public final class WizardNav {
             R.string.results_options_title,
             R.string.hardware_setup_title,
             R.string.chip_timing_title,
+            R.string.start_list_title,
+            R.string.race_start_title,
     };
 
     public static final int SELECT_START_LIST = 1;
@@ -50,6 +54,8 @@ public final class WizardNav {
     public static final int RESULTS_OPTIONS = 7;
     public static final int HARDWARE_SETUP = 8;
     public static final int CHIP_TIMING = 9;
+    public static final int START_LIST = 10;
+    public static final int RACE_START = 11;
 
     private WizardNav() { }
 

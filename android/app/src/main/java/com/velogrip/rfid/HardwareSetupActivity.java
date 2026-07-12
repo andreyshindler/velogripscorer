@@ -30,9 +30,9 @@ public class HardwareSetupActivity extends Activity {
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {
-            // chip timing on -> configure the reader next; off -> straight to the race
+            // chip timing on -> configure the reader next; off -> straight to the start list
             startActivity(new Intent(this, prefs.chipTiming()
-                    ? ChipTimingActivity.class : RaceActivity.class));
+                    ? ChipTimingActivity.class : StartListActivity.class));
         });
 
         Switch chip = findViewById(R.id.swChipTiming);

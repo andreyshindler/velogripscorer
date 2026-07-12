@@ -82,6 +82,12 @@ public final class Prefs {
                 .apply();
     }
 
+    // Race start options.
+    public long clockAdjustMs() { return sp.getLong("clockAdjustMs", 0); }
+    public void setClockAdjustMs(long ms) { sp.edit().putLong("clockAdjustMs", ms).apply(); }
+    public boolean liveResults() { return sp.getBoolean("liveResults", false); }
+    public void setLiveResults(boolean on) { sp.edit().putBoolean("liveResults", on).apply(); }
+
     // Results options.
     public static final String ORDER_TIME = "time";
     public static final String ORDER_BIB = "bib";

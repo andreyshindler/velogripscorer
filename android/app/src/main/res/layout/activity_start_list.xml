@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#BFBFBF"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+
+        <TextView android:layout_width="30dp" android:layout_height="wrap_content"
+            android:text="✓" android:textColor="#555555" android:textSize="16sp" android:textStyle="bold" />
+        <TextView android:layout_width="64dp" android:layout_height="wrap_content"
+            android:text="@string/bib_col" android:textColor="#222222" android:textSize="18sp" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="@string/name_col" android:textColor="#222222" android:textSize="18sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/racersBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/racerCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <!-- Bottom bar page A: Search · DNS · Delete · Merge · More -->
+    <LinearLayout
+        android:id="@+id/barA"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp">
+
+        <LinearLayout android:id="@+id/aSearch" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="🔍" />
+            <TextView style="@style/BottomText" android:text="@string/search_racer" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aDns" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="DNS" android:textSize="15sp" android:textStyle="bold" />
+            <TextView style="@style/BottomText" android:text="@string/did_not_start" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aDelete" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⊗" />
+            <TextView style="@style/BottomText" android:text="@string/delete_racers" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aMerge" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇲" />
+            <TextView style="@style/BottomText" android:text="@string/merge_start_lists" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aMore" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="•••" />
+            <TextView style="@style/BottomText" android:text="@string/more" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom bar page B: Add · Automate · Sort · Share · More -->
+    <LinearLayout
+        android:id="@+id/barB"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp"
+        android:visibility="gone">
+
+        <LinearLayout android:id="@+id/bAdd" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="＋" />
+            <TextView style="@style/BottomText" android:text="@string/add_racer" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bAutomate" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="BIB" android:textSize="13sp" android:textStyle="bold" />
+            <TextView style="@style/BottomText" android:text="@string/automate" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bSort" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇅" />
+            <TextView style="@style/BottomText" android:text="@string/sort_list" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bShare" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇪" />
+            <TextView style="@style/BottomText" android:text="@string/share_print" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bMore" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="•••" />
+            <TextView style="@style/BottomText" android:text="@string/more" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -111,6 +111,18 @@
             android:exported="false" />
 
         <activity
+            android:name=".StartListActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:exported="false" />
+
+        <activity
+            android:name=".RaceStartActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:exported="false" />
+
+        <activity
             android:name=".DownloadRacesActivity"
             android:label="@string/download_title"
             android:parentActivityName=".MainActivity"
