@@ -467,34 +467,33 @@ public class RaceTimingActivity extends Activity {
                 .show();
     }
 
-    /** Finish race: if racers are still out, offer DNF or laps-down; else results. */
+    /** Finish race: any racer with no finish time is marked DNS, then results. */
     private void finishRace() {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
                 prefs.raceFinalized());
-        final List<RaceEngine.Result> unfinished = new ArrayList<>();
+        final List<RaceEngine.Result> noTime = new ArrayList<>();
         for (RaceEngine.Result r : results) {
-            if ("on_course".equals(r.status) || "not_started".equals(r.status)) unfinished.add(r);
+            // no finish time and not already given a declared status -> DNS
+            if (!"finished".equals(r.status)
+                    && (r.status == null || r.status.isEmpty()
+                        || "on_course".equals(r.status) || "not_started".equals(r.status))) {
+                noTime.add(r);
+            }
         }
-        if (unfinished.isEmpty()) {
-            startActivity(new Intent(this, RaceArchiveActivity.class));
-            return;
-        }
+        String message = noTime.isEmpty()
+                ? getString(R.string.finish_race_confirm)
+                : getString(R.string.finish_race_dns, noTime.size());
         new android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.still_on_course)
-                .setItems(new String[]{getString(R.string.mark_dnf), getString(R.string.mark_laps_down)},
-                        (d, which) -> {
-                            if (which == 0) {                       // Mark racers as DNF
-                                for (RaceEngine.Result r : unfinished) store.setRacerStatus(r.bib, "DNF");
-                            } else {                                // Mark racers as laps down
-                                prefs.setRaceFinalized(true);
-                                for (RaceEngine.Result r : unfinished) {
-                                    if (r.laps == 0) store.setRacerStatus(r.bib, "DNF"); // never crossed
-                                }
-                            }
-                            startActivity(new Intent(this, RaceArchiveActivity.class));
-                        })
+                .setTitle(R.string.rc_finish)
+                .setMessage(message)
+                .setPositiveButton(R.string.finish_race_ok, (d, w) -> {
+                    for (RaceEngine.Result r : noTime) {
+                        if (!r.bib.isEmpty()) store.setRacerStatus(r.bib, "DNS"); // no time -> DNS
+                    }
+                    startActivity(new Intent(this, ViewResultsActivity.class));
+                })
                 .setNegativeButton(R.string.cancel_popup, null)
                 .show();
     }

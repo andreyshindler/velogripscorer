@@ -418,6 +418,25 @@
         <item>מוטוקרוס</item>
     </string-array>
 
+    <string name="view_results_title">תוצאות</string>
+    <string name="view_results_hint">בחר מרחק או קטגוריה לצפייה בתוצאות</string>
+    <string name="post_results_title">פרסום תוצאות</string>
+    <string name="all_racers">כל המשתתפים</string>
+    <string name="overall">כללי</string>
+    <string name="status_dns">DNS</string>
+    <string name="post_to_web">פרסום לאתר</string>
+    <string name="post_to_web_hint">פרסום ל‑srv1515969.hstgr.cloud/veloscorer</string>
+    <string name="post_results_hint">התוצאות מתפרסמות לאתר VeloGripScorer שלך</string>
+    <string name="posting">מפרסם תוצאות…</string>
+    <string name="posted_ok">פורסם לאתר (%1$d עודכנו)</string>
+    <string name="post_failed">הפרסום נכשל: %1$s</string>
+    <string name="results_header">תוצאות</string>
+    <string name="segment_footer">%1$s | %2$d משתתפים</string>
+    <string name="no_match">לא נמצא משתתף</string>
+    <string name="finish_race_confirm">לסיים את המרוץ ולהציג תוצאות?</string>
+    <string name="finish_race_dns">ל‑%1$d משתתפים אין זמן והם יסומנו DNS. לסיים את המרוץ?</string>
+    <string name="finish_race_ok">סיים מרוץ</string>
+
     <string-array name="protocols">
         <item>שורות ASCII (EPC בכל שורה)</item>
         <item>RFID-LLRP (Impinj/Zebra, פורט 5084)</item>

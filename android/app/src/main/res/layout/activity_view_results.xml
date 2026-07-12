@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <!-- Dark header: Home · title · Share -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/homeButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_green"
+            android:gravity="center"
+            android:text="⌂"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/view_results_title"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/subTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#BBBBBB"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/shareButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_green"
+            android:gravity="center"
+            android:text="⇪"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <LinearLayout
+            android:id="@+id/resultsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="@string/view_results_hint"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <!-- Bottom bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp">
+        <LinearLayout android:id="@+id/aResultsOpt" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="☑" />
+            <TextView style="@style/BottomText" android:text="@string/results_options_title" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aStartList" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="☰" />
+            <TextView style="@style/BottomText" android:text="@string/start_list_title" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aShare" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇪" />
+            <TextView style="@style/BottomText" android:text="@string/post_results_title" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

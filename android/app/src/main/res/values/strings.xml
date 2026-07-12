@@ -407,6 +407,25 @@
     <string name="no_browser">No browser to open the link.</string>
     <string name="live_results_hint">Configure live results options</string>
 
+    <string name="view_results_title">View Results</string>
+    <string name="view_results_hint">Select a distance or category to view results</string>
+    <string name="post_results_title">Post Results</string>
+    <string name="all_racers">All racers</string>
+    <string name="overall">Overall</string>
+    <string name="status_dns">DNS</string>
+    <string name="post_to_web">Post to the web</string>
+    <string name="post_to_web_hint">Publish to srv1515969.hstgr.cloud/veloscorer</string>
+    <string name="post_results_hint">Results are published to your VeloGripScorer site</string>
+    <string name="posting">Posting results…</string>
+    <string name="posted_ok">Posted to the web (%1$d times uploaded)</string>
+    <string name="post_failed">Post failed: %1$s</string>
+    <string name="results_header">Results</string>
+    <string name="segment_footer">%1$s | %2$d racers</string>
+    <string name="no_match">No matching racer</string>
+    <string name="finish_race_confirm">Finish the race and view results?</string>
+    <string name="finish_race_dns">%1$d racers have no time and will be marked DNS. Finish the race?</string>
+    <string name="finish_race_ok">Finish race</string>
+
     <string-array name="sports">
         <item>Running</item>
         <item>Trail running</item>
