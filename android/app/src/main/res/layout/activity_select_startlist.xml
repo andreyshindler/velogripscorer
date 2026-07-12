@@ -5,43 +5,7 @@
     android:background="#FFFFFF"
     android:orientation="vertical">
 
-    <!-- Dark header with round back button -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/nav_bar_bg"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="10dp">
-
-        <TextView
-            android:id="@+id/backButton"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/bg_circle_green"
-            android:contentDescription="@string/back"
-            android:gravity="center"
-            android:text="❮"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <ImageView
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:layout_marginStart="16dp"
-            android:contentDescription="@string/app_name"
-            android:src="@drawable/logo_velogrip" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="@string/select_startlist_title"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+    <include layout="@layout/header_flow" />
 
     <ScrollView
         android:layout_width="match_parent"

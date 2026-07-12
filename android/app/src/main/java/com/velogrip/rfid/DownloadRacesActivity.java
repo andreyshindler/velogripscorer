@@ -35,8 +35,12 @@ public class DownloadRacesActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_download);
-        if (getActionBar() != null) getActionBar().setDisplayHomeAsUpEnabled(true);
         prefs = new Prefs(this);
+
+        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.download_title);
+        findViewById(R.id.backButton).setOnClickListener(v -> finish());
+        findViewById(R.id.nextButton).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, RaceSetupActivity.class)));
 
         form = findViewById(R.id.dlForm);
         connectedAs = findViewById(R.id.dlConnectedAs);
@@ -190,8 +194,11 @@ public class DownloadRacesActivity extends Activity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(android.view.MenuItem item) {
-        if (item.getItemId() == android.R.id.home) { finish(); return true; }
-        return super.onOptionsItemSelected(item);
+    protected void onResume() {
+        super.onResume();
+        // a race is already picked -> offer to continue forward
+        boolean hasChoice = !prefs.readerToken().isEmpty() && !prefs.contestTitle().isEmpty();
+        findViewById(R.id.nextButton).setVisibility(
+                hasChoice ? View.VISIBLE : View.GONE);
     }
 }

@@ -54,6 +54,7 @@
             android:name=".DownloadRacesActivity"
             android:label="@string/download_title"
             android:parentActivityName=".MainActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
             android:exported="false" />
 
         <activity

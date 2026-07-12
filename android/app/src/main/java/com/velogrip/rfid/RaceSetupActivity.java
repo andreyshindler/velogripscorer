@@ -28,7 +28,9 @@ public class RaceSetupActivity extends Activity {
         setContentView(R.layout.activity_race_setup);
         prefs = new Prefs(this);
 
+        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.race_setup_title);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
+        findViewById(R.id.nextButton).setVisibility(android.view.View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v -> {
             prefs.setStartType(selected);
             startActivity(new Intent(this, RaceActivity.class));

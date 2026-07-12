@@ -25,7 +25,10 @@ public class SelectStartListActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_select_startlist);
 
+        ((TextView) findViewById(R.id.headerTitle)).setText(R.string.select_startlist_title);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
+        findViewById(R.id.nextButton).setOnClickListener(v ->
+                startActivity(new Intent(this, RaceSetupActivity.class)));
 
         Prefs prefs = new Prefs(this);
         String host = prefs.serverUrl().replaceFirst("^https?://", "");
@@ -45,6 +48,17 @@ public class SelectStartListActivity extends Activity {
                     "application/vnd.ms-excel", "application/octet-stream"});
             startActivityForResult(pick, PICK_FILE);
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // a start list is already on the phone -> offer to continue forward
+        RaceStore store = new RaceStore(this);
+        boolean hasChoice = !store.racers().isEmpty();
+        store.close();
+        findViewById(R.id.nextButton).setVisibility(
+                hasChoice ? android.view.View.VISIBLE : android.view.View.GONE);
     }
 
     @Override
