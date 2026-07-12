@@ -132,7 +132,7 @@ async function route() {
     if (!page) return viewHome();
     if (page === 'login') return viewLogin();
     if (page === 'create') return viewCreate();
-    if (page === 'contest') return viewContest(Number(arg), sub || 'details');
+    if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
     if (page === 'admin') return viewAdmin(arg || 'reports');
     viewHome();
@@ -147,9 +147,9 @@ window.addEventListener('hashchange', route);
 async function viewHome() {
   main.innerHTML = `
     <div class="hero">
-      <h1>🏆 VeloGripScorer</h1>
-      <p>${t('footer_tagline')}</p>
-      <a class="btn" href="${state.user ? '#/create' : '#/login'}">${t('nav_create')}</a>
+      <h1>🏁 ${t('hero_title')}</h1>
+      <p>${t('hero_sub')}</p>
+      <a class="btn" href="${state.user ? '#/create' : '#/login'}">${t('create_race')}</a>
     </div>
     <form class="searchbar" id="search-form" role="search">
       <input type="search" id="q" placeholder="${t('search_placeholder')}" aria-label="${t('search_placeholder')}">
@@ -164,7 +164,7 @@ async function viewHome() {
       <button class="btn" type="submit">🔍</button>
     </form>
     <div id="recommended"></div>
-    <h2>${t('featured')}</h2>
+    <h2>${t('races')}</h2>
     <div class="grid" id="contest-list"></div>`;
 
   document.getElementById('search-form').onsubmit = (e) => { e.preventDefault(); loadContests(); };
@@ -196,21 +196,32 @@ async function loadContests() {
 }
 
 function contestCard(c) {
+  const isRace = c.kind === 'race';
+  const started = new Date(c.start_at) <= new Date();
+  const statusPill = c.status === 'finished'
+    ? `<span class="pill finished">${t('status_finished')}</span>`
+    : isRace
+      ? (started ? `<span class="pill live">● ${t('hero_live')}</span>` : `<span class="pill">${t('live_upcoming')}</span>`)
+      : (c.voting_open ? `<span class="pill live">${t('voting_open_now')}</span>` : `<span class="pill">${t('status_active')}</span>`);
   return `
     <a class="card contest-card" href="#/contest/${c.id}" style="color:inherit;text-decoration:none">
       <div>
-        <span class="pill">${t('category_' + c.category)}</span>
-        <span class="pill ${c.status === 'finished' ? 'finished' : c.voting_open ? 'live' : ''}">
-          ${c.status === 'finished' ? t('status_finished') : c.voting_open ? t('voting_open_now') : t('status_active')}
-        </span>
+        <span class="pill">${isRace ? '🏁 ' + (esc(c.sport) || t('race_kind')) : t('category_' + c.category)}</span>
+        ${statusPill}
       </div>
       <h3>${esc(c.title)}</h3>
-      <p class="muted" style="margin:0">${esc((c.description || '').slice(0, 110))}${(c.description || '').length > 110 ? '…' : ''}</p>
-      <div class="meta">
-        <span>👤 ${esc(c.organizer_name || '')}</span>
-        <span>📥 ${c.entry_count ?? 0} ${t('entries')}</span>
-        <span>⏱ ${fmtDate(c.end_at)}</span>
-      </div>
+      ${isRace
+        ? `<div class="meta">
+            ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
+            <span>🗓 ${fmtDate(c.start_at)}</span>
+            <span>👤 ${esc(c.organizer_name || '')}</span>
+          </div>`
+        : `<p class="muted" style="margin:0">${esc((c.description || '').slice(0, 110))}${(c.description || '').length > 110 ? '…' : ''}</p>
+          <div class="meta">
+            <span>👤 ${esc(c.organizer_name || '')}</span>
+            <span>📥 ${c.entry_count ?? 0} ${t('entries')}</span>
+            <span>⏱ ${fmtDate(c.end_at)}</span>
+          </div>`}
       <div>${(c.tags || []).slice(0, 4).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>
     </a>`;
 }
@@ -268,13 +279,30 @@ function viewCreate() {
   main.innerHTML = `
     <div class="card form-narrow">
       <h1>${t('create_title')}</h1>
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" id="kind-race">🏁 ${t('race_kind')}</button>
+        <button role="tab" aria-selected="false" id="kind-voting">🗳 ${t('voting_kind')}</button>
+      </div>
       <form id="create-form">
         <label for="c-title">${t('contest_title')}</label>
         <input id="c-title" required maxlength="120">
+        <div class="row2" id="race-only">
+          <div>
+            <label for="c-sport">${t('sport')}</label>
+            <input id="c-sport" placeholder="${t('sport_hint')}" list="sport-list">
+            <datalist id="sport-list">
+              ${['Cycling — Road', 'Cycling — MTB XCO', 'Cycling — Gravel', 'Running', 'Trail running', 'Triathlon', 'Duathlon', 'Motocross'].map((s) => `<option value="${s}">`).join('')}
+            </datalist>
+          </div>
+          <div>
+            <label for="c-location">${t('location')}</label>
+            <input id="c-location" placeholder="${t('location_hint')}">
+          </div>
+        </div>
         <label for="c-desc">${t('description')}</label>
         <textarea id="c-desc" rows="4"></textarea>
         <div class="row2">
-          <div>
+          <div id="voting-cat">
             <label for="c-cat">${t('category')}</label>
             <select id="c-cat">
               ${['photo', 'design', 'code', 'writing', 'video', 'other'].map((c) => `<option value="${c}">${t('category_' + c)}</option>`).join('')}
@@ -282,7 +310,7 @@ function viewCreate() {
           </div>
           <div>
             <label for="c-tags">${t('tags')}</label>
-            <input id="c-tags" placeholder="art, summer">
+            <input id="c-tags" placeholder="mtb, xco">
           </div>
         </div>
         <div class="row2">
@@ -294,32 +322,47 @@ function viewCreate() {
             <label for="c-visibility">${t('visibility')}</label>
             <select id="c-visibility"><option value="public">${t('public')}</option><option value="private">${t('private')}</option></select>
           </div>
-          <div>
+          <div id="voting-mode-box">
             <label for="c-mode">${t('voting_mode')}</label>
             <select id="c-mode"><option value="open">${t('voting_mode_open')}</option><option value="closed">${t('voting_mode_closed')}</option></select>
           </div>
         </div>
-        <div class="row2" id="vote-window" hidden>
-          <div><label for="c-vstart">${t('voting_window')} — ${t('start_date')}</label><input id="c-vstart" type="datetime-local"></div>
-          <div><label for="c-vend">${t('voting_window')} — ${t('end_date')}</label><input id="c-vend" type="datetime-local"></div>
-        </div>
-        <div class="row2">
-          <div><label for="c-scale">${t('scale_max')}</label><input id="c-scale" type="number" min="2" max="100" value="10"></div>
-          <div><label for="c-cap">${t('participant_cap')}</label><input id="c-cap" type="number" min="1"></div>
-        </div>
-        <label><input type="checkbox" id="c-blind" style="width:auto"> ${t('blind_voting')}</label>
+        <div id="voting-only">
+          <div class="row2" id="vote-window" hidden>
+            <div><label for="c-vstart">${t('voting_window')} — ${t('start_date')}</label><input id="c-vstart" type="datetime-local"></div>
+            <div><label for="c-vend">${t('voting_window')} — ${t('end_date')}</label><input id="c-vend" type="datetime-local"></div>
+          </div>
+          <div class="row2">
+            <div><label for="c-scale">${t('scale_max')}</label><input id="c-scale" type="number" min="2" max="100" value="10"></div>
+            <div><label for="c-cap">${t('participant_cap')}</label><input id="c-cap" type="number" min="1"></div>
+          </div>
+          <label><input type="checkbox" id="c-blind" style="width:auto"> ${t('blind_voting')}</label>
 
-        <h3 class="mt">${t('criteria')}</h3>
-        <div class="criteria-editor" id="criteria-editor"></div>
-        <button type="button" class="btn small secondary" id="add-criterion">+ ${t('add_criterion')}</button>
-        <p class="sum-indicator" id="sum-indicator" aria-live="polite"></p>
+          <h3 class="mt">${t('criteria')}</h3>
+          <div class="criteria-editor" id="criteria-editor"></div>
+          <button type="button" class="btn small secondary" id="add-criterion">+ ${t('add_criterion')}</button>
+          <p class="sum-indicator" id="sum-indicator" aria-live="polite"></p>
 
-        <h3>${t('prizes')}</h3>
-        <div id="prizes-editor"></div>
-        <button type="button" class="btn small secondary" id="add-prize">+ ${t('add_prize')}</button>
+          <h3>${t('prizes')}</h3>
+          <div id="prizes-editor"></div>
+          <button type="button" class="btn small secondary" id="add-prize">+ ${t('add_prize')}</button>
+        </div>
         <div class="mt"><button class="btn" type="submit">${t('create')}</button></div>
       </form>
     </div>`;
+
+  let kind = 'race';
+  const setKind = (value) => {
+    kind = value;
+    document.getElementById('kind-race').setAttribute('aria-selected', String(value === 'race'));
+    document.getElementById('kind-voting').setAttribute('aria-selected', String(value === 'voting'));
+    document.getElementById('voting-only').hidden = value === 'race';
+    document.getElementById('voting-cat').hidden = value === 'race';
+    document.getElementById('voting-mode-box').hidden = value === 'race';
+    document.getElementById('race-only').hidden = value !== 'race';
+  };
+  document.getElementById('kind-race').onclick = () => setKind('race');
+  document.getElementById('kind-voting').onclick = () => setKind('voting');
 
   const editor = document.getElementById('criteria-editor');
   const addCriterion = (name = '', weight = '') => {
@@ -358,6 +401,7 @@ function viewCreate() {
   document.getElementById('c-mode').onchange = (e) => {
     document.getElementById('vote-window').hidden = e.target.value !== 'closed';
   };
+  setKind('race');
 
   document.getElementById('create-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -369,9 +413,12 @@ function viewCreate() {
       .map((line) => ({ name: line.querySelector('.prize-name').value, rank: Number(line.querySelector('.prize-rank').value), type: 'badge' }))
       .filter((p) => p.name);
     const body = {
+      kind,
+      sport: document.getElementById('c-sport').value,
+      location: document.getElementById('c-location').value,
       title: document.getElementById('c-title').value,
       description: document.getElementById('c-desc').value,
-      category: document.getElementById('c-cat').value,
+      category: kind === 'race' ? 'other' : document.getElementById('c-cat').value,
       tags: document.getElementById('c-tags').value.split(',').map((s) => s.trim()).filter(Boolean),
       visibility: document.getElementById('c-visibility').value,
       voting_mode: document.getElementById('c-mode').value,
@@ -382,7 +429,8 @@ function viewCreate() {
       end_at: new Date(document.getElementById('c-end').value).toISOString(),
       voting_start_at: document.getElementById('c-vstart').value ? new Date(document.getElementById('c-vstart').value).toISOString() : undefined,
       voting_end_at: document.getElementById('c-vend').value ? new Date(document.getElementById('c-vend').value).toISOString() : undefined,
-      criteria, prizes,
+      criteria: kind === 'race' ? [] : criteria,
+      prizes: kind === 'race' ? [] : prizes,
     };
     try {
       const contest = await api('/contests', { method: 'POST', body });
@@ -399,24 +447,32 @@ async function viewContest(id, tab) {
   const generation = ++renderGeneration;
   const c = await api(`/contests/${id}`);
   if (generation !== renderGeneration) return; // a newer render superseded this one
-  const tabs = ['details', 'entries', 'vote', 'leaderboard', 'comments'];
+  const tabs = c.kind === 'race'
+    ? ['results', 'startlist', 'details']
+    : ['details', 'entries', 'vote', 'leaderboard', 'comments'];
   if (c.is_organizer) tabs.push('timing');
-  if (!tabs.includes(tab)) tab = 'details';
+  if (!tabs.includes(tab)) tab = c.kind === 'race' ? 'results' : 'details';
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
         <h1 style="margin:0 0 4px">${esc(c.title)}</h1>
         <div class="muted">
-          <span class="pill">${t('category_' + c.category)}</span>
-          <span class="pill ${c.status === 'finished' ? 'finished' : c.voting_open ? 'live' : ''}">
-            ${c.status === 'finished' ? t('status_finished') : c.voting_open ? t('voting_open_now') : t('status_active')}
-          </span>
+          ${c.kind === 'race'
+            ? `<span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+               ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
+               <span class="pill ${c.status === 'finished' ? 'finished' : 'live'}">
+                 ${c.status === 'finished' ? t('status_finished') : '● ' + t('hero_live')}
+               </span>`
+            : `<span class="pill">${t('category_' + c.category)}</span>
+               <span class="pill ${c.status === 'finished' ? 'finished' : c.voting_open ? 'live' : ''}">
+                 ${c.status === 'finished' ? t('status_finished') : c.voting_open ? t('voting_open_now') : t('status_active')}
+               </span>`}
           ${t('by')} <a href="#/profile/${c.organizer.id}">${esc(c.organizer.name)}</a>
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${state.user ? `<button class="btn small secondary" id="follow-btn">${c.is_following ? t('unfollow') : t('follow')}</button>` : ''}
-        ${state.user && c.status === 'active' ? `<button class="btn small" id="join-btn">${t('join')}</button>` : ''}
+        ${state.user && c.status === 'active' && c.kind !== 'race' ? `<button class="btn small" id="join-btn">${t('join')}</button>` : ''}
         ${c.is_organizer && c.status === 'active' ? `<button class="btn small danger" id="finish-btn">${t('finish_contest')}</button>` : ''}
       </div>
     </div>
@@ -446,7 +502,9 @@ async function viewContest(id, tab) {
   };
 
   const box = document.getElementById('tab-content');
-  if (tab === 'details') renderDetails(box, c);
+  if (tab === 'results') renderRaceResults(box, c);
+  else if (tab === 'startlist') renderStartlist(box, c);
+  else if (tab === 'details') renderDetails(box, c);
   else if (tab === 'entries') renderEntries(box, c, false);
   else if (tab === 'vote') renderEntries(box, c, true);
   else if (tab === 'leaderboard') renderLeaderboard(box, c);
@@ -460,15 +518,17 @@ function renderDetails(box, c) {
       <div class="card">
         <p style="white-space:pre-wrap">${esc(c.description) || '<span class="muted">—</span>'}</p>
         <div>${(c.tags || []).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>
-        <h3>${t('criteria')}</h3>
+        ${c.criteria.length ? `<h3>${t('criteria')}</h3>
         <ul class="stat-list">
           ${c.criteria.map((cr) => `<li><span>${esc(cr.name)}</span><strong>${cr.weight}% ${t('weight')}</strong></li>`).join('')}
-        </ul>
+        </ul>` : ''}
         ${c.prizes.length ? `<h3>${t('prizes')}</h3><ul class="stat-list">
           ${c.prizes.map((p) => `<li><span>${MEDALS[p.rank] || '🎖'} ${t('prize_rank')} ${p.rank}</span><strong>${esc(p.name)}</strong></li>`).join('')}</ul>` : ''}
       </div>
       <div class="card">
         <ul class="stat-list">
+          ${c.sport ? `<li><span>${t('sport')}</span><strong>${esc(c.sport)}</strong></li>` : ''}
+          ${c.location ? `<li><span>${t('location')}</span><strong>${esc(c.location)}</strong></li>` : ''}
           <li><span>${t('starts')}</span><strong>${fmtDate(c.start_at)}</strong></li>
           <li><span>${t('ends')}</span><strong>${fmtDate(c.end_at)}</strong></li>
           ${c.voting_mode === 'closed' ? `<li><span>${t('voting_window')}</span><strong>${fmtDate(c.voting_start_at)} → ${fmtDate(c.voting_end_at)}</strong></li>` : ''}
@@ -782,6 +842,112 @@ async function drawHistoryChart(c) {
   boxEl.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('score_history')}">${lines}</svg><div>${legend}</div>`;
 }
 
+// ---------- public race views: live results & start list ----------
+
+const RACE_STATUS_LABEL = () => ({
+  finished: t('status_finished_r'), on_course: t('status_on_course'),
+  not_started: t('status_not_started'), DNS: 'DNS', DNF: 'DNF', DSQ: 'DSQ',
+});
+
+async function renderRaceResults(box, c) {
+  const generation = renderGeneration;
+  const data = await api(`/contests/${c.id}/race-results`);
+  if (generation !== renderGeneration) return;
+  const categories = [...new Set(data.results.map((r) => r.category).filter(Boolean))];
+
+  box.innerHTML = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0">${t('race_results')} <span class="live-indicator">● ${t('live')}</span></h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${categories.length ? `<select id="cat-filter" aria-label="${t('category')}">
+            <option value="">${t('all_cats')}</option>
+            ${categories.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('')}
+          </select>` : ''}
+          <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/race-results?format=csv" download>⬇ ${t('export_csv')}</a>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="board"><thead><tr>
+          <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
+          <th>${t('category_place')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>
+        </tr></thead><tbody id="race-results-body"></tbody></table>
+      </div>
+    </div>`;
+
+  const draw = (results) => {
+    const filter = box.querySelector('#cat-filter');
+    const cat = filter ? filter.value : '';
+    const rows = results.filter((r) => !cat || r.category === cat);
+    const finished = rows.filter((r) => r.status === 'finished');
+    const others = rows.filter((r) => r.status !== 'finished');
+    const body = box.querySelector('#race-results-body');
+    if (!body) return;
+    body.innerHTML = [
+      ...finished.map((r) => `
+        <tr class="${r.rank <= 3 && !cat ? 'top' + r.rank : ''}">
+          <td><strong>${!cat ? (MEDALS[r.rank] || r.rank) : r.category_rank}</strong></td>
+          <td><strong>${esc(r.bib || '')}</strong></td>
+          <td>${esc(r.participant)}</td>
+          <td>${esc(r.category || '')}</td>
+          <td>${r.category_rank ?? ''}</td>
+          <td>${esc(r.wave || '')}</td>
+          <td>${r.laps}</td>
+          <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
+          <td style="font-variant-numeric:tabular-nums" class="muted">${esc(r.behind || '')}</td>
+        </tr>`),
+      ...others.map((r) => `
+        <tr>
+          <td class="muted">–</td>
+          <td><strong>${esc(r.bib || '')}</strong></td>
+          <td>${esc(r.participant)}</td>
+          <td>${esc(r.category || '')}</td>
+          <td></td>
+          <td>${esc(r.wave || '')}</td>
+          <td>${r.laps || ''}</td>
+          <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td>
+          <td></td>
+        </tr>`),
+    ].join('') || `<tr><td colspan="9" class="muted">${t('no_results_yet')}</td></tr>`;
+  };
+  draw(data.results);
+
+  const filter = box.querySelector('#cat-filter');
+  const refetch = async () => {
+    const fresh = await api(`/contests/${c.id}/race-results`);
+    draw(fresh.results);
+  };
+  if (filter) filter.onchange = refetch;
+
+  closeSse();
+  state.sse = new EventSource(`${BASE}/api/contests/${c.id}/stream`);
+  state.sse.addEventListener('tag_reads', refetch);
+  state.sse.addEventListener('wave_start', refetch);
+}
+
+async function renderStartlist(box, c) {
+  const { racers, waves } = await api(`/contests/${c.id}/startlist`);
+  box.innerHTML = `
+    <div class="card">
+      <h3 style="margin-top:0">${t('tab_startlist')} <span class="muted" style="font-weight:400">(${racers.length} ${t('racers_count')})</span></h3>
+      <div style="overflow-x:auto">
+        <table class="board"><thead><tr>
+          <th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th><th>${t('wave')}</th><th>${t('racer_status')}</th>
+        </tr></thead><tbody>
+          ${racers.map((r) => `
+            <tr>
+              <td><strong>${esc(r.bib || '')}</strong></td>
+              <td>${esc(r.participant)}</td>
+              <td>${esc(r.category || '')}</td>
+              <td>${esc(r.wave || '')}</td>
+              <td>${r.racer_status ? `<span class="pill finished">${esc(r.racer_status)}</span>` : ''}</td>
+            </tr>`).join('') || `<tr><td colspan="5" class="muted">${t('no_startlist')}</td></tr>`}
+        </tbody></table>
+      </div>
+      ${waves.length ? `<p class="muted">${waves.map((w) => `${esc(w.name)}: ${w.started_at ? fmtDate(w.started_at) : t('not_started')}`).join(' · ')}</p>` : ''}
+    </div>`;
+}
+
 // ---------- timing tab: RFID readers, live reads, tag assignment ----------
 
 async function renderTiming(box, c) {
@@ -832,13 +998,16 @@ async function renderTiming(box, c) {
           <button class="btn small">${t('assign')}</button>
         </form>
         <div id="tags-list" class="mt" style="max-height:220px;overflow:auto">
-          ${tags.map((a) => `
+          ${tags.map((a, i) => `
             <div class="comment" style="display:flex;gap:8px;align-items:center">
               <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
               ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
               ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
               <code style="font-size:0.7rem;overflow-wrap:anywhere">${esc(a.epc)}</code>
-              <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}" style="margin-inline-start:auto">🗑</button>
+              <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
+                ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
+              </select>
+              <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}">🗑</button>
             </div>`).join('') || `<p class="muted">—</p>`}
         </div>
       </div>
@@ -960,6 +1129,18 @@ async function renderTiming(box, c) {
     btn.onclick = async () => {
       await api(`/contests/${c.id}/tags/${btn.dataset.epc}`, { method: 'DELETE' });
       viewContest(c.id, 'timing');
+    };
+  });
+  box.querySelectorAll('.tag-status').forEach((sel) => {
+    sel.onchange = async () => {
+      const a = tags[Number(sel.dataset.idx)];
+      try {
+        await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
+          epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
+          wave_id: a.wave_id, racer_status: sel.value,
+        }});
+        toast('✓');
+      } catch (err) { toast(err.message, true); }
     };
   });
 

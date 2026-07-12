@@ -227,6 +227,10 @@ for (const stmt of [
   `ALTER TABLE tag_assignments ADD COLUMN category TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE contests ADD COLUMN suppress_secs INTEGER NOT NULL DEFAULT 10`,
   `ALTER TABLE contests ADD COLUMN min_lap_gap_secs INTEGER NOT NULL DEFAULT 30`,
+  `ALTER TABLE contests ADD COLUMN kind TEXT NOT NULL DEFAULT 'voting'`,
+  `ALTER TABLE contests ADD COLUMN sport TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE contests ADD COLUMN location TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE tag_assignments ADD COLUMN racer_status TEXT NOT NULL DEFAULT ''`,
 ]) {
   try {
     db.exec(stmt);

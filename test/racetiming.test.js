@@ -137,3 +137,69 @@ test('timing settings are adjustable and affect results', async () => {
   await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
     .send({ suppress_secs: 10, min_lap_gap_secs: 30 });
 });
+
+test('race kind: creation without criteria; results and start list are public', async () => {
+  const raceOrg = await register('race-kind@test.co', 'Race Kind Org');
+  const race = await request(app).post('/api/contests').set(auth(raceOrg)).send({
+    kind: 'race', title: 'Public XCO race', sport: 'Cycling — MTB XCO', location: 'Kiryat Gat',
+    start_at: past, end_at: future,
+  });
+  assert.equal(race.status, 201, JSON.stringify(race.body));
+  assert.equal(race.body.kind, 'race');
+  assert.equal(race.body.sport, 'Cycling — MTB XCO');
+  assert.equal(race.body.criteria.length, 0);
+
+  // anonymous visitors can read results and start list of a public race
+  const anonResults = await request(app).get(`/api/contests/${race.body.id}/race-results`);
+  assert.equal(anonResults.status, 200);
+  const anonStartlist = await request(app).get(`/api/contests/${race.body.id}/startlist`);
+  assert.equal(anonStartlist.status, 200);
+
+  // voting kind still validates criteria
+  const badVoting = await request(app).post('/api/contests').set(auth(raceOrg)).send({
+    kind: 'voting', title: 'needs criteria', start_at: past, end_at: future,
+  });
+  assert.equal(badVoting.status, 400);
+});
+
+test('DNS/DNF/DSQ statuses override results and sink below finishers', async () => {
+  const gun2 = new Date(Date.now() - 500_000);
+  const at2 = (secs) => new Date(gun2.getTime() + secs * 1000).toISOString();
+  const w = (await request(app).post(`/api/contests/${contest.id}/waves`).set(auth(org)).send({ name: 'statuswave' })).body;
+  await request(app).post(`/api/contests/${contest.id}/waves/${w.id}/start`).set(auth(org))
+    .send({ at: gun2.toISOString() });
+
+  for (const [epc, bib, name, status] of [
+    ['BBBB0200', '200', 'Finisher', ''],
+    ['BBBB0201', '201', 'Second Finisher', ''],
+    ['BBBB0202', '202', 'Did Not Start', 'DNS'],
+    ['BBBB0203', '203', 'Did Not Finish', 'DNF'],
+  ]) {
+    await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+      .send({ epc, bib, participant: name, wave_id: w.id, category: 'M40', racer_status: status });
+  }
+  const reader2 = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
+    .send({ name: 'Status reader' })).body;
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader2.token).send({
+    reads: [
+      { epc: 'BBBB0200', read_at: at2(100) },
+      { epc: 'BBBB0201', read_at: at2(130) },
+      { epc: 'BBBB0203', read_at: at2(90) },  // read exists but organizer marked DNF
+    ],
+  });
+
+  const res = await request(app).get(`/api/contests/${contest.id}/race-results?category=M40`).set(auth(org));
+  const rows = res.body.results;
+  assert.equal(rows[0].bib, '200');
+  assert.equal(rows[0].behind, '', 'leader has no gap');
+  assert.equal(rows[0].category_rank, 1);
+  assert.equal(rows[1].bib, '201');
+  assert.equal(rows[1].behind, '+0:30.0', 'gap behind leader');
+  assert.equal(rows[1].category_rank, 2);
+  const dnf = rows.find((r) => r.bib === '203');
+  assert.equal(dnf.status, 'DNF', 'organizer status overrides reads');
+  assert.equal(dnf.rank, undefined);
+  const dns = rows.find((r) => r.bib === '202');
+  assert.equal(dns.status, 'DNS');
+  assert.ok(rows.indexOf(dnf) > 1 && rows.indexOf(dns) > 1, 'statuses sink below finishers');
+});

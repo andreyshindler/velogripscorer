@@ -5,12 +5,22 @@ const express = require('express');
 const { db, auditLog } = require('../db');
 const { requireAuth } = require('../auth');
 const { sseBroadcast } = require('../events');
-const { getContest, isOrganizer } = require('./contests');
+const { getContest, isOrganizer, canView } = require('./contests');
 
 const router = express.Router();
 
 const MAX_BATCH = 500;
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
+
+function viewableContest(req, res) {
+  const contest = getContest(req.params.id);
+  if (!contest) { res.status(404).json({ error: 'contest not found' }); return null; }
+  if (!canView(contest, req.user, req.query.invite_code)) {
+    res.status(403).json({ error: 'this contest is private' });
+    return null;
+  }
+  return contest;
+}
 
 function organizerContest(req, res) {
   const contest = getContest(req.params.id);
@@ -221,7 +231,7 @@ router.get('/contests/:id/tags', requireAuth, (req, res) => {
   if (!contest) return;
   res.json({
     tags: db.prepare(
-      `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.wave_id, w.name AS wave_name
+      `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.wave_id, a.racer_status, w.name AS wave_name
        FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
        WHERE a.contest_id = ? ORDER BY a.bib, a.epc`
     ).all(contest.id),
@@ -241,13 +251,15 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
     if (!wave) return res.status(400).json({ error: 'unknown wave for this contest' });
     waveId = wave.id;
   }
+  const racerStatus = ['', 'DNS', 'DNF', 'DSQ'].includes(req.body?.racer_status) ? req.body.racer_status : '';
   db.prepare(
-    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category)
-     VALUES (?,?,?,?,?,?,?)
+    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category, racer_status)
+     VALUES (?,?,?,?,?,?,?,?)
      ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
-       user_id = excluded.user_id, wave_id = excluded.wave_id, category = excluded.category`
+       user_id = excluded.user_id, wave_id = excluded.wave_id, category = excluded.category,
+       racer_status = excluded.racer_status`
   ).run(contest.id, epc, String(req.body?.bib || '').trim(), participant, req.body?.user_id ?? null,
-    waveId, String(req.body?.category || '').trim());
+    waveId, String(req.body?.category || '').trim(), racerStatus);
   auditLog(req.user.id, 'tag.assign', 'contest', contest.id, `${epc} -> ${participant}`);
   res.status(201).json({ ok: true });
 });
@@ -337,8 +349,8 @@ router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
 //   - the first valid read is the finish (single-crossing race) and each
 //     subsequent read spaced >= min_lap_gap_secs starts a new lap;
 //   - no valid reads => still on course (or DNS).
-router.get('/contests/:id/race-results', requireAuth, (req, res) => {
-  const contest = organizerContest(req, res);
+router.get('/contests/:id/race-results', (req, res) => {
+  const contest = viewableContest(req, res);
   if (!contest) return;
 
   const waves = new Map(db.prepare('SELECT * FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));
@@ -364,6 +376,8 @@ router.get('/contests/:id/race-results', requireAuth, (req, res) => {
       epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
     };
+    // organizer-declared statuses override everything (Webscorer-style)
+    if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
     if (!wave || !wave.started_at) return { ...base, status: 'not_started', laps: 0 };
     const startMs = Date.parse(wave.started_at);
     const valid = (readsByEpc.get(a.epc) || []).filter((t) => t >= startMs + suppressMs);
@@ -385,22 +399,37 @@ router.get('/contests/:id/race-results', requireAuth, (req, res) => {
     };
   });
 
-  // Fastest time first (Webscorer default); more laps beats fewer for lap races.
+  // Fastest time first (Webscorer default); more laps beats fewer for lap
+  // races; DNS/DNF/DSQ and non-finishers sink to the bottom.
+  const statusOrder = { finished: 0, on_course: 1, not_started: 2, DNF: 3, DSQ: 4, DNS: 5 };
   results.sort((x, y) => {
-    if (x.status !== 'finished' && y.status !== 'finished') return 0;
-    if (x.status !== 'finished') return 1;
-    if (y.status !== 'finished') return -1;
+    const sx = statusOrder[x.status] ?? 9, sy = statusOrder[y.status] ?? 9;
+    if (sx !== sy) return sx - sy;
+    if (x.status !== 'finished') return 0;
     return y.laps - x.laps || x.elapsed_ms - y.elapsed_ms;
   });
-  results.forEach((r, i) => { if (r.status === 'finished') r.rank = i + 1; });
+  // overall rank + gap behind the leader + place within category
+  const categoryPlace = new Map();
+  let leader = null;
+  results.forEach((r, i) => {
+    if (r.status !== 'finished') return;
+    r.rank = i + 1;
+    if (!leader) leader = r;
+    r.behind = r.rank === 1 ? '' : (r.laps < leader.laps
+      ? `-${leader.laps - r.laps} lap${leader.laps - r.laps > 1 ? 's' : ''}`
+      : '+' + formatElapsed(r.elapsed_ms - leader.elapsed_ms));
+    const place = (categoryPlace.get(r.category) || 0) + 1;
+    categoryPlace.set(r.category, place);
+    r.category_rank = place;
+  });
 
   if (req.query.format === 'csv') {
     const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
-    const header = 'rank,bib,participant,category,wave,laps,elapsed,status';
+    const header = 'rank,bib,participant,category,category_rank,wave,laps,elapsed,behind,status';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`);
     return res.send([header, ...results.map((r) =>
-      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', r.status].join(','))].join('\n') + '\n');
+      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
@@ -413,6 +442,21 @@ function formatElapsed(ms) {
   const t = tenths % 10;
   return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}.${t}`;
 }
+
+// Public start list for a viewable contest (spectators, participants).
+router.get('/contests/:id/startlist', (req, res) => {
+  const contest = viewableContest(req, res);
+  if (!contest) return;
+  const racers = db
+    .prepare(
+      `SELECT a.bib, a.participant, a.category, a.racer_status, w.name AS wave
+       FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
+       WHERE a.contest_id = ? ORDER BY CAST(a.bib AS INTEGER), a.bib`
+    )
+    .all(contest.id);
+  const waves = db.prepare('SELECT name, started_at FROM waves WHERE contest_id = ? ORDER BY id').all(contest.id);
+  res.json({ racers, waves });
+});
 
 // ---- Manual passing (tap-to-record fallback, by bib) ----
 

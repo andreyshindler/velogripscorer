@@ -167,8 +167,16 @@ router.post('/contests', requireAuth, (req, res) => {
   if (!b.start_at || !b.end_at) return res.status(400).json({ error: 'start_at and end_at required' });
   if (new Date(b.end_at) <= new Date(b.start_at)) return res.status(400).json({ error: 'end_at must be after start_at' });
   if (b.category && !CATEGORIES.includes(b.category)) return res.status(400).json({ error: 'invalid category' });
-  const criteriaError = validateCriteria(b.criteria);
-  if (criteriaError) return res.status(400).json({ error: criteriaError });
+  // Two contest kinds: 'race' (RFID/manual timing, ranked by time) and
+  // 'voting' (community-judged entries with weighted criteria). Default is
+  // inferred for API compatibility: criteria supplied -> voting.
+  const kind = b.kind === 'race' || b.kind === 'voting'
+    ? b.kind
+    : Array.isArray(b.criteria) && b.criteria.length ? 'voting' : 'race';
+  if (kind === 'voting') {
+    const criteriaError = validateCriteria(b.criteria);
+    if (criteriaError) return res.status(400).json({ error: criteriaError });
+  }
   if (b.voting_mode === 'closed' && (!b.voting_start_at || !b.voting_end_at)) {
     return res.status(400).json({ error: 'closed voting mode requires voting_start_at and voting_end_at' });
   }
@@ -179,8 +187,8 @@ router.post('/contests', requireAuth, (req, res) => {
         `INSERT INTO contests
           (organizer_id, title, description, category, tags, visibility, invite_code,
            voting_mode, blind_voting, scale_max, participant_cap,
-           start_at, end_at, voting_start_at, voting_end_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           start_at, end_at, voting_start_at, voting_end_at, kind, sport, location)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         req.user.id,
@@ -197,11 +205,16 @@ router.post('/contests', requireAuth, (req, res) => {
         b.start_at,
         b.end_at,
         b.voting_start_at || null,
-        b.voting_end_at || null
+        b.voting_end_at || null,
+        kind,
+        String(b.sport || '').trim(),
+        String(b.location || '').trim()
       );
     const contestId = info.lastInsertRowid;
-    const stmt = db.prepare('INSERT INTO criteria (contest_id, name, weight) VALUES (?, ?, ?)');
-    for (const c of b.criteria) stmt.run(contestId, String(c.name).trim(), Math.round(Number(c.weight)));
+    if (kind === 'voting') {
+      const stmt = db.prepare('INSERT INTO criteria (contest_id, name, weight) VALUES (?, ?, ?)');
+      for (const c of b.criteria) stmt.run(contestId, String(c.name).trim(), Math.round(Number(c.weight)));
+    }
     if (Array.isArray(b.prizes)) {
       const pstmt = db.prepare('INSERT INTO prizes (contest_id, rank, name, type, details) VALUES (?,?,?,?,?)');
       for (const p of b.prizes) {

@@ -1,9 +1,11 @@
-# 🏆 VeloGripScorer
+# 🏁 VeloGripScorer
 
-An online scoring & competition platform (in the spirit of webscorer.com): users create
-contests with **weighted judging criteria**, participants submit entries (text, code,
-images, video, PDF), the community casts **per-criterion votes**, and the platform
-aggregates weighted scores into **live leaderboards**.
+A race-timing platform in the spirit of webscorer.com: organizers create **races**,
+build start lists (bib / name / category / wave), start waves with a gun time, and
+the public watches **live results** — Place, Bib, Category place, Laps, Time, Behind,
+DNS/DNF/DSQ — updated in real time from RFID chip reads delivered by the companion
+**Android timing app** (`android/`). A second contest type, community-voting
+competitions with weighted judging criteria, is also included.
 
 ## Quick start
 
