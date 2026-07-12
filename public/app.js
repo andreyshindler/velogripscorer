@@ -502,6 +502,7 @@ async function renderRaceResults(box, c) {
             ${categories.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('')}
           </select>` : ''}
           <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/race-results?format=csv" download>⬇ ${t('export_csv')}</a>
+          <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/taps" download>⬇ ${t('export_taps')}</a>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -578,6 +579,10 @@ async function viewPublicResults(id, tab) {
       <h1 style="text-align:center">${esc(c.title)}</h1>
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
+      </div>
+      <div style="text-align:center;margin:8px 0">
+        <a class="btn small secondary" href="${BASE}/api/contests/${id}/race-results?format=csv" download>⬇ ${t('export_csv')}</a>
+        <a class="btn small secondary" href="${BASE}/api/contests/${id}/taps" download>⬇ ${t('export_taps')}</a>
       </div>
       <div id="pubbody"></div>
     </div>`;

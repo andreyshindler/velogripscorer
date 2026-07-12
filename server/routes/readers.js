@@ -640,6 +640,92 @@ function formatElapsed(ms) {
   return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}.${t}`;
 }
 
+// HH:MM:SS.t time-of-day from an ISO timestamp (device clock as stored).
+function timeOfDay(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}.${Math.floor(d.getUTCMilliseconds() / 100)}`;
+}
+
+// Taps log: one row per counted crossing (start-suppression + lap-gap applied),
+// in chronological order, labelled Lap 1…Lap n / Finish per racer's lap target.
+// Mirrors the timing app's own passing log so each race has an auditable trail.
+router.get('/contests/:id/taps', (req, res) => {
+  const contest = viewableContest(req, res);
+  if (!contest) return;
+
+  const waves = new Map(db.prepare('SELECT * FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));
+  const assignments = db.prepare('SELECT * FROM tag_assignments WHERE contest_id = ? ORDER BY bib, epc').all(contest.id);
+  const reads = db
+    .prepare(
+      `SELECT t.epc, t.rssi, t.read_at, r.name AS reader_name
+       FROM tag_reads t JOIN readers r ON r.id = t.reader_id
+       WHERE t.contest_id = ? ORDER BY t.read_at`
+    )
+    .all(contest.id);
+  const readsByEpc = new Map();
+  for (const r of reads) {
+    if (!readsByEpc.has(r.epc)) readsByEpc.set(r.epc, []);
+    readsByEpc.get(r.epc).push(r);
+  }
+
+  const suppressMs = contest.suppress_secs * 1000;
+  const lapGapMs = contest.min_lap_gap_secs * 1000;
+
+  // Merge two-chip racers by bib so a read from either chip counts.
+  const groups = new Map();
+  for (const a of assignments) {
+    const key = a.bib ? `bib:${a.bib}` : `epc:${a.epc}`;
+    if (!groups.has(key)) groups.set(key, { ...a, epcs: [a.epc] });
+    else groups.get(key).epcs.push(a.epc);
+  }
+
+  const rows = [];
+  for (const g of groups.values()) {
+    const wave = g.wave_id ? waves.get(g.wave_id) : null;
+    if (g.racer_status || !wave || !wave.started_at) continue; // no timed crossings
+    const startMs = Date.parse(wave.started_at);
+    const valid = g.epcs
+      .flatMap((epc) => readsByEpc.get(epc) || [])
+      .map((r) => ({ ...r, ms: Date.parse(r.read_at) }))
+      .filter((r) => r.ms >= startMs + suppressMs)
+      .sort((x, y) => x.ms - y.ms);
+
+    // Collapse reads within the lap gap into one crossing per lap.
+    const crossings = [];
+    let lastMs = null;
+    for (const r of valid) {
+      if (lastMs !== null && r.ms - lastMs < lapGapMs) continue;
+      lastMs = r.ms;
+      crossings.push(r);
+    }
+    // Last crossing is the Finish (server treats last read as the finish); the
+    // rest are Lap 1…Lap n-1.
+    crossings.forEach((r, idx) => {
+      const tap = idx === crossings.length - 1 ? 'Finish' : `Lap ${idx + 1}`;
+      rows.push({
+        bib: g.bib, epc: r.epc, name: g.participant,
+        tap, timeTap: formatElapsed(r.ms - startMs),
+        distance: g.distance || '', category: g.category || '', team: g.team || '',
+        reader: r.reader_name || '', peak: r.rssi ?? '', timeOfDay: timeOfDay(r.read_at),
+        sortMs: r.ms,
+      });
+    });
+  }
+  rows.sort((a, b) => a.sortMs - b.sortMs);
+
+  const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
+  const header = ['Seq #', 'Bib', 'Chip ID', 'Name', 'Tap', 'Time tap', 'Bib tap',
+    'Distance', 'Category', 'Team name', 'Gender', 'Reader', 'Antenna', 'Peak Signal', 'Time tap (time of day)'];
+  const lines = rows.map((r, i) =>
+    [i + 1, cell(r.bib), cell(r.epc), cell(r.name), r.tap, r.timeTap, '',
+      cell(r.distance), cell(r.category), cell(r.team), '', cell(r.reader), '', r.peak, r.timeOfDay].join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="race-${contest.id}-taps.csv"`);
+  res.send('﻿' + [header.join(','), ...lines].join('\n') + '\n'); // BOM so Excel reads Hebrew
+});
+
 // Public start list for a viewable contest (spectators, participants).
 router.get('/contests/:id/startlist', (req, res) => {
   const contest = viewableContest(req, res);
