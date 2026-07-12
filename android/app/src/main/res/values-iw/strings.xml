@@ -73,6 +73,22 @@
     <string name="lap_1">הקפה אחת</string>
     <string name="laps_n">%1$d הקפות</string>
 
+    <string name="racer_setup_title">הגדרת רוכבים</string>
+    <string name="for_each_racer">לכל רוכב נדרש:</string>
+    <string name="racer_name">שם:</string>
+    <string name="racer_bib">מספר חזה:</string>
+    <string name="racer_bib_type">סוג מספר חזה:</string>
+    <string name="bib_numeric">מספרי</string>
+    <string name="bib_alpha">אלפא\nנומרי</string>
+    <string name="racer_category">קטגוריה:</string>
+    <string name="racer_age">גיל:</string>
+    <string name="racer_year">שנת לידה:</string>
+    <string name="racer_gender">מין:</string>
+    <string name="racer_third_gender">מין שלישי מותאם:</string>
+    <string name="racer_checkin">צ׳ק-אין רוכב:</string>
+    <string name="racer_field_unsupported">שדה זה אינו נתמך עדיין.</string>
+    <string name="configure_racer_settings">הגדר הגדרות רוכב</string>
+
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
     <string name="connect_reader">▶ חיבור קורא</string>

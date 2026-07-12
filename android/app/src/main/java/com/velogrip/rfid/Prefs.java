@@ -52,9 +52,23 @@ public final class Prefs {
     public boolean recordLaps() { return sp.getBoolean("recordLaps", true); }
     public void setRecordLaps(boolean on) { sp.edit().putBoolean("recordLaps", on).apply(); }
 
+    // Racer setup: which fields each racer requires, and the bib format.
+    public boolean requireName() { return sp.getBoolean("reqName", true); }
+    public boolean requireBib() { return sp.getBoolean("reqBib", true); }
+    public boolean bibAlphanumeric() { return sp.getBoolean("bibAlpha", false); }
+    public boolean requireCategory() { return sp.getBoolean("reqCategory", true); }
+    public boolean requireGender() { return sp.getBoolean("reqGender", false); }
+    public void setRacerSetup(boolean name, boolean bib, boolean alpha, boolean category, boolean gender) {
+        sp.edit().putBoolean("reqName", name).putBoolean("reqBib", bib)
+                .putBoolean("bibAlpha", alpha).putBoolean("reqCategory", category)
+                .putBoolean("reqGender", gender).apply();
+    }
+
     /** A different race was loaded: race-specific choices return to defaults. */
     public void resetRaceSetup() {
-        sp.edit().remove("startType").remove("multiDistance").remove("recordLaps").apply();
+        sp.edit().remove("startType").remove("multiDistance").remove("recordLaps")
+                .remove("reqName").remove("reqBib").remove("bibAlpha")
+                .remove("reqCategory").remove("reqGender").apply();
     }
 
     /** Remembered after the first successful login so race downloads are one tap. */

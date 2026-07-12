@@ -28,7 +28,7 @@ public class DistanceSetupActivity extends Activity {
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
         findViewById(R.id.nextButton).setOnClickListener(v ->
-                startActivity(new Intent(this, RaceActivity.class)));
+                startActivity(new Intent(this, RacerSetupActivity.class)));
     }
 
     @Override

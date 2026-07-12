@@ -73,6 +73,22 @@
     <string name="lap_1">1 lap</string>
     <string name="laps_n">%1$d laps</string>
 
+    <string name="racer_setup_title">Racer Setup</string>
+    <string name="for_each_racer">For each racer require:</string>
+    <string name="racer_name">Name:</string>
+    <string name="racer_bib">Bib number:</string>
+    <string name="racer_bib_type">Bib number type:</string>
+    <string name="bib_numeric">Numeric</string>
+    <string name="bib_alpha">Alpha\nnumeric</string>
+    <string name="racer_category">Category:</string>
+    <string name="racer_age">Age:</string>
+    <string name="racer_year">Year of birth:</string>
+    <string name="racer_gender">Gender:</string>
+    <string name="racer_third_gender">Customize 3rd gender:</string>
+    <string name="racer_checkin">Racer check-in:</string>
+    <string name="racer_field_unsupported">This field is not supported yet.</string>
+    <string name="configure_racer_settings">Configure racer settings</string>
+
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>
     <string name="connect_reader">▶ Connect reader</string>

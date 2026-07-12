@@ -69,6 +69,10 @@ public class RaceActivity extends Activity {
         });
 
         EditText manualBib = findViewById(R.id.manualBib);
+        // keyboard matches the bib format chosen in Racer Setup
+        manualBib.setInputType(prefs.bibAlphanumeric()
+                ? android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                : android.text.InputType.TYPE_CLASS_NUMBER);
         Button record = findViewById(R.id.recordManual);
         record.setOnClickListener(v -> {
             String bib = manualBib.getText().toString().trim();
@@ -78,7 +82,7 @@ public class RaceActivity extends Activity {
             if (racer != null) {
                 epc = racer.epc;
             } else {
-                epc = "AA" + String.format(Locale.US, "%4s", bib).replace(' ', '0');
+                epc = synthEpc(bib);
                 store.upsertRacer(new RaceStore.Racer(epc, bib, getString(R.string.bib_n, bib), "", ""));
             }
             store.addPassing(new TagRead(epc, null, System.currentTimeMillis()));
@@ -127,6 +131,20 @@ public class RaceActivity extends Activity {
             refresh();
         }
     };
+
+    /** Deterministic synthetic chip code for a manually-entered bib with no
+     *  chip: numeric bibs stay compatible with the server (AA + padded), while
+     *  alphanumeric bibs hex-encode so re-entering the same bib merges. */
+    private static String synthEpc(String bib) {
+        if (bib.matches("\\d{1,10}")) {
+            return "AA" + String.format(Locale.US, "%4s", bib).replace(' ', '0');
+        }
+        StringBuilder hex = new StringBuilder("AA");
+        for (byte b : bib.getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+            hex.append(String.format(Locale.US, "%02X", b));
+        }
+        return hex.toString();
+    }
 
     /** Explicit "upload race to the web now": flushes gun times and every
      *  pending passing in one go, independent of the background bridge. */
