@@ -93,3 +93,29 @@ test('offline race round-trip: gun time + queued reads produce server results', 
   assert.equal(rider.elapsed, '1:24.2');
   assert.equal(rider.rank, 1);
 });
+
+test('app login flow: /my/races lists own races with pairing tokens', async () => {
+  const owner = await register('myraces@test.co', 'My Races Org');
+  const other = await register('other-races@test.co', 'Other Org');
+  const race = await request(app).post('/api/contests').set(auth(owner)).send({
+    kind: 'race', title: 'Login-flow race', sport: 'Running', start_at: past, end_at: future,
+  });
+  assert.equal(race.status, 201);
+  await request(app).post('/api/contests').set(auth(other)).send({
+    kind: 'race', title: 'Someone else race', start_at: past, end_at: future,
+  });
+
+  const mine = await request(app).get('/api/my/races').set(auth(owner));
+  assert.equal(mine.status, 200);
+  assert.equal(mine.body.races.length, 1, 'only own races listed');
+  assert.equal(mine.body.races[0].title, 'Login-flow race');
+  assert.match(mine.body.races[0].app_token, /^vgr_[0-9a-f]{48}$/);
+
+  // the listed token actually works for app sync
+  const sl = await request(app).get('/api/ingest/startlist').set('X-Reader-Token', mine.body.races[0].app_token);
+  assert.equal(sl.status, 200);
+  assert.equal(sl.body.contest.title, 'Login-flow race');
+
+  const anon = await request(app).get('/api/my/races');
+  assert.equal(anon.status, 401);
+});

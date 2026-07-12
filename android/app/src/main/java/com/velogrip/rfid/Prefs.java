@@ -32,6 +32,17 @@ public final class Prefs {
     public int lapGapSecs() { return sp.getInt("lapGapSecs", 30); }
     public String contestTitle() { return sp.getString("contestTitle", ""); }
 
+    public String accountEmail() { return sp.getString("accountEmail", ""); }
+
+    /** Called when the user picks a race after logging in: wires the pairing. */
+    public void savePairing(String readerToken, String contestTitle, String email) {
+        sp.edit()
+                .putString("readerToken", readerToken.trim())
+                .putString("contestTitle", contestTitle)
+                .putString("accountEmail", email.trim())
+                .apply();
+    }
+
     public void saveTimingSettings(int suppressSecs, int lapGapSecs, String contestTitle) {
         sp.edit()
                 .putInt("suppressSecs", suppressSecs)

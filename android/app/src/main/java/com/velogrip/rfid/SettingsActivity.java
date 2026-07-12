@@ -10,6 +10,9 @@ import android.widget.Toast;
 
 import com.velogrip.rfid.net.Uploader;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 /** Configuration form: server, reader connection, protocol, reader WiFi. */
 public class SettingsActivity extends Activity {
 
@@ -42,6 +45,10 @@ public class SettingsActivity extends Activity {
         Prefs prefs = new Prefs(this);
         serverUrl.setText(prefs.serverUrl());
         readerToken.setText(prefs.readerToken());
+        EditText accountEmail = findViewById(R.id.accountEmail);
+        accountEmail.setText(prefs.accountEmail());
+        android.widget.TextView selectedRace = findViewById(R.id.selectedRace);
+        selectedRace.setText(prefs.contestTitle());
         readerHost.setText(prefs.readerHost());
         readerPort.setText(String.valueOf(prefs.readerPort()));
         protocol.setSelection(indexOfProtocol(prefs.protocol()));
@@ -71,6 +78,59 @@ public class SettingsActivity extends Activity {
 
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+
+        Button loginPick = findViewById(R.id.loginPickRace);
+        loginPick.setOnClickListener(v -> {
+            save(prefs); // persist the server URL typed above
+            String email = accountEmail.getText().toString().trim();
+            String password = ((EditText) findViewById(R.id.accountPassword)).getText().toString();
+            if (prefs.serverUrl().isEmpty() || email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, R.string.login_needs_fields, Toast.LENGTH_LONG).show();
+                return;
+            }
+            loginPick.setEnabled(false);
+            new Thread(() -> {
+                try {
+                    JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), email, password));
+                    String jwt = session.getString("token");
+                    JSONArray races = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt))
+                            .getJSONArray("races");
+                    runOnUiThread(() -> {
+                        loginPick.setEnabled(true);
+                        if (races.length() == 0) {
+                            Toast.makeText(this, R.string.no_races_on_account, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        String[] titles = new String[races.length()];
+                        for (int i = 0; i < races.length(); i++) {
+                            JSONObject race = races.optJSONObject(i);
+                            titles[i] = race.optString("title")
+                                    + (race.optString("location").isEmpty() ? "" : " — " + race.optString("location"))
+                                    + " (" + race.optInt("racer_count") + ")";
+                        }
+                        new android.app.AlertDialog.Builder(this)
+                                .setTitle(R.string.choose_race)
+                                .setItems(titles, (dialog, which) -> {
+                                    JSONObject race = races.optJSONObject(which);
+                                    prefs.savePairing(race.optString("app_token"), race.optString("title"), email);
+                                    readerToken.setText(race.optString("app_token"));
+                                    selectedRace.setText(race.optString("title"));
+                                    Toast.makeText(this,
+                                            getString(R.string.race_paired, race.optString("title")),
+                                            Toast.LENGTH_LONG).show();
+                                })
+                                .setNegativeButton(android.R.string.cancel, null)
+                                .show();
+                    });
+                } catch (Exception e) {
+                    final String msg = getString(R.string.test_failed) + " " + e.getMessage();
+                    runOnUiThread(() -> {
+                        loginPick.setEnabled(true);
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                    });
+                }
+            }).start();
         });
 
         Button scanReader = findViewById(R.id.scanReader);

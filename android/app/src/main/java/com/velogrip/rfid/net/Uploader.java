@@ -124,6 +124,47 @@ public final class Uploader {
         return sb.append('"').toString();
     }
 
+    /** Logs into the web account; returns the response JSON (token + user). */
+    public static String login(String serverUrl, String email, String password) throws IOException {
+        HttpURLConnection conn = openStatic(serverUrl, "/api/auth/login", "POST", null);
+        byte[] body = ("{\"email\":" + jsonString(email) + ",\"password\":" + jsonString(password) + "}")
+                .getBytes(StandardCharsets.UTF_8);
+        conn.setDoOutput(true);
+        conn.setFixedLengthStreamingMode(body.length);
+        OutputStream os = conn.getOutputStream();
+        try {
+            os.write(body);
+        } finally {
+            os.close();
+        }
+        int code = conn.getResponseCode();
+        String response = readBody(conn, code);
+        conn.disconnect();
+        if (code != 200) throw new IOException("HTTP " + code + ": " + response);
+        return response;
+    }
+
+    /** Lists the account's races (each carries its app pairing token). */
+    public static String myRaces(String serverUrl, String jwt) throws IOException {
+        HttpURLConnection conn = openStatic(serverUrl, "/api/my/races", "GET", jwt);
+        int code = conn.getResponseCode();
+        String response = readBody(conn, code);
+        conn.disconnect();
+        if (code != 200) throw new IOException("HTTP " + code + ": " + response);
+        return response;
+    }
+
+    private static HttpURLConnection openStatic(String serverUrl, String path, String method,
+                                                String bearer) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(serverUrl.replaceAll("/+$", "") + path).openConnection();
+        conn.setRequestMethod(method);
+        conn.setConnectTimeout(10_000);
+        conn.setReadTimeout(15_000);
+        conn.setRequestProperty("Content-Type", "application/json");
+        if (bearer != null) conn.setRequestProperty("Authorization", "Bearer " + bearer);
+        return conn;
+    }
+
     private HttpURLConnection open(String path, String method) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(serverUrl + path).openConnection();
         conn.setRequestMethod(method);

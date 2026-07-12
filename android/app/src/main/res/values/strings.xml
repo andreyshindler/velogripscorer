@@ -17,6 +17,16 @@
     <string name="saved">Saved</string>
     <string name="save">Save</string>
 
+    <string name="section_account">Your account</string>
+    <string name="account_help">Log in with your website account and pick your race — the start list and result upload connect automatically.</string>
+    <string name="label_email">Email</string>
+    <string name="label_password">Password</string>
+    <string name="login_pick_race">Log in &amp; choose race</string>
+    <string name="login_needs_fields">Enter server URL, email and password first.</string>
+    <string name="no_races_on_account">No races on this account yet — create one on the website.</string>
+    <string name="choose_race">Choose your race</string>
+    <string name="race_paired">Connected to \"%1$s\" — start list and uploads are wired.</string>
+    <string name="label_server_url_manual">Manual pairing (advanced)</string>
     <string name="section_server">Scoring server</string>
     <string name="label_server_url">Server URL</string>
     <string name="hint_server_url">https://scores.example.com</string>

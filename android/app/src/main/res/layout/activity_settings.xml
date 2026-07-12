@@ -9,7 +9,12 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <TextView style="@style/SettingsHeader" android:text="@string/section_server" />
+        <TextView style="@style/SettingsHeader" android:text="@string/section_account" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/account_help"
+            android:textSize="12sp" />
 
         <TextView style="@style/SettingsLabel" android:text="@string/label_server_url" />
         <EditText
@@ -17,6 +22,42 @@
             style="@style/SettingsField"
             android:hint="@string/hint_server_url"
             android:inputType="textUri" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_email" />
+        <EditText
+            android:id="@+id/accountEmail"
+            style="@style/SettingsField"
+            android:inputType="textEmailAddress" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_password" />
+        <EditText
+            android:id="@+id/accountPassword"
+            style="@style/SettingsField"
+            android:inputType="textPassword" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/loginPickRace"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/login_pick_race" />
+
+            <TextView
+                android:id="@+id/selectedRace"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="10dp"
+                android:paddingLeft="10dp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView style="@style/SettingsHeader" android:text="@string/section_server" />
 
         <TextView style="@style/SettingsLabel" android:text="@string/label_reader_token" />
         <EditText

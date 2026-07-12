@@ -164,6 +164,29 @@ router.get('/contests/recommended', requireAuth, (req, res) => {
   res.json({ contests: candidates });
 });
 
+// Races organized by the logged-in user, with their app pairing tokens —
+// lets the Android app offer "log in and pick your race" instead of manual
+// token entry. Tokens are auto-created for races that predate them.
+router.get('/my/races', requireAuth, (req, res) => {
+  const races = db
+    .prepare(
+      `SELECT c.id, c.title, c.sport, c.location, c.start_at, c.end_at, c.status,
+        (SELECT COUNT(*) FROM tag_assignments a WHERE a.contest_id = c.id) AS racer_count,
+        (SELECT token FROM readers r WHERE r.contest_id = c.id ORDER BY r.id LIMIT 1) AS app_token
+       FROM contests c WHERE c.organizer_id = ? AND c.kind = 'race'
+       ORDER BY c.start_at DESC LIMIT 100`
+    )
+    .all(req.user.id);
+  for (const race of races) {
+    if (!race.app_token) {
+      race.app_token = `vgr_${crypto.randomBytes(24).toString('hex')}`;
+      db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+        .run(race.id, 'Timing app', race.app_token, '');
+    }
+  }
+  res.json({ races });
+});
+
 // ---- Creation & management (req 3.2) ----
 
 router.post('/contests', requireAuth, (req, res) => {
