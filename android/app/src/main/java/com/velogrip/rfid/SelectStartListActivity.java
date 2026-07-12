@@ -91,7 +91,10 @@ public class SelectStartListActivity extends Activity {
                 List<StartListFile.Row> rows = StartListFile.parse(in);
                 if (in != null) in.close();
                 RaceStore store = new RaceStore(this);
-                if (clearFirst) store.clearRace();
+                if (clearFirst) {
+                    store.clearRace();
+                    new Prefs(this).setStartType(""); // new race starts from the Mass default
+                }
                 StartListFile.ImportResult r = StartListFile.importInto(store, rows);
                 store.close();
                 new Prefs(this).saveTimingSettings(

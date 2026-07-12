@@ -173,7 +173,10 @@ public class DownloadRacesActivity extends Activity {
             boolean ok = false;
             try {
                 RaceStore store = new RaceStore(this);
-                if (clearFirst) store.clearRace();
+                if (clearFirst) {
+                    store.clearRace();
+                    prefs.setStartType(""); // new race starts from the Mass default
+                }
                 StartListSync.Result r = StartListSync.download(prefs, store);
                 store.close();
                 message = getString(R.string.sync_done, r.racers, r.waves);

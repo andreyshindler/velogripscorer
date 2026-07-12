@@ -59,14 +59,8 @@ public class RaceSetupActivity extends Activity {
         interval = findViewById(R.id.typeInterval);
         pursuit = findViewById(R.id.typePursuit);
 
-        // pre-select from saved choice, else from the start list's shape
-        String saved = prefs.startType();
-        if (saved.isEmpty()) {
-            RaceStore store = new RaceStore(this);
-            saved = store.waves().size() > 1 ? TYPE_WAVE : TYPE_MASS;
-            store.close();
-        }
-        select(TYPE_WAVE.equals(saved) ? TYPE_WAVE : TYPE_MASS);
+        // Mass is the default; a Wave choice sticks for this race only
+        select(TYPE_WAVE.equals(prefs.startType()) ? TYPE_WAVE : TYPE_MASS);
 
         mass.setOnClickListener(v -> select(TYPE_MASS));
         wave.setOnClickListener(v -> select(TYPE_WAVE));
