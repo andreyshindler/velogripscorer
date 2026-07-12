@@ -248,3 +248,66 @@ test('bulk start-list import creates racers, waves, and synthetic EPCs', async (
     .send({ racers: [{ bib: '1', participant: 'x' }] });
   assert.equal(denied.status, 403);
 });
+
+test('xlsx start-list upload: Webscorer format, two chips per racer, delete race', async () => {
+  const xlOrg = await register('xlsx-org@test.co', 'Xlsx Org');
+  const race = (await request(app).post('/api/contests').set(auth(xlOrg)).send({
+    kind: 'race', title: 'Excel race', start_at: past, end_at: future,
+  })).body;
+
+  const up = await request(app).post(`/api/contests/${race.id}/startlist-file`).set(auth(xlOrg))
+    .attach('file', 'test/fixtures/startlist.xlsx');
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  assert.equal(up.body.imported, 3);
+  assert.equal(up.body.errors.length, 0);
+
+  const tags = (await request(app).get(`/api/contests/${race.id}/tags`).set(auth(xlOrg))).body.tags;
+  // racer 1 has two chips -> two assignments on bib 100
+  const bib100 = tags.filter((a) => a.bib === '100');
+  assert.equal(bib100.length, 2, 'both chips imported');
+  assert.deepEqual(bib100.map((a) => a.epc).sort(),
+    ['000000000000000000009901', 'E28011700000021B236F9C4C']);
+  // racer 3 had no chip -> synthetic EPC
+  assert.ok(tags.some((a) => a.bib === '102' && a.epc === 'AA0102'));
+
+  // waves auto-created from the sheet
+  const waves = (await request(app).get(`/api/contests/${race.id}/waves`).set(auth(xlOrg))).body.waves;
+  assert.deepEqual(waves.map((w) => w.name).sort(), ['wave1', 'wave2']);
+
+  // start the wave; a read on EITHER chip finishes the racer exactly once
+  const gun3 = new Date(Date.now() - 400_000);
+  const wave1 = waves.find((w) => w.name === 'wave1');
+  await request(app).post(`/api/contests/${race.id}/waves/${wave1.id}/start`).set(auth(xlOrg))
+    .send({ at: gun3.toISOString() });
+  const readers = (await request(app).get(`/api/contests/${race.id}/readers`).set(auth(xlOrg))).body.readers;
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', readers[0].token).send({
+    reads: [
+      { epc: 'E28011700000021B236F9C4C', read_at: new Date(gun3.getTime() + 70_000).toISOString() }, // chip 2
+      { epc: '000000000000000000009901', read_at: new Date(gun3.getTime() + 71_000).toISOString() }, // chip 1 re-read
+    ],
+  });
+  const results = (await request(app).get(`/api/contests/${race.id}/race-results`).set(auth(xlOrg))).body.results;
+  const dual = results.filter((r) => r.bib === '100');
+  assert.equal(dual.length, 1, 'two-chip racer appears once in results');
+  assert.equal(dual[0].status, 'finished');
+  assert.equal(dual[0].laps, 1, 'both chip reads collapse into one crossing');
+  assert.equal(dual[0].elapsed, '1:10.0', 'earliest chip read wins');
+  assert.equal(dual[0].distance, '5k');
+  assert.equal(dual[0].team, 'Team A');
+
+  // public start list is deduped and carries distance/team
+  const startlist = (await request(app).get(`/api/contests/${race.id}/startlist`)).body;
+  assert.equal(startlist.racers.filter((r) => r.bib === '100').length, 1);
+  assert.equal(startlist.racers.find((r) => r.bib === '101').distance, '10k');
+
+  // delete race: non-organizer denied, organizer wipes everything
+  const outsider2 = await register('xlsx-outsider@test.co', 'Xlsx Outsider');
+  const denied = await request(app).delete(`/api/contests/${race.id}`).set(auth(outsider2));
+  assert.equal(denied.status, 403);
+  const del = await request(app).delete(`/api/contests/${race.id}`).set(auth(xlOrg));
+  assert.equal(del.status, 200);
+  const gone = await request(app).get(`/api/contests/${race.id}`);
+  assert.equal(gone.status, 404);
+  const tokenDead = await request(app).get('/api/ingest/ping').set('X-Reader-Token', readers[0].token);
+  assert.equal(tokenDead.status, 401, 'pairing token dies with the race');
+});

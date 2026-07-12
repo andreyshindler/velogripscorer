@@ -274,6 +274,22 @@ router.get('/contests/:id', (req, res) => {
   res.json(serializeContest(contest, req.user));
 });
 
+// Delete a race and everything under it (start list, reads, waves, results).
+router.delete('/contests/:id', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const wipe = db.transaction(() => {
+    // awards reference entries without cascade; clear them first
+    db.prepare('DELETE FROM awards WHERE contest_id = ?').run(contest.id);
+    db.prepare('DELETE FROM entries WHERE contest_id = ?').run(contest.id);
+    db.prepare('DELETE FROM contests WHERE id = ?').run(contest.id);
+  });
+  wipe();
+  auditLog(req.user.id, 'contest.delete', 'contest', contest.id, contest.title);
+  res.json({ ok: true });
+});
+
 router.patch('/contests/:id', requireAuth, (req, res) => {
   const contest = getContest(req.params.id);
   if (!contest) return res.status(404).json({ error: 'contest not found' });

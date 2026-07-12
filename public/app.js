@@ -407,7 +407,7 @@ async function renderRaceResults(box, c) {
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
           <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-          <th>${t('category_place')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>
+          <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>
         </tr></thead><tbody id="race-results-body"></tbody></table>
       </div>
     </div>`;
@@ -428,6 +428,7 @@ async function renderRaceResults(box, c) {
           <td>${esc(r.participant)}</td>
           <td>${esc(r.category || '')}</td>
           <td>${r.category_rank ?? ''}</td>
+          <td>${esc(r.distance || '')}</td>
           <td>${esc(r.wave || '')}</td>
           <td>${r.laps}</td>
           <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
@@ -440,12 +441,13 @@ async function renderRaceResults(box, c) {
           <td>${esc(r.participant)}</td>
           <td>${esc(r.category || '')}</td>
           <td></td>
+          <td>${esc(r.distance || '')}</td>
           <td>${esc(r.wave || '')}</td>
           <td>${r.laps || ''}</td>
           <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td>
           <td></td>
         </tr>`),
-    ].join('') || `<tr><td colspan="9" class="muted">${t('no_results_yet')}</td></tr>`;
+    ].join('') || `<tr><td colspan="10" class="muted">${t('no_results_yet')}</td></tr>`;
   };
   draw(data.results);
 
@@ -469,71 +471,22 @@ async function renderStartlist(box, c) {
       <h3 style="margin-top:0">${t('tab_startlist')} <span class="muted" style="font-weight:400">(${racers.length} ${t('racers_count')})</span></h3>
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
-          <th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th><th>${t('wave')}</th><th>${t('racer_status')}</th>
+          <th>${t('bib')}</th><th>${t('participant')}</th><th>${t('team')}</th><th>${t('category')}</th><th>${t('distance')}</th><th>${t('wave')}</th><th>${t('racer_status')}</th>
         </tr></thead><tbody>
           ${racers.map((r) => `
             <tr>
               <td><strong>${esc(r.bib || '')}</strong></td>
               <td>${esc(r.participant)}</td>
+              <td>${esc(r.team || '')}</td>
               <td>${esc(r.category || '')}</td>
+              <td>${esc(r.distance || '')}</td>
               <td>${esc(r.wave || '')}</td>
               <td>${r.racer_status ? `<span class="pill finished">${esc(r.racer_status)}</span>` : ''}</td>
-            </tr>`).join('') || `<tr><td colspan="5" class="muted">${t('no_startlist')}</td></tr>`}
+            </tr>`).join('') || `<tr><td colspan="7" class="muted">${t('no_startlist')}</td></tr>`}
         </tbody></table>
       </div>
       ${waves.length ? `<p class="muted">${waves.map((w) => `${esc(w.name)}: ${w.started_at ? fmtDate(w.started_at) : t('not_started')}`).join(' · ')}</p>` : ''}
     </div>`;
-}
-
-// CSV start list: header row optional; recognizes bib/name/category/wave/epc
-// column names in English and Hebrew, or positional columns in that order.
-function parseStartListCsv(text) {
-  const delimiter = [',', ';', '\t'].reduce((best, d) =>
-    text.split('\n')[0].split(d).length > text.split('\n')[0].split(best).length ? d : best, ',');
-  const parseLine = (line) => {
-    const cells = [];
-    let cur = '', inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (inQ) {
-        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-        else if (ch === '"') inQ = false;
-        else cur += ch;
-      } else if (ch === '"') inQ = true;
-      else if (ch === delimiter) { cells.push(cur); cur = ''; }
-      else cur += ch;
-    }
-    cells.push(cur);
-    return cells.map((s) => s.trim());
-  };
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
-
-  const HEADER_MAP = {
-    bib: ['bib', 'number', 'num', '#', 'מספר', 'מספר חזה', 'חזה'],
-    participant: ['name', 'participant', 'racer', 'שם', 'שם מלא'],
-    category: ['category', 'cat', 'קטגוריה'],
-    wave: ['wave', 'heat', 'מקצה'],
-    epc: ['epc', 'chip', 'tag', 'chip id', 'שבב', 'תג'],
-  };
-  const first = parseLine(lines[0]).map((h) => h.toLowerCase());
-  const cols = {};
-  let hasHeader = false;
-  for (const [field, names] of Object.entries(HEADER_MAP)) {
-    const idx = first.findIndex((h) => names.includes(h));
-    if (idx >= 0) { cols[field] = idx; hasHeader = true; }
-  }
-  if (!hasHeader) {
-    // positional: bib, name, category, wave, epc
-    Object.assign(cols, { bib: 0, participant: 1, category: 2, wave: 3, epc: 4 });
-  }
-  return lines.slice(hasHeader ? 1 : 0).map(parseLine).map((cells) => ({
-    bib: cells[cols.bib] ?? '',
-    participant: cells[cols.participant] ?? '',
-    category: cols.category !== undefined ? cells[cols.category] ?? '' : '',
-    wave: cols.wave !== undefined ? cells[cols.wave] ?? '' : '',
-    epc: cols.epc !== undefined ? cells[cols.epc] ?? '' : '',
-  })).filter((r) => r.participant || r.bib);
 }
 
 // ---------- manage tab (organizer): start list, app pairing, settings ----------
@@ -562,7 +515,7 @@ async function renderManage(box, c) {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <h3 style="margin:0">${t('tab_startlist')} <span class="muted" style="font-weight:400">(${tags.length} ${t('racers_count')})</span></h3>
         <div>
-          <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+          <input type="file" id="csv-file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
           <button class="btn small" id="import-csv" title="${t('csv_help')}">⬆ ${t('import_csv')}</button>
         </div>
       </div>
@@ -622,6 +575,12 @@ async function renderManage(box, c) {
         <input name="name" placeholder="${t('wave')}" required style="max-width:220px">
         <button class="btn small secondary">+ ${t('add_wave')}</button>
       </form>
+    </div>
+
+    <div class="card mt" style="border-color:var(--danger)">
+      <h3 style="margin-top:0;color:var(--danger)">${t('danger_zone')}</h3>
+      <p class="muted" style="font-size:0.85rem">${t('delete_race_help')}</p>
+      <button class="btn small danger" id="delete-race">🗑 ${t('delete_race')}</button>
     </div>`;
 
   $('#copy-token').onclick = async () => {
@@ -636,10 +595,9 @@ async function renderManage(box, c) {
     const file = csvFile.files[0];
     if (!file) return;
     try {
-      const text = (await file.text()).replace(/^\uFEFF/, ''); // strip Excel BOM
-      const racers = parseStartListCsv(text);
-      if (!racers.length) throw new Error(t('csv_help'));
-      const result = await api(`/contests/${c.id}/tags/bulk`, { method: 'POST', body: { racers } });
+      const form = new FormData();
+      form.set('file', file);
+      const result = await api(`/contests/${c.id}/startlist-file`, { method: 'POST', form });
       toast(t('import_done', { n: result.imported, s: result.skipped })
         + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
       viewContest(c.id, 'manage');
@@ -694,6 +652,17 @@ async function renderManage(box, c) {
       viewContest(c.id, 'manage');
     };
   });
+  $('#delete-race').onclick = async () => {
+    const typed = prompt(t('delete_race_confirm', { title: c.title }));
+    if (typed === null) return;
+    if (typed.trim() !== c.title) { toast(t('delete_race_mismatch'), true); return; }
+    try {
+      await api(`/contests/${c.id}`, { method: 'DELETE' });
+      toast('🗑 ✓');
+      location.hash = '#/';
+    } catch (err) { toast(err.message, true); }
+  };
+
   $('#timing-settings').onsubmit = async (e) => {
     e.preventDefault();
     try {

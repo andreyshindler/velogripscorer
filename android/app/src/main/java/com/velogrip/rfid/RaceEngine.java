@@ -52,17 +52,32 @@ public final class RaceEngine {
         long suppressMs = suppressSecs * 1000L;
         long lapGapMs = minLapGapSecs * 1000L;
 
-        List<Result> results = new ArrayList<>();
+        // Racers can carry two chips: rows sharing a non-empty bib are merged
+        // so a read from either chip counts for the racer.
+        Map<String, List<RaceStore.Racer>> groups = new java.util.LinkedHashMap<>();
         for (RaceStore.Racer racer : racers) {
+            String key = racer.bib.isEmpty() ? "epc:" + racer.epc : "bib:" + racer.bib;
+            List<RaceStore.Racer> group = groups.get(key);
+            if (group == null) groups.put(key, group = new ArrayList<>());
+            group.add(racer);
+        }
+
+        List<Result> results = new ArrayList<>();
+        for (List<RaceStore.Racer> group : groups.values()) {
+            RaceStore.Racer racer = group.get(0);
             Long gun = racer.wave.isEmpty() ? null : gunByWave.get(racer.wave);
             if (gun == null) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
                         "not_started", 0, 0));
                 continue;
             }
-            List<Long> raw = readsByEpc.get(racer.epc);
+            List<Long> raw = new ArrayList<>();
+            for (RaceStore.Racer member : group) {
+                List<Long> reads = readsByEpc.get(member.epc);
+                if (reads != null) raw.addAll(reads);
+            }
             List<Long> crossings = new ArrayList<>();
-            if (raw != null) {
+            if (!raw.isEmpty()) {
                 Collections.sort(raw);
                 for (long at : raw) {
                     if (at < gun + suppressMs) continue;

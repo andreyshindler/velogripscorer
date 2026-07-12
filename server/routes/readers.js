@@ -5,7 +5,11 @@ const express = require('express');
 const { db, auditLog } = require('../db');
 const { requireAuth } = require('../auth');
 const { sseBroadcast } = require('../events');
+const multer = require('multer');
+const { parseXlsx } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
+
+const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -271,23 +275,22 @@ router.delete('/contests/:id/tags/:epc', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Bulk start-list import (CSV upload parsed client-side). Waves are matched
-// by name and created on the fly; rows without an EPC get a synthetic one
-// derived from the bib so manual/chip timing interoperate.
-router.post('/contests/:id/tags/bulk', requireAuth, (req, res) => {
-  const contest = organizerContest(req, res);
-  if (!contest) return;
-  const racers = Array.isArray(req.body?.racers) ? req.body.racers.slice(0, 2000) : null;
-  if (!racers || !racers.length) return res.status(400).json({ error: 'racers array required' });
-
+// ---- Start-list import ----
+//
+// Shared by the JSON bulk endpoint and the file-upload endpoint. Waves are
+// matched by name and created on the fly; racers without a chip get a
+// synthetic bib-based EPC; a second chip (Chip ID2) becomes an extra
+// assignment on the same bib so either chip read counts for the racer.
+function importRacers(contest, racers, userId) {
   const waveIdByName = new Map(
     db.prepare('SELECT id, name FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.name, w.id])
   );
   const upsert = db.prepare(
-    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id, category, racer_status)
-     VALUES (?,?,?,?,?,?,'')
+    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id, category, distance, team, racer_status)
+     VALUES (?,?,?,?,?,?,?,?,'')
      ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
-       wave_id = excluded.wave_id, category = excluded.category`
+       wave_id = excluded.wave_id, category = excluded.category,
+       distance = excluded.distance, team = excluded.team`
   );
   const newWave = db.prepare('INSERT INTO waves (contest_id, name) VALUES (?, ?)');
 
@@ -298,6 +301,7 @@ router.post('/contests/:id/tags/bulk', requireAuth, (req, res) => {
       const bib = String(row?.bib ?? '').trim();
       const participant = String(row?.participant ?? row?.name ?? '').trim();
       let epc = String(row?.epc ?? '').trim().toUpperCase();
+      const epc2 = String(row?.epc2 ?? '').trim().toUpperCase();
       if (!participant) { errors.push(`row ${i + 1}: name missing`); return; }
       if (!epc) {
         if (!/^\d{1,10}$/.test(bib)) { errors.push(`row ${i + 1}: needs an EPC or a numeric bib`); return; }
@@ -312,13 +316,105 @@ router.post('/contests/:id/tags/bulk', requireAuth, (req, res) => {
         }
         waveId = waveIdByName.get(waveName);
       }
-      upsert.run(contest.id, epc, bib, participant, waveId, String(row?.category ?? '').trim());
+      const category = String(row?.category ?? '').trim();
+      const distance = String(row?.distance ?? '').trim();
+      const team = String(row?.team ?? '').trim();
+      upsert.run(contest.id, epc, bib, participant, waveId, category, distance, team);
       imported++;
+      if (epc2 && EPC_RE.test(epc2) && epc2 !== epc) {
+        upsert.run(contest.id, epc2, bib, participant, waveId, category, distance, team);
+      }
     });
   });
   tx();
-  auditLog(req.user.id, 'tag.bulk_import', 'contest', contest.id, `${imported} racers`);
-  res.json({ imported, skipped: racers.length - imported, errors: errors.slice(0, 20) });
+  auditLog(userId, 'tag.bulk_import', 'contest', contest.id, `${imported} racers`);
+  return { imported, skipped: racers.length - imported, errors: errors.slice(0, 20) };
+}
+
+// Header names recognized in uploaded files (Webscorer exports, our CSV
+// template, Hebrew sheets). Matched case-insensitively.
+const FILE_HEADERS = {
+  bib: ['bib', 'number', 'num', '#', 'מספר', 'מספר חזה', 'חזה'],
+  participant: ['name', 'participant', 'racer', 'שם', 'שם מלא'],
+  category: ['category', 'cat', 'קטגוריה'],
+  wave: ['wave', 'heat', 'מקצה'],
+  epc: ['epc', 'chip', 'tag', 'chip id', 'chipid', 'שבב', 'תג'],
+  epc2: ['chip id2', 'chipid2', 'epc2', 'chip 2', 'שבב 2'],
+  distance: ['distance', 'מרחק'],
+  team: ['team', 'team name', 'קבוצה', 'שם קבוצה'],
+};
+
+function rowsToRacers(rows) {
+  if (!rows.length) return [];
+  const header = rows[0].map((h) => String(h ?? '').trim().toLowerCase());
+  const cols = {};
+  let hasHeader = false;
+  for (const [field, names] of Object.entries(FILE_HEADERS)) {
+    const idx = header.findIndex((h) => names.includes(h));
+    if (idx >= 0) { cols[field] = idx; hasHeader = true; }
+  }
+  if (!hasHeader) {
+    // positional fallback: bib, name, category, wave, epc
+    Object.assign(cols, { bib: 0, participant: 1, category: 2, wave: 3, epc: 4 });
+  }
+  return rows.slice(hasHeader ? 1 : 0).map((cells) => {
+    const get = (field) => (cols[field] !== undefined ? String(cells[cols[field]] ?? '').trim() : '');
+    return {
+      bib: get('bib'), participant: get('participant'), category: get('category'),
+      wave: get('wave'), epc: get('epc'), epc2: get('epc2'),
+      distance: get('distance'), team: get('team'),
+    };
+  }).filter((r) => r.participant || r.bib);
+}
+
+function parseCsvBuffer(buf) {
+  const text = buf.toString('utf8').replace(/^\uFEFF/, '');
+  const firstLine = text.split('\n')[0] || '';
+  const delimiter = [',', ';', '\t'].reduce((best, d) =>
+    firstLine.split(d).length > firstLine.split(best).length ? d : best, ',');
+  const parseLine = (line) => {
+    const cells = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') inQ = false;
+        else cur += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === delimiter) { cells.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    cells.push(cur);
+    return cells.map((s) => s.trim());
+  };
+  return text.split(/\r?\n/).filter((l) => l.trim()).map(parseLine);
+}
+
+router.post('/contests/:id/tags/bulk', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const racers = Array.isArray(req.body?.racers) ? req.body.racers.slice(0, 2000) : null;
+  if (!racers || !racers.length) return res.status(400).json({ error: 'racers array required' });
+  res.json(importRacers(contest, racers, req.user.id));
+});
+
+// File upload: .xlsx (Excel / Webscorer export) or .csv, parsed server-side.
+router.post('/contests/:id/startlist-file', requireAuth, uploadMemory.single('file'), (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'file required' });
+  let rows;
+  try {
+    const isXlsx = /\.xlsx$/i.test(req.file.originalname || '')
+      || req.file.buffer.subarray(0, 2).toString('latin1') === 'PK';
+    rows = isXlsx ? parseXlsx(req.file.buffer) : parseCsvBuffer(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: `could not read file: ${err.message}` });
+  }
+  const racers = rowsToRacers(rows).slice(0, 2000);
+  if (!racers.length) return res.status(400).json({ error: 'no racers found in the file' });
+  res.json(importRacers(contest, racers, req.user.id));
 });
 
 // ---- Waves & race start (Webscorer-style: gun time per wave) ----
@@ -420,17 +516,34 @@ router.get('/contests/:id/race-results', (req, res) => {
   const suppressMs = contest.suppress_secs * 1000;
   const lapGapMs = contest.min_lap_gap_secs * 1000;
 
-  const results = assignments.map((a) => {
+  // Racers can carry two chips (Chip ID + Chip ID2): assignments sharing a
+  // non-empty bib are merged, and a read from either chip counts.
+  const groups = new Map();
+  for (const a of assignments) {
+    const key = a.bib ? `bib:${a.bib}` : `epc:${a.epc}`;
+    if (!groups.has(key)) groups.set(key, { ...a, epcs: [a.epc] });
+    else {
+      const g = groups.get(key);
+      g.epcs.push(a.epc);
+      if (!g.racer_status && a.racer_status) g.racer_status = a.racer_status;
+    }
+  }
+
+  const results = [...groups.values()].map((a) => {
     const wave = a.wave_id ? waves.get(a.wave_id) : null;
     const base = {
       epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
+      distance: a.distance || '', team: a.team || '',
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
     };
     // organizer-declared statuses override everything (Webscorer-style)
     if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
     if (!wave || !wave.started_at) return { ...base, status: 'not_started', laps: 0 };
     const startMs = Date.parse(wave.started_at);
-    const valid = (readsByEpc.get(a.epc) || []).filter((t) => t >= startMs + suppressMs);
+    const valid = a.epcs
+      .flatMap((epc) => readsByEpc.get(epc) || [])
+      .sort((x, y) => x - y)
+      .filter((t) => t >= startMs + suppressMs);
     if (!valid.length) return { ...base, status: 'on_course', laps: 0 };
 
     const crossings = [];
@@ -475,11 +588,11 @@ router.get('/contests/:id/race-results', (req, res) => {
 
   if (req.query.format === 'csv') {
     const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
-    const header = 'rank,bib,participant,category,category_rank,wave,laps,elapsed,behind,status';
+    const header = 'rank,bib,participant,category,category_rank,distance,team,wave,laps,elapsed,behind,status';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`);
     return res.send([header, ...results.map((r) =>
-      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
+      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.distance ?? ''), cell(r.team ?? ''), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
@@ -499,9 +612,11 @@ router.get('/contests/:id/startlist', (req, res) => {
   if (!contest) return;
   const racers = db
     .prepare(
-      `SELECT a.bib, a.participant, a.category, a.racer_status, w.name AS wave
+      `SELECT a.bib, a.participant, a.category, a.distance, a.team, a.racer_status, w.name AS wave
        FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
-       WHERE a.contest_id = ? ORDER BY CAST(a.bib AS INTEGER), a.bib`
+       WHERE a.contest_id = ?
+       GROUP BY CASE WHEN a.bib != '' THEN a.bib ELSE a.epc END
+       ORDER BY CAST(a.bib AS INTEGER), a.bib`
     )
     .all(contest.id);
   const waves = db.prepare('SELECT name, started_at FROM waves WHERE contest_id = ? ORDER BY id').all(contest.id);
