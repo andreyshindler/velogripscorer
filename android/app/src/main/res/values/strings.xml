@@ -92,6 +92,35 @@
     <string name="nav_home">Home</string>
     <string name="navigate_back_to">Navigate back to</string>
 
+    <string name="race_timing_title">Race Timing</string>
+    <string name="or_swipe">or swipe</string>
+    <string name="tap_to_record">Tap to record a time</string>
+    <string name="no_bib">No Bib</string>
+    <string name="no_bib_short">No Bib</string>
+    <string name="tap_to_finish">Tap to finish</string>
+    <string name="col_pl">Pl</string>
+    <string name="col_time">Time</string>
+    <string name="show_splits">Show splits</string>
+    <string name="hide_splits">Hide splits</string>
+    <string name="race_control">Race control</string>
+    <string name="normal_view">Normal view</string>
+    <string name="keypad_view">Keypad view</string>
+    <string name="pause_scroll">Pause scroll</string>
+    <string name="next_distance">Next\ndistance</string>
+    <string name="next_category">Next\ncategory</string>
+    <string name="view_option_unsupported">This view option is not supported yet.</string>
+    <string name="finish_split">Finish  +%1$s</string>
+    <string name="timing_hint">Tap timer button or pre-enter bib | %1$d - %2$d/%3$d</string>
+    <string name="assign_to_racer">Assign this time to racer</string>
+    <string name="choose_race_control">Choose race control option</string>
+    <string name="rc_restart">Restart race (false start)</string>
+    <string name="rc_finish">Finish race (race completed)</string>
+    <string name="rc_live">Live results (view / update)</string>
+    <string name="race_restarted">Race restarted — clock reset.</string>
+    <string name="live_results_on">Live results ON — standings upload as the race runs.</string>
+    <string name="live_results_off">Live results OFF.</string>
+    <string name="close">Close</string>
+
     <string name="start_list_title">Start List</string>
     <string name="race_start_title">Race Start</string>
     <string name="bib">Bib</string>

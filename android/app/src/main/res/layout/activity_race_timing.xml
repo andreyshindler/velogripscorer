@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <!-- Dark header: Home · title · finish flag -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/homeButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_green"
+            android:gravity="center"
+            android:text="⌂"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/race_timing_title"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/finishButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_green"
+            android:gravity="center"
+            android:text="🏁"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <!-- Clock row: ‹ prev · clock · next › -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <LinearLayout
+            android:id="@+id/prevPage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_box"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="‹" android:textColor="@color/velogrip_green" android:textSize="22sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/or_swipe" android:textColor="#888888" android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/clockButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="8dp"
+            android:background="@drawable/bg_segment_on"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingVertical="10dp">
+            <TextView android:id="@+id/clockText" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="0:00.0" android:textColor="#111111" android:textSize="30sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/tap_to_record" android:textColor="#1E4032" android:textSize="15sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nextPage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_box"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="›" android:textColor="@color/velogrip_green" android:textSize="22sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/or_swipe" android:textColor="#888888" android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bib grid -->
+    <GridLayout
+        android:id="@+id/bibGrid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="4"
+        android:padding="4dp" />
+
+    <!-- Results header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#BFBFBF"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp">
+        <TextView android:layout_width="36dp" android:layout_height="wrap_content"
+            android:text="@string/col_pl" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="52dp" android:layout_height="wrap_content"
+            android:text="@string/bib_col" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="@string/name_col" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/col_time" android:textColor="#222222" android:textSize="16sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/resultsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <LinearLayout
+            android:id="@+id/resultsBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/timingHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <!-- Bottom bar page A -->
+    <LinearLayout
+        android:id="@+id/tbarA"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp">
+        <LinearLayout android:id="@+id/aSplits" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="±" />
+            <TextView style="@style/BottomText" android:text="@string/show_splits" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aControl" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⏹" android:textColor="#E74C3C" />
+            <TextView style="@style/BottomText" android:text="@string/race_control" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aNormal" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="▦" />
+            <TextView style="@style/BottomText" android:text="@string/normal_view" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aKeypad" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⌨" />
+            <TextView style="@style/BottomText" android:text="@string/keypad_view" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aMoreT" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="•••" />
+            <TextView style="@style/BottomText" android:text="@string/more" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom bar page B -->
+    <LinearLayout
+        android:id="@+id/tbarB"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp"
+        android:visibility="gone">
+        <LinearLayout android:id="@+id/bPause" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⏸" />
+            <TextView style="@style/BottomText" android:text="@string/pause_scroll" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bHide" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="±" />
+            <TextView style="@style/BottomText" android:text="@string/hide_splits" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bDist" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⟳" />
+            <TextView style="@style/BottomText" android:text="@string/next_distance" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bCat" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⟳" />
+            <TextView style="@style/BottomText" android:text="@string/next_category" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/bMoreT" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="•••" />
+            <TextView style="@style/BottomText" android:text="@string/more" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -124,6 +124,32 @@ public final class RaceStore extends SQLiteOpenHelper {
         return out;
     }
 
+    /** Records a finish for a specific chip at a given time (grid tap / No Bib). */
+    public void recordPassing(String epc, long atMs) {
+        ContentValues values = new ContentValues();
+        values.put("epc", epc);
+        values.put("read_at", atMs);
+        getWritableDatabase().insert("passings", null, values);
+    }
+
+    public List<Passing> passingsForEpc(String epc) {
+        List<Passing> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT id, epc, rssi, read_at FROM passings WHERE epc = ? ORDER BY read_at", new String[]{epc});
+        try {
+            while (c.moveToNext()) {
+                out.add(new Passing(c.getLong(0), c.getString(1), c.isNull(2) ? null : c.getDouble(2), c.getLong(3)));
+            }
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
+    public void deletePassing(long id) {
+        getWritableDatabase().execSQL("DELETE FROM passings WHERE id = ?", new Object[]{id});
+    }
+
     public void markUploaded(long maxIdInclusive) {
         getWritableDatabase().execSQL("UPDATE passings SET uploaded = 1 WHERE id <= ? AND uploaded = 0",
                 new Object[]{maxIdInclusive});

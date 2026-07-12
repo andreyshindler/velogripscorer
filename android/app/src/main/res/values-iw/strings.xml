@@ -92,6 +92,35 @@
     <string name="nav_home">בית</string>
     <string name="navigate_back_to">ניווט חזרה אל</string>
 
+    <string name="race_timing_title">תזמון מרוץ</string>
+    <string name="or_swipe">או החלק</string>
+    <string name="tap_to_record">הקש כדי לרשום זמן</string>
+    <string name="no_bib">ללא\nמספר</string>
+    <string name="no_bib_short">ללא מספר</string>
+    <string name="tap_to_finish">הקש לסיום</string>
+    <string name="col_pl">מק׳</string>
+    <string name="col_time">זמן</string>
+    <string name="show_splits">הצג פערים</string>
+    <string name="hide_splits">הסתר פערים</string>
+    <string name="race_control">בקרת מרוץ</string>
+    <string name="normal_view">תצוגה רגילה</string>
+    <string name="keypad_view">תצוגת מקשים</string>
+    <string name="pause_scroll">השהה גלילה</string>
+    <string name="next_distance">מרחק\nהבא</string>
+    <string name="next_category">קטגוריה\nהבאה</string>
+    <string name="view_option_unsupported">אפשרות תצוגה זו אינה נתמכת עדיין.</string>
+    <string name="finish_split">סיום  +%1$s</string>
+    <string name="timing_hint">הקש על הטיימר או הזן מספר חזה מראש | %1$d - %2$d/%3$d</string>
+    <string name="assign_to_racer">שייך את הזמן הזה לרוכב</string>
+    <string name="choose_race_control">בחר אפשרות בקרת מרוץ</string>
+    <string name="rc_restart">התחל מחדש (זינוק שגוי)</string>
+    <string name="rc_finish">סיים מרוץ (הושלם)</string>
+    <string name="rc_live">תוצאות חיות (צפייה / עדכון)</string>
+    <string name="race_restarted">המרוץ הותחל מחדש — השעון אופס.</string>
+    <string name="live_results_on">תוצאות חיות פעילות — הדירוג יועלה במהלך המרוץ.</string>
+    <string name="live_results_off">תוצאות חיות כבויות.</string>
+    <string name="close">סגור</string>
+
     <string name="start_list_title">רשימת זינוק</string>
     <string name="race_start_title">התחלת מרוץ</string>
     <string name="bib">חזה</string>

@@ -81,11 +81,11 @@ public class RaceStartActivity extends Activity {
                 if (!w.name.isEmpty()) store.startWave(w.name, gun, true);
             }
             Toast.makeText(this, R.string.race_started_mass, Toast.LENGTH_LONG).show();
-            startActivity(new Intent(this, RaceActivity.class));
+            startActivity(new Intent(this, RaceTimingActivity.class));
         } else {
             // wave races arm the gun per wave inside the console
             Toast.makeText(this, R.string.race_started_wave, Toast.LENGTH_LONG).show();
-            startActivity(new Intent(this, RaceActivity.class));
+            startActivity(new Intent(this, RaceTimingActivity.class));
         }
     }
 
