@@ -17,7 +17,12 @@ public final class Prefs {
         sp = ctx.getSharedPreferences("bridge", Context.MODE_PRIVATE);
     }
 
-    public String serverUrl() { return sp.getString("serverUrl", ""); }
+    // Defaults preconfigured for this deployment: fresh installs are ready to
+    // log in without typing the server address.
+    public static final String DEFAULT_SERVER_URL = "https://srv1515969.hstgr.cloud/veloscorer";
+    public static final String DEFAULT_EMAIL = "admin@velogripscorer.local";
+
+    public String serverUrl() { return sp.getString("serverUrl", DEFAULT_SERVER_URL); }
     public String readerToken() { return sp.getString("readerToken", ""); }
     public String readerHost() { return sp.getString("readerHost", ""); }
     public int readerPort() { return sp.getInt("readerPort", 6000); }
@@ -32,7 +37,7 @@ public final class Prefs {
     public int lapGapSecs() { return sp.getInt("lapGapSecs", 30); }
     public String contestTitle() { return sp.getString("contestTitle", ""); }
 
-    public String accountEmail() { return sp.getString("accountEmail", ""); }
+    public String accountEmail() { return sp.getString("accountEmail", DEFAULT_EMAIL); }
 
     /** Called when the user picks a race after logging in: wires the pairing. */
     public void savePairing(String readerToken, String contestTitle, String email) {
