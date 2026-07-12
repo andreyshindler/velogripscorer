@@ -239,6 +239,25 @@
     <string name="scan_no_wifi">התחבר תחילה ל-WiFi של נתב ה-RFID, ואז סרוק.</string>
     <string name="reader_saved">הקורא %1$s נשמר</string>
 
+    <string name="program_chips_title">תכנות שבבי RFID</string>
+    <string name="rfid_reader_label">קורא RFID:</string>
+    <string name="connected_reader">מחובר %1$s</string>
+    <string name="existing_chip_id">מזהה שבב קיים:</string>
+    <string name="read_chip">קרא</string>
+    <string name="new_chip_id">מזהה שבב חדש:</string>
+    <string name="write_chip">כתוב</string>
+    <string name="one_chip_per_id">שבב אחד למזהה</string>
+    <string name="two_chips_per_id">2 שבבים למזהה</string>
+    <string name="place_chip">הנח שבב מול האנטנה…</string>
+    <string name="read_no_chip">לא זוהה שבב — הנח שבב על האנטנה ונסה שוב.</string>
+    <string name="enter_new_id">הזן תחילה מזהה שבב חדש.</string>
+    <string name="write_confirm">לתכנת את השבב שעל האנטנה עם המזהה %1$s?</string>
+    <string name="write_sent">הכתיבה נשלחה — הקש קרא כדי לאמת שהצליחה.</string>
+    <string name="write_failed">הכתיבה נכשלה — בדוק את חיבור הקורא.</string>
+    <string name="program_chips_hint">תכנות שבבי RFID</string>
+    <string name="program_instructions">הוראות:\n• הנח שבב מול האנטנה\n• הקש \'קרא\' כדי לגלות את מזהה השבב הקיים\n• הזן מזהה שבב חדש\n• הקש \'כתוב\' כדי לתכנת את השבב\n• לאחר מכן ניתן להקיש \'קרא\' שוב כדי לאמת שהכתיבה הצליחה</string>
+    <string name="program_notes">הערות:\n• מזהי שבב RFID הם בדרך כלל באורך 24 תווים\n• מזהים חדשים ירופדו באפסים מובילים\n• עבור מזהים עשרוניים, המזהה הבא מוגדל אוטומטית\n• מזהי שבב הקסדצימליים יש להזין ידנית</string>
+
     <string-array name="protocols">
         <item>שורות ASCII (EPC בכל שורה)</item>
         <item>RFID-LLRP (Impinj/Zebra, פורט 5084)</item>

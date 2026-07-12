@@ -75,8 +75,10 @@ public class ChipTimingActivity extends Activity {
                 }
             });
         }
-        findViewById(R.id.rowProgramChips).setOnClickListener(v ->
-                Toast.makeText(this, R.string.chip_option_unsupported, Toast.LENGTH_LONG).show());
+        findViewById(R.id.rowProgramChips).setOnClickListener(v -> {
+            save();
+            startActivity(new Intent(this, ProgramChipsActivity.class));
+        });
 
         findViewById(R.id.navSettings).setOnClickListener(v -> {
             save();

@@ -65,6 +65,7 @@ public final class Prefs {
     public boolean chipIdEqualsBib() { return sp.getBoolean("chipIdEqualsBib", false); }
     public int chipsPerRacer() { return sp.getInt("chipsPerRacer", 2); }
     public int antennaPower() { return sp.getInt("antennaPower", 100); }
+    public void saveChipsPerRacer(int n) { sp.edit().putInt("chipsPerRacer", Math.max(1, n)).apply(); }
     public boolean beepUnknownChip() { return sp.getBoolean("beepUnknownChip", true); }
     public void saveReaderHostPort(String host, int port) {
         sp.edit().putString("readerHost", host.trim()).putInt("readerPort", port).apply();

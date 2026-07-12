@@ -90,6 +90,75 @@ public final class LlrpEngine implements TagParser {
         return out.toByteArray();
     }
 
+    // ---- chip programming: write a new EPC into the tag's EPC memory bank ----
+    //
+    // Builds an AccessSpec whose single C1G2Write op-spec writes the new EPC
+    // words into memory bank 1 starting at word 2 (past StoredCRC + PC), for
+    // any tag the reader sees, then stops after one operation. Verification is
+    // by re-running inventory (Read), matching the reference app's flow.
+
+    private static final int MSG_ADD_ACCESSSPEC = 40;
+    private static final int MSG_ENABLE_ACCESSSPEC = 42;
+    private static final int MSG_DELETE_ACCESSSPEC = 41;
+
+    private static final int P_ACCESS_SPEC = 207;
+    private static final int P_ACCESS_SPEC_STOP_TRIGGER = 208;
+    private static final int P_ACCESS_COMMAND = 209;
+    private static final int P_C1G2_TAG_SPEC = 338;
+    private static final int P_C1G2_TARGET_TAG = 339;
+    private static final int P_C1G2_WRITE = 342;
+
+    private static final int ACCESS_SPEC_ID = 1;
+
+    /** DELETE + ADD (disabled) + ENABLE the write AccessSpec, ready to send. */
+    public byte[] programEpc(String newEpcHex) {
+        byte[] epc = hexToBytes(newEpcHex);
+        int words = (epc.length + 1) / 2;
+        byte[] writeData = new byte[words * 2];
+        System.arraycopy(epc, 0, writeData, 0, epc.length); // zero-padded to a word
+
+        byte[] write = tlv(P_C1G2_WRITE,
+                u16(1),          // OpSpecID
+                u32(0),          // access password
+                u8(0x40),        // MB=1 (EPC), reserved
+                u16(2),          // word pointer: skip CRC + PC
+                u16(words),      // write data word count
+                writeData);
+
+        byte[] targetTag = tlv(P_C1G2_TARGET_TAG,
+                u8(0x60),        // MB=1, Match=1
+                u16(0x20),       // pointer to EPC (32 bits in)
+                u16(0),          // mask bit count 0 -> match any
+                u16(0));         // data bit count 0
+        byte[] tagSpec = tlv(P_C1G2_TAG_SPEC, targetTag);
+        byte[] command = tlv(P_ACCESS_COMMAND, tagSpec, write);
+
+        byte[] stop = tlv(P_ACCESS_SPEC_STOP_TRIGGER, u8(1), u16(1)); // stop after 1 op
+        byte[] accessSpec = tlv(P_ACCESS_SPEC,
+                u32(ACCESS_SPEC_ID),
+                u16(0),          // antenna 0 = all
+                u8(1),           // protocol C1G2
+                u8(0x00),        // disabled; enabled by ENABLE_ACCESSSPEC
+                u32(ROSPEC_ID),  // tie to our running ROSpec
+                stop, command);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeAll(out, message(MSG_DELETE_ACCESSSPEC, u32(ACCESS_SPEC_ID)));
+        writeAll(out, message(MSG_ADD_ACCESSSPEC, accessSpec));
+        writeAll(out, message(MSG_ENABLE_ACCESSSPEC, u32(ACCESS_SPEC_ID)));
+        return out.toByteArray();
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        hex = hex.replaceAll("[^0-9A-Fa-f]", "");
+        if (hex.length() % 2 != 0) hex = "0" + hex;
+        byte[] out = new byte[hex.length() / 2];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+        }
+        return out;
+    }
+
     /** Bytes the engine wants written to the reader (keepalive ACKs). */
     public byte[] takeOutbound() {
         if (outbound.size() == 0) return new byte[0];

@@ -239,6 +239,25 @@
     <string name="scan_no_wifi">Join the RFID router\'s WiFi first, then scan.</string>
     <string name="reader_saved">Reader %1$s saved</string>
 
+    <string name="program_chips_title">Program RFID Chips</string>
+    <string name="rfid_reader_label">RFID Reader:</string>
+    <string name="connected_reader">Connected %1$s</string>
+    <string name="existing_chip_id">Existing chip ID:</string>
+    <string name="read_chip">Read</string>
+    <string name="new_chip_id">New chip ID:</string>
+    <string name="write_chip">Write</string>
+    <string name="one_chip_per_id">1 chip per ID</string>
+    <string name="two_chips_per_id">2 chips per ID</string>
+    <string name="place_chip">Place a chip in front of the antenna…</string>
+    <string name="read_no_chip">No chip detected — place one on the antenna and try again.</string>
+    <string name="enter_new_id">Enter a new chip ID first.</string>
+    <string name="write_confirm">Program the chip on the antenna with ID %1$s?</string>
+    <string name="write_sent">Write sent — tap Read to verify it worked.</string>
+    <string name="write_failed">Write failed — check the reader connection.</string>
+    <string name="program_chips_hint">Program RFID chips</string>
+    <string name="program_instructions">Instructions:\n• Place chip in front of the antenna\n• Tap \'Read\' to discover existing chip ID\n• Enter new chip ID\n• Tap \'Write\' to program the chip\n• You can then tap \'Read\' again to verify write worked</string>
+    <string name="program_notes">Notes:\n• RFID chip IDs are (typically) 24 characters long\n• New chip IDs will be padded by leading zeros\n• For decimal IDs, the next ID is auto-incremented\n• Hexadecimal chip IDs must be entered manually</string>
+
     <string-array name="protocols">
         <item>ASCII lines (EPC per line)</item>
         <item>RFID-LLRP (Impinj/Zebra, port 5084)</item>
