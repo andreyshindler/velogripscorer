@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#2F5CFF</color>
+    <color name="ic_launcher_background">#76B82A</color>
+    <color name="velogrip_green">#76B82A</color>
+    <color name="velogrip_dark">#1E4032</color>
+    <color name="menu_section_bg">#EDEDED</color>
+    <color name="menu_divider">#DDDDDD</color>
+    <color name="nav_bar_bg">#111111</color>
 </resources>

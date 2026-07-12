@@ -3,6 +3,35 @@
     <string name="app_name">VeloGrip RFID</string>
     <string name="settings_title">הגדרות</string>
 
+    <string name="brand_velo">Velo</string>
+    <string name="brand_grip">Grip</string>
+    <string name="chip_timing_version">v%1$s מדידת שבבים</string>
+    <string name="home_time_race">מדידת מרוץ</string>
+    <string name="home_race_with_list">מרוץ עם רשימת זינוק</string>
+    <string name="home_race_no_list">מרוץ ללא רשימת זינוק</string>
+    <string name="home_race_data">נתוני מרוצים</string>
+    <string name="home_archive">ארכיון מרוצים</string>
+    <string name="home_download">הורדת מרוצים</string>
+    <string name="nav_account">החשבון שלי</string>
+    <string name="no_startlist_yet">אין עדיין רשימת זינוק בטלפון — הורד קודם את המרוץ שלך.</string>
+
+    <string name="download_title">הורדת מרוצים</string>
+    <string name="download_help">התחבר עם חשבון האתר, ואז הקש על מרוץ כדי לטעון את רשימת הזינוק שלו לטלפון.</string>
+    <string name="login_button">התחברות</string>
+    <string name="racers_n">%1$d רוכבים</string>
+    <string name="switch_race_confirm">לעבור אל \"%1$s\"? רשימת הזינוק והמעברים שהוקלטו מהמרוץ הקודם יימחקו מהטלפון.</string>
+
+    <string name="archive_title">ארכיון מרוצים</string>
+    <string name="archive_empty">אין עדיין נתוני מרוץ בטלפון.</string>
+    <string name="archive_counts">%1$d רוכבים · %2$d מקצים · %3$d מעברים שהוקלטו</string>
+    <string name="archive_open">פתח את מסך המרוץ</string>
+
+    <string name="reader_idle">קורא: כבוי</string>
+    <string name="reader_line">קורא: %1$s</string>
+    <string name="connect_reader">▶ חיבור קורא</string>
+    <string name="disconnect_reader">■ ניתוק</string>
+    <string name="reader_needs_config">הגדר תחילה את כתובת ה-IP של הקורא בהגדרות.</string>
+
     <string name="status_idle">גשר: כבוי</string>
     <string name="status_line">גשר: %1$s · קורא: %2$s · WiFi: %3$s</string>
     <string name="counters_idle">הועלו 0 · ממתינות 0</string>

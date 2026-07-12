@@ -113,6 +113,14 @@ public final class RaceStore extends SQLiteOpenHelper {
         return count("SELECT COUNT(*) FROM passings");
     }
 
+    /** Wipes the stored race (start list, waves, passings) before pairing a new one. */
+    public void clearRace() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL("DELETE FROM passings");
+        db.execSQL("DELETE FROM waves");
+        db.execSQL("DELETE FROM racers");
+    }
+
     public List<Passing> allPassings() {
         List<Passing> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(

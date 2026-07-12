@@ -3,6 +3,35 @@
     <string name="app_name">VeloGrip RFID</string>
     <string name="settings_title">Settings</string>
 
+    <string name="brand_velo">Velo</string>
+    <string name="brand_grip">Grip</string>
+    <string name="chip_timing_version">v%1$s Chip timing</string>
+    <string name="home_time_race">Time a race</string>
+    <string name="home_race_with_list">Race with start list</string>
+    <string name="home_race_no_list">Race without start list</string>
+    <string name="home_race_data">Race data</string>
+    <string name="home_archive">Race archive</string>
+    <string name="home_download">Download races</string>
+    <string name="nav_account">My account</string>
+    <string name="no_startlist_yet">No start list on this phone yet — download your race first.</string>
+
+    <string name="download_title">Download races</string>
+    <string name="download_help">Log in with your website account, then tap a race to load its start list onto this phone.</string>
+    <string name="login_button">Log in</string>
+    <string name="racers_n">%1$d racers</string>
+    <string name="switch_race_confirm">Switch to \"%1$s\"? The previous race\'s start list and recorded passings on this phone will be cleared.</string>
+
+    <string name="archive_title">Race archive</string>
+    <string name="archive_empty">No race data on this phone yet.</string>
+    <string name="archive_counts">%1$d racers · %2$d waves · %3$d recorded passings</string>
+    <string name="archive_open">Open race console</string>
+
+    <string name="reader_idle">Reader: off</string>
+    <string name="reader_line">Reader: %1$s</string>
+    <string name="connect_reader">▶ Connect reader</string>
+    <string name="disconnect_reader">■ Disconnect</string>
+    <string name="reader_needs_config">Set the reader IP in Settings first.</string>
+
     <string name="status_idle">Bridge: off</string>
     <string name="status_line">Bridge: %1$s · Reader: %2$s · WiFi: %3$s</string>
     <string name="counters_idle">Uploaded 0 · pending 0</string>

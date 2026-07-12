@@ -38,6 +38,18 @@
             android:parentActivityName=".MainActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".DownloadRacesActivity"
+            android:label="@string/download_title"
+            android:parentActivityName=".MainActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".RaceArchiveActivity"
+            android:label="@string/archive_title"
+            android:parentActivityName=".MainActivity"
+            android:exported="false" />
+
         <service
             android:name=".BridgeService"
             android:foregroundServiceType="dataSync"

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- VeloGrip badge: dark ring, green sky, white peaks, trail band. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <path
+        android:fillColor="@color/velogrip_dark"
+        android:pathData="M100,2 a98,98 0 1,0 0.001,0 z" />
+
+    <group>
+        <clip-path android:pathData="M100,14 a86,86 0 1,0 0.001,0 z" />
+
+        <path
+            android:fillColor="@color/velogrip_green"
+            android:pathData="M14,14 h172 v172 h-172 z" />
+
+        <!-- clouds -->
+        <path
+            android:fillColor="#F4FBEC"
+            android:pathData="M46,52 a8,8 0 0,1 16,0 a7,7 0 0,1 -2,14 h-20 a7,7 0 0,1 6,-14 z" />
+        <path
+            android:fillColor="#F4FBEC"
+            android:pathData="M136,40 a7,7 0 0,1 14,0 a6,6 0 0,1 -1,12 h-18 a6,6 0 0,1 5,-12 z" />
+
+        <!-- back peaks -->
+        <path
+            android:fillColor="#DFF0CC"
+            android:pathData="M6,140 L52,74 L84,116 L120,60 L160,118 L194,140 Z" />
+
+        <!-- main white peaks -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M20,142 L74,58 L100,96 L118,44 L152,100 L186,142 Z" />
+
+        <!-- dark ridges -->
+        <path
+            android:fillColor="@color/velogrip_dark"
+            android:pathData="M74,58 L84,88 L74,96 L86,112 L66,142 L20,142 Z"
+            android:fillAlpha="0.18" />
+
+        <!-- pine tree -->
+        <path
+            android:fillColor="@color/velogrip_dark"
+            android:pathData="M34,142 l12,-24 l8,10 l-4,0 l10,14 z" />
+
+        <!-- trail band -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M6,142 h188 v50 h-188 z" />
+        <path
+            android:fillColor="@color/velogrip_dark"
+            android:pathData="M60,192 C84,168 116,168 140,192 L120,192 C110,180 90,180 80,192 Z" />
+    </group>
+</vector>

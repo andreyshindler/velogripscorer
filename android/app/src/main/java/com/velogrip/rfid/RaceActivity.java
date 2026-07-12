@@ -13,6 +13,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.velogrip.rfid.db.RaceStore;
+import com.velogrip.rfid.net.StartListSync;
 import com.velogrip.rfid.net.Uploader;
 
 import org.json.JSONArray;
@@ -88,7 +89,41 @@ public class RaceActivity extends Activity {
 
         Button upload = findViewById(R.id.uploadRace);
         upload.setOnClickListener(v -> uploadRace(upload));
+
+        readerStatus = findViewById(R.id.readerStatus);
+        connectButton = findViewById(R.id.connectReader);
+        connectButton.setOnClickListener(v -> {
+            if (!bridgeRunning && !prefs.isConfigured()) {
+                Toast.makeText(this, R.string.reader_needs_config, Toast.LENGTH_LONG).show();
+                startActivity(new android.content.Intent(this, SettingsActivity.class));
+                return;
+            }
+            android.content.Intent intent = new android.content.Intent(this, BridgeService.class);
+            intent.setAction(bridgeRunning ? BridgeService.ACTION_STOP : BridgeService.ACTION_START);
+            if (!bridgeRunning) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+        });
     }
+
+    // ---- reader connection (the bridge service owns the socket) ----
+
+    private TextView readerStatus;
+    private Button connectButton;
+    private boolean bridgeRunning = false;
+    private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context context, android.content.Intent intent) {
+            bridgeRunning = intent.getBooleanExtra(BridgeService.EXTRA_RUNNING, false);
+            boolean connected = intent.getBooleanExtra(BridgeService.EXTRA_READER_CONNECTED, false);
+            readerStatus.setText(getString(R.string.reader_line, getString(
+                    connected ? R.string.connected : bridgeRunning ? R.string.disconnected : R.string.off)));
+            connectButton.setText(bridgeRunning ? R.string.disconnect_reader : R.string.connect_reader);
+            refresh();
+        }
+    };
 
     /** Explicit "upload race to the web now": flushes gun times and every
      *  pending passing in one go, independent of the background bridge. */
@@ -139,35 +174,8 @@ public class RaceActivity extends Activity {
         new Thread(() -> {
             String message;
             try {
-                String body = new Uploader(prefs.serverUrl(), prefs.readerToken()).downloadStartList();
-                JSONObject json = new JSONObject(body);
-                prefs.saveTimingSettings(
-                        json.optInt("suppress_secs", 10),
-                        json.optInt("min_lap_gap_secs", 30),
-                        json.getJSONObject("contest").optString("title", ""));
-                JSONArray waves = json.getJSONArray("waves");
-                for (int i = 0; i < waves.length(); i++) {
-                    JSONObject w = waves.getJSONObject(i);
-                    RaceStore.Wave local = store.wave(w.getString("name"));
-                    // a locally recorded gun time always wins over the server's
-                    if (local == null || local.startedAtMs == null) {
-                        String at = w.isNull("started_at") ? null : w.getString("started_at");
-                        store.upsertWave(w.getString("name"),
-                                at == null ? null : parseIso(at), at != null);
-                    }
-                }
-                JSONArray racers = json.getJSONArray("racers");
-                // Two-chip racers arrive as one row per chip; count people, not chips.
-                java.util.HashSet<String> distinct = new java.util.HashSet<>();
-                for (int i = 0; i < racers.length(); i++) {
-                    JSONObject r = racers.getJSONObject(i);
-                    String bib = r.optString("bib", "");
-                    distinct.add(bib.isEmpty() ? "e:" + r.getString("epc") : "b:" + bib);
-                    store.upsertRacer(new RaceStore.Racer(
-                            r.getString("epc"), bib, r.optString("participant", ""),
-                            r.optString("category", ""), r.isNull("wave") ? "" : r.optString("wave", "")));
-                }
-                message = getString(R.string.sync_done, distinct.size(), waves.length());
+                StartListSync.Result r = StartListSync.download(prefs, store);
+                message = getString(R.string.sync_done, r.racers, r.waves);
             } catch (Exception e) {
                 message = getString(R.string.sync_failed, e.getMessage());
             }
@@ -179,17 +187,6 @@ public class RaceActivity extends Activity {
                 refresh();
             });
         }).start();
-    }
-
-    private static long parseIso(String iso) {
-        try {
-            java.text.SimpleDateFormat fmt =
-                    new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-            fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-            return fmt.parse(iso).getTime();
-        } catch (Exception e) {
-            return System.currentTimeMillis();
-        }
     }
 
     private void rebuildWaves() {
@@ -279,11 +276,13 @@ public class RaceActivity extends Activity {
         super.onResume();
         rebuildWaves();
         handler.post(ticker);
+        registerReceiver(bridgeReceiver, new android.content.IntentFilter(BridgeService.ACTION_STATUS));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         handler.removeCallbacks(ticker);
+        unregisterReceiver(bridgeReceiver);
     }
 }
