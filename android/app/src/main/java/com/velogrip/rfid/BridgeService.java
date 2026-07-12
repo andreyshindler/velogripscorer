@@ -324,6 +324,7 @@ public class BridgeService extends Service {
                 Thread.sleep(UPLOAD_INTERVAL_MS);
                 // gun times first: results on the web are wrong without them
                 for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
+                    if (wave.name.isEmpty()) continue; // local mass-start marker
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) {
                         store.markWaveSynced(wave.name);
                         broadcastStatus(getString(R.string.log_wave_synced, wave.name));

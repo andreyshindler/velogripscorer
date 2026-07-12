@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
         findViewById(R.id.rowRaceWithList).setOnClickListener(v ->
                 startActivity(new Intent(this, SelectStartListActivity.class)));
         findViewById(R.id.rowRaceNoList).setOnClickListener(v ->
-                startActivity(new Intent(this, RaceActivity.class)));
+                startActivity(new Intent(this, RaceSetupActivity.class)));
         findViewById(R.id.rowArchive).setOnClickListener(v ->
                 startActivity(new Intent(this, RaceArchiveActivity.class)));
         findViewById(R.id.rowDownload).setOnClickListener(v ->

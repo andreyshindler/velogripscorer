@@ -40,6 +40,11 @@ public final class Prefs {
     public String accountEmail() { return sp.getString("accountEmail", DEFAULT_EMAIL); }
     public String accountPass() { return sp.getString("accountPass", ""); }
 
+    /** How the race starts: "mass" (one gun for everyone) or "wave". */
+    public String startType() { return sp.getString("startType", ""); }
+    public void setStartType(String type) { sp.edit().putString("startType", type).apply(); }
+    public void setContestTitle(String title) { sp.edit().putString("contestTitle", title.trim()).apply(); }
+
     /** Remembered after the first successful login so race downloads are one tap. */
     public void saveAccount(String email, String password) {
         sp.edit().putString("accountEmail", email.trim())

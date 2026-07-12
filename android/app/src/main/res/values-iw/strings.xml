@@ -38,6 +38,20 @@
     <string name="file_import_failed">לא ניתן לקרוא את הקובץ: %1$s</string>
     <string name="rows_skipped">%1$d שורות דולגו — ללא שבב וללא מספר חזה מספרי</string>
 
+    <string name="race_setup_title">הגדרת מרוץ</string>
+    <string name="next">הבא</string>
+    <string name="race_name_label">שם המרוץ:</string>
+    <string name="edit">עריכה</string>
+    <string name="start_type_label">סוג זינוק:</string>
+    <string name="start_mass">המוני</string>
+    <string name="start_wave">מקצים</string>
+    <string name="start_individual">אישי</string>
+    <string name="start_interval">אינטרוול</string>
+    <string name="start_pursuit">מרדף</string>
+    <string name="start_type_unsupported">סוג זינוק זה אינו נתמך עדיין — השתמש בהמוני או מקצים.</string>
+    <string name="proceed_hint">השתמש בכפתור הניווט הימני העליון כדי להמשיך</string>
+    <string name="mass_race_label">מרוץ</string>
+
     <string name="reader_idle">קורא: כבוי</string>
     <string name="reader_line">קורא: %1$s</string>
     <string name="connect_reader">▶ חיבור קורא</string>

@@ -65,7 +65,8 @@ public final class RaceEngine {
         List<Result> results = new ArrayList<>();
         for (List<RaceStore.Racer> group : groups.values()) {
             RaceStore.Racer racer = group.get(0);
-            Long gun = racer.wave.isEmpty() ? null : gunByWave.get(racer.wave);
+            // racers without a wave start with the mass gun (wave named "")
+            Long gun = gunByWave.get(racer.wave);
             if (gun == null) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
                         "not_started", 0, 0));

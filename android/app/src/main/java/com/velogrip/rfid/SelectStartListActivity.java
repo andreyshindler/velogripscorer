@@ -93,9 +93,9 @@ public class SelectStartListActivity extends Activity {
             final boolean openRace = ok;
             runOnUiThread(() -> {
                 Toast.makeText(this, toastText, Toast.LENGTH_LONG).show();
-                // stay on the stack: back from the race returns here
+                // stay on the stack: back from race setup returns here
                 if (openRace) {
-                    startActivity(new Intent(this, RaceActivity.class));
+                    startActivity(new Intent(this, RaceSetupActivity.class));
                 }
             });
         }).start();

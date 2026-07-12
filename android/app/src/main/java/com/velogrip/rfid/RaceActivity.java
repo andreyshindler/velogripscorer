@@ -139,6 +139,7 @@ public class RaceActivity extends Activity {
             try {
                 Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
                 for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
+                    if (wave.name.isEmpty()) continue; // local mass-start marker
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) {
                         store.markWaveSynced(wave.name);
                     }
@@ -192,7 +193,15 @@ public class RaceActivity extends Activity {
 
     private void rebuildWaves() {
         wavesBox.removeAllViews();
+        boolean massMode = RaceSetupActivity.TYPE_MASS.equals(prefs.startType());
+        findViewById(R.id.newWaveName).setVisibility(massMode ? View.GONE : View.VISIBLE);
+        findViewById(R.id.addWave).setVisibility(massMode ? View.GONE : View.VISIBLE);
+        if (massMode) {
+            buildMassRow();
+            return;
+        }
         for (final RaceStore.Wave wave : store.waves()) {
+            if (wave.name.isEmpty()) continue; // mass-start marker
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -237,6 +246,70 @@ public class RaceActivity extends Activity {
         }
     }
 
+    /** Mass start: one gun for the whole field — every wave (and the racers
+     *  with no wave, via the "" marker wave) gets the same start time. */
+    private void buildMassRow() {
+        Long startedAt = massStartedAt();
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, 8, 0, 8);
+
+        TextView name = new TextView(this);
+        name.setText(getString(R.string.mass_race_label));
+        name.setTextSize(16);
+        name.setTypeface(null, android.graphics.Typeface.BOLD);
+        name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView clock = new TextView(this);
+        clock.setTag("clock:__mass");
+        clock.setTextSize(16);
+        clock.setTypeface(android.graphics.Typeface.MONOSPACE);
+        clock.setPadding(12, 0, 12, 0);
+        clock.setText(startedAt == null ? getString(R.string.not_started_wave) : "");
+
+        Button start = new Button(this);
+        start.setText(startedAt == null ? getString(R.string.start_gun) : getString(R.string.restart_gun));
+        start.setOnClickListener(v -> {
+            if (massStartedAt() != null) {
+                new android.app.AlertDialog.Builder(this)
+                        .setMessage(R.string.restart_gun_confirm)
+                        .setPositiveButton(android.R.string.ok, (d, w) -> {
+                            startAll(true);
+                            rebuildWaves();
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+            } else {
+                startAll(false);
+                rebuildWaves();
+            }
+        });
+
+        row.addView(name);
+        row.addView(clock);
+        row.addView(start);
+        wavesBox.addView(row);
+    }
+
+    private Long massStartedAt() {
+        Long earliest = null;
+        for (RaceStore.Wave w : store.waves()) {
+            if (w.startedAtMs != null && (earliest == null || w.startedAtMs < earliest)) {
+                earliest = w.startedAtMs;
+            }
+        }
+        return earliest;
+    }
+
+    private void startAll(boolean force) {
+        long now = System.currentTimeMillis();
+        store.startWave("", now, force);
+        for (RaceStore.Wave w : store.waves()) {
+            if (!w.name.isEmpty()) store.startWave(w.name, now, force);
+        }
+    }
+
     private void refresh() {
         String title = prefs.contestTitle();
         headerView.setText(title.isEmpty() ? getString(R.string.race_title) : title);
@@ -247,6 +320,11 @@ public class RaceActivity extends Activity {
             if (clock instanceof TextView && wave.startedAtMs != null) {
                 ((TextView) clock).setText(RaceEngine.formatClock(System.currentTimeMillis() - wave.startedAtMs));
             }
+        }
+        View massClock = wavesBox.findViewWithTag("clock:__mass");
+        Long massStart = massClock == null ? null : massStartedAt();
+        if (massClock instanceof TextView && massStart != null) {
+            ((TextView) massClock).setText(RaceEngine.formatClock(System.currentTimeMillis() - massStart));
         }
 
         List<RaceEngine.Result> results = RaceEngine.compute(
