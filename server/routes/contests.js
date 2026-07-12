@@ -171,7 +171,8 @@ router.get('/my/races', requireAuth, (req, res) => {
   const races = db
     .prepare(
       `SELECT c.id, c.title, c.sport, c.location, c.start_at, c.end_at, c.status,
-        (SELECT COUNT(*) FROM tag_assignments a WHERE a.contest_id = c.id) AS racer_count,
+        (SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END)
+           FROM tag_assignments a WHERE a.contest_id = c.id) AS racer_count,
         (SELECT token FROM readers r WHERE r.contest_id = c.id ORDER BY r.id LIMIT 1) AS app_token
        FROM contests c WHERE c.organizer_id = ? AND c.kind = 'race'
        ORDER BY c.start_at DESC LIMIT 100`

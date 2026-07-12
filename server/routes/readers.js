@@ -230,24 +230,39 @@ router.get('/contests/:id/passings', requireAuth, (req, res) => {
 
 // ---- EPC → participant assignment ----
 
+// One entry per RACER: assignments sharing a non-empty bib (two-chip racers)
+// collapse into a single row whose `epcs` lists every chip.
 router.get('/contests/:id/tags', requireAuth, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
-  res.json({
-    tags: db.prepare(
-      `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.wave_id, a.racer_status, w.name AS wave_name
-       FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
-       WHERE a.contest_id = ? ORDER BY a.bib, a.epc`
-    ).all(contest.id),
-  });
+  const rows = db.prepare(
+    `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.wave_id, a.racer_status, w.name AS wave_name
+     FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
+     WHERE a.contest_id = ? ORDER BY CAST(a.bib AS INTEGER), a.bib, a.epc`
+  ).all(contest.id);
+  const racers = new Map();
+  for (const r of rows) {
+    const key = r.bib ? `b:${r.bib}` : `e:${r.epc}`;
+    const g = racers.get(key);
+    if (!g) racers.set(key, { ...r, epcs: [r.epc] });
+    else {
+      g.epcs.push(r.epc);
+      if (!g.racer_status && r.racer_status) g.racer_status = r.racer_status;
+    }
+  }
+  res.json({ tags: [...racers.values()] });
 });
 
 router.post('/contests/:id/tags', requireAuth, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
   const epc = String(req.body?.epc || '').toUpperCase().trim();
+  const epc2 = String(req.body?.epc2 || '').toUpperCase().trim();
+  const bib = String(req.body?.bib || '').trim();
   const participant = String(req.body?.participant || '').trim();
   if (!EPC_RE.test(epc)) return res.status(400).json({ error: 'epc must be a 4-64 char hex string' });
+  if (epc2 && !EPC_RE.test(epc2)) return res.status(400).json({ error: 'second chip must be a 4-64 char hex string' });
+  if (epc2 && !bib) return res.status(400).json({ error: 'a bib is required to pair two chips to one racer' });
   if (!participant) return res.status(400).json({ error: 'participant name required' });
   let waveId = null;
   if (req.body?.wave_id) {
@@ -256,22 +271,40 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
     waveId = wave.id;
   }
   const racerStatus = ['', 'DNS', 'DNF', 'DSQ'].includes(req.body?.racer_status) ? req.body.racer_status : '';
-  db.prepare(
+  const upsert = db.prepare(
     `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category, racer_status)
      VALUES (?,?,?,?,?,?,?,?)
      ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
        user_id = excluded.user_id, wave_id = excluded.wave_id, category = excluded.category,
        racer_status = excluded.racer_status`
-  ).run(contest.id, epc, String(req.body?.bib || '').trim(), participant, req.body?.user_id ?? null,
-    waveId, String(req.body?.category || '').trim(), racerStatus);
-  auditLog(req.user.id, 'tag.assign', 'contest', contest.id, `${epc} -> ${participant}`);
+  );
+  db.transaction(() => {
+    upsert.run(contest.id, epc, bib, participant, req.body?.user_id ?? null,
+      waveId, String(req.body?.category || '').trim(), racerStatus);
+    if (epc2 && epc2 !== epc) {
+      upsert.run(contest.id, epc2, bib, participant, req.body?.user_id ?? null,
+        waveId, String(req.body?.category || '').trim(), racerStatus);
+    }
+    // status belongs to the racer, not the chip — keep every chip in sync
+    if (bib) db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND bib = ?')
+      .run(racerStatus, contest.id, bib);
+  })();
+  auditLog(req.user.id, 'tag.assign', 'contest', contest.id, `${epc}${epc2 ? '+' + epc2 : ''} -> ${participant}`);
   res.status(201).json({ ok: true });
 });
 
+// Deletes the RACER the chip belongs to: for a two-chip racer (same bib) both
+// assignments go, so the start list never keeps an orphaned second chip.
 router.delete('/contests/:id/tags/:epc', requireAuth, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
-  db.prepare('DELETE FROM tag_assignments WHERE contest_id = ? AND epc = ?').run(contest.id, String(req.params.epc).toUpperCase());
+  const epc = String(req.params.epc).toUpperCase();
+  const row = db.prepare('SELECT bib FROM tag_assignments WHERE contest_id = ? AND epc = ?').get(contest.id, epc);
+  if (row && row.bib) {
+    db.prepare('DELETE FROM tag_assignments WHERE contest_id = ? AND bib = ?').run(contest.id, row.bib);
+  } else {
+    db.prepare('DELETE FROM tag_assignments WHERE contest_id = ? AND epc = ?').run(contest.id, epc);
+  }
   res.json({ ok: true });
 });
 
@@ -424,7 +457,8 @@ router.get('/contests/:id/waves', requireAuth, (req, res) => {
   if (!contest) return;
   const waves = db
     .prepare(
-      `SELECT w.*, (SELECT COUNT(*) FROM tag_assignments a WHERE a.wave_id = w.id) AS racer_count
+      `SELECT w.*, (SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END)
+                      FROM tag_assignments a WHERE a.wave_id = w.id) AS racer_count
        FROM waves w WHERE w.contest_id = ? ORDER BY w.id`
     )
     .all(contest.id);

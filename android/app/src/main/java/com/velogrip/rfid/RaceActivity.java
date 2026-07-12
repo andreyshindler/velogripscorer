@@ -157,13 +157,17 @@ public class RaceActivity extends Activity {
                     }
                 }
                 JSONArray racers = json.getJSONArray("racers");
+                // Two-chip racers arrive as one row per chip; count people, not chips.
+                java.util.HashSet<String> distinct = new java.util.HashSet<>();
                 for (int i = 0; i < racers.length(); i++) {
                     JSONObject r = racers.getJSONObject(i);
+                    String bib = r.optString("bib", "");
+                    distinct.add(bib.isEmpty() ? "e:" + r.getString("epc") : "b:" + bib);
                     store.upsertRacer(new RaceStore.Racer(
-                            r.getString("epc"), r.optString("bib", ""), r.optString("participant", ""),
+                            r.getString("epc"), bib, r.optString("participant", ""),
                             r.optString("category", ""), r.isNull("wave") ? "" : r.optString("wave", "")));
                 }
-                message = getString(R.string.sync_done, racers.length(), waves.length());
+                message = getString(R.string.sync_done, distinct.size(), waves.length());
             } catch (Exception e) {
                 message = getString(R.string.sync_failed, e.getMessage());
             }

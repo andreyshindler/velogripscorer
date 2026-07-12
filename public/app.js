@@ -529,6 +529,7 @@ async function renderManage(box, c) {
           ${waves.map((w) => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
         </select>
         <input name="epc" placeholder="${t('epc_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
+        <input name="epc2" placeholder="${t('epc2_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
         <button class="btn small">${t('assign')}</button>
       </form>
       <div id="tags-list" class="mt" style="max-height:420px;overflow:auto">
@@ -537,7 +538,7 @@ async function renderManage(box, c) {
             <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
             ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
             ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
-            <code style="font-size:0.7rem;overflow-wrap:anywhere" class="muted">${esc(a.epc)}</code>
+            <code style="font-size:0.7rem;overflow-wrap:anywhere" class="muted">${esc((a.epcs || [a.epc]).join(' + '))}</code>
             <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
               ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
             </select>
@@ -613,7 +614,7 @@ async function renderManage(box, c) {
     try {
       if (!epc) throw new Error(t('epc_or_bib'));
       await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
-        epc, bib: form.bib.value, participant: form.participant.value,
+        epc, epc2: form.epc2.value.trim(), bib: form.bib.value, participant: form.participant.value,
         category: form.category.value, wave_id: form.wave_id.value ? Number(form.wave_id.value) : null,
       }});
       viewContest(c.id, 'manage');

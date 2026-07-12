@@ -262,17 +262,37 @@ test('xlsx start-list upload: Webscorer format, two chips per racer, delete race
   assert.equal(up.body.errors.length, 0);
 
   const tags = (await request(app).get(`/api/contests/${race.id}/tags`).set(auth(xlOrg))).body.tags;
-  // racer 1 has two chips -> two assignments on bib 100
+  assert.equal(tags.length, 3, 'tags list counts racers, not chips');
+  // racer 1 has two chips -> ONE entry listing both EPCs
   const bib100 = tags.filter((a) => a.bib === '100');
-  assert.equal(bib100.length, 2, 'both chips imported');
-  assert.deepEqual(bib100.map((a) => a.epc).sort(),
+  assert.equal(bib100.length, 1, 'two-chip racer appears once in the start list');
+  assert.deepEqual([...bib100[0].epcs].sort(),
     ['000000000000000000009901', 'E28011700000021B236F9C4C']);
   // racer 3 had no chip -> synthetic EPC
   assert.ok(tags.some((a) => a.bib === '102' && a.epc === 'AA0102'));
 
-  // waves auto-created from the sheet
+  // waves auto-created from the sheet; per-wave counts are racers, not chips
   const waves = (await request(app).get(`/api/contests/${race.id}/waves`).set(auth(xlOrg))).body.waves;
   assert.deepEqual(waves.map((w) => w.name).sort(), ['wave1', 'wave2']);
+  assert.equal(waves.find((w) => w.name === 'wave1').racer_count, 2,
+    'two-chip racer counted once in wave');
+
+  // race card / app picker count is racers too
+  const myRaces = (await request(app).get('/api/my/races').set(auth(xlOrg))).body.races;
+  assert.equal(myRaces.find((r) => r.id === race.id).racer_count, 3);
+
+  // deleting the two-chip racer removes BOTH assignments
+  const spare = (await request(app).post('/api/contests').set(auth(xlOrg)).send({
+    kind: 'race', title: 'Delete-racer check', start_at: past, end_at: future,
+  })).body;
+  await request(app).post(`/api/contests/${spare.id}/tags`).set(auth(xlOrg))
+    .send({ epc: 'ABCD0001', epc2: 'ABCD0002', bib: '7', participant: 'Dual Chip' });
+  let spareTags = (await request(app).get(`/api/contests/${spare.id}/tags`).set(auth(xlOrg))).body.tags;
+  assert.equal(spareTags.length, 1);
+  assert.deepEqual([...spareTags[0].epcs].sort(), ['ABCD0001', 'ABCD0002']);
+  await request(app).delete(`/api/contests/${spare.id}/tags/ABCD0002`).set(auth(xlOrg));
+  spareTags = (await request(app).get(`/api/contests/${spare.id}/tags`).set(auth(xlOrg))).body.tags;
+  assert.equal(spareTags.length, 0, 'deleting either chip removes the whole racer');
 
   // start the wave; a read on EITHER chip finishes the racer exactly once
   const gun3 = new Date(Date.now() - 400_000);
