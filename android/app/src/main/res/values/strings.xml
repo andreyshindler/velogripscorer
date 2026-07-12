@@ -93,6 +93,23 @@
     <string name="navigate_back_to">Navigate back to</string>
 
     <string name="race_timing_title">Race Timing</string>
+    <string name="time_pending">Time pending</string>
+    <string name="tap_time">Tap time</string>
+    <string name="select_a_bib">Select a bib</string>
+    <string name="tap_timer_for_bib">Tap the timer to give this bib a time</string>
+    <string name="times_waiting">%1$d time(s) waiting — tap a racer</string>
+    <string name="edit_time_for">Edit time for %1$s - %2$s</string>
+    <string name="enter">Enter</string>
+    <string name="dns_dnf_dsq">DNS/DNF/DSQ</string>
+    <string name="racer_info_title">Racer Info</string>
+    <string name="racer_info_hint">Tap Edit next to a field to change it</string>
+    <string name="bib_and_name">Bib %1$s - %2$s</string>
+    <string name="distance">Distance:</string>
+    <string name="category">Category:</string>
+    <string name="chip_id">Chip ID:</string>
+    <string name="chip_id2">Chip ID2:</string>
+    <string name="team_name">Team name:</string>
+    <string name="not_stored">— (not in start list)</string>
     <string name="or_swipe">or swipe</string>
     <string name="tap_to_record">Tap to record a time</string>
     <string name="no_bib">No Bib</string>

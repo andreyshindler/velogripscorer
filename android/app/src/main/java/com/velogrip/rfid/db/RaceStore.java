@@ -64,7 +64,7 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 5);
+        super(ctx, "race.db", null, 6);
     }
 
     @Override
@@ -78,6 +78,8 @@ public final class RaceStore extends SQLiteOpenHelper {
                 " rssi REAL, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
+        db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL DEFAULT ''," +
+                " bib TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', read_at INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE INDEX idx_passings_epc ON passings(epc, read_at)");
         db.execSQL("CREATE INDEX idx_passings_uploaded ON passings(uploaded, id)");
     }
@@ -95,6 +97,10 @@ public final class RaceStore extends SQLiteOpenHelper {
         }
         if (oldVersion < 5) {
             db.execSQL("ALTER TABLE racers ADD COLUMN racer_status TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 6) {
+            db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL DEFAULT ''," +
+                    " bib TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', read_at INTEGER NOT NULL DEFAULT 0)");
         }
     }
 
@@ -155,6 +161,15 @@ public final class RaceStore extends SQLiteOpenHelper {
         getWritableDatabase().execSQL("DELETE FROM passings");
     }
 
+    /** Un-starts every wave so the race can be re-gunned from Race Start. */
+    public void clearGunTimes() {
+        getWritableDatabase().execSQL("UPDATE waves SET started_at = NULL, synced = 0");
+    }
+
+    public void clearPending() {
+        getWritableDatabase().execSQL("DELETE FROM pending");
+    }
+
     public void markUploaded(long maxIdInclusive) {
         getWritableDatabase().execSQL("UPDATE passings SET uploaded = 1 WHERE id <= ? AND uploaded = 0",
                 new Object[]{maxIdInclusive});
@@ -176,6 +191,53 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM racers");
         db.execSQL("DELETE FROM distances");
         db.execSQL("DELETE FROM categories");
+        db.execSQL("DELETE FROM pending");
+    }
+
+    // ---- pending timing entries (pre-entered bib awaiting a time, or a time
+    // awaiting a bib) for the Race Timing tap flow ----
+
+    public static final class Pending {
+        public final long id;
+        public final String epc, bib, name;
+        public final long readAtMs;   // 0 = no time yet (racer waiting for a time)
+        public Pending(long id, String epc, String bib, String name, long readAtMs) {
+            this.id = id; this.epc = epc; this.bib = bib; this.name = name; this.readAtMs = readAtMs;
+        }
+        public boolean hasTime() { return readAtMs > 0; }
+        public boolean hasRacer() { return !epc.isEmpty(); }
+    }
+
+    /** Timer pressed with no racer selected: a time waiting for a bib. */
+    public void addPendingTime(long readAtMs) {
+        ContentValues v = new ContentValues();
+        v.put("read_at", readAtMs);
+        getWritableDatabase().insert("pending", null, v);
+    }
+
+    /** Racer tapped with no time waiting: a bib waiting for a time. */
+    public void addPendingRacer(String epc, String bib, String name) {
+        ContentValues v = new ContentValues();
+        v.put("epc", epc); v.put("bib", bib); v.put("name", name); v.put("read_at", 0);
+        getWritableDatabase().insert("pending", null, v);
+    }
+
+    public List<Pending> pendingEntries() {
+        List<Pending> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT id, epc, bib, name, read_at FROM pending ORDER BY id", null);
+        try {
+            while (c.moveToNext()) {
+                out.add(new Pending(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getLong(4)));
+            }
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
+    public void deletePending(long id) {
+        getWritableDatabase().execSQL("DELETE FROM pending WHERE id = ?", new Object[]{id});
     }
 
     // ---- categories (curated set for category results) ----
@@ -268,6 +330,12 @@ public final class RaceStore extends SQLiteOpenHelper {
         getWritableDatabase().execSQL(
                 "UPDATE racers SET name = ?, category = ?, wave = ? WHERE bib = ?",
                 new Object[]{name, category, wave, bib});
+    }
+
+    public void setRacerDistance(String bib, String distance) {
+        if (bib.isEmpty()) return;
+        getWritableDatabase().execSQL("UPDATE racers SET distance = ? WHERE bib = ?",
+                new Object[]{distance, bib});
     }
 
     // ---- lap targets per distance ("" = whole race when no distances) ----

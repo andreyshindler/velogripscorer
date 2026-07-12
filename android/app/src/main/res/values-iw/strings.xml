@@ -93,6 +93,23 @@
     <string name="navigate_back_to">ניווט חזרה אל</string>
 
     <string name="race_timing_title">תזמון מרוץ</string>
+    <string name="time_pending">ממתין לזמן</string>
+    <string name="tap_time">הקש זמן</string>
+    <string name="select_a_bib">בחר מספר חזה</string>
+    <string name="tap_timer_for_bib">הקש על הטיימר כדי לתת זמן למספר זה</string>
+    <string name="times_waiting">%1$d זמנים ממתינים — הקש על רוכב</string>
+    <string name="edit_time_for">עריכת זמן עבור %1$s - %2$s</string>
+    <string name="enter">אישור</string>
+    <string name="dns_dnf_dsq">DNS/DNF/DSQ</string>
+    <string name="racer_info_title">פרטי רוכב</string>
+    <string name="racer_info_hint">הקש על עריכה ליד שדה כדי לשנותו</string>
+    <string name="bib_and_name">מספר %1$s - %2$s</string>
+    <string name="distance">מרחק:</string>
+    <string name="category">קטגוריה:</string>
+    <string name="chip_id">מזהה שבב:</string>
+    <string name="chip_id2">מזהה שבב 2:</string>
+    <string name="team_name">שם קבוצה:</string>
+    <string name="not_stored">— (לא ברשימת הזינוק)</string>
     <string name="or_swipe">או החלק</string>
     <string name="tap_to_record">הקש כדי לרשום זמן</string>
     <string name="no_bib">ללא\nמספר</string>
