@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#BFBFBF"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+
+        <TextView
+            android:layout_width="34dp"
+            android:layout_height="wrap_content"
+            android:text="✓"
+            android:textColor="#555555"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/col_category"
+            android:textColor="#222222"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/categoriesBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/categoryHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <!-- Bottom bar: Settings · Delete · Edit -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="8dp">
+
+        <LinearLayout
+            android:id="@+id/navSettings"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="6dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="⚙️" android:textSize="20sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/settings_title" android:textColor="#FFFFFF" android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navDelete"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="6dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="⊗" android:textColor="#FFFFFF" android:textSize="20sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/action_delete" android:textColor="#FFFFFF" android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navEdit"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="6dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="✎" android:textColor="#FFFFFF" android:textSize="20sp" />
+            <TextView android:id="@+id/editLabel" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/action_edit" android:textColor="#FFFFFF" android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

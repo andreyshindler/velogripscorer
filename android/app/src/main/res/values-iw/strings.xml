@@ -92,6 +92,18 @@
     <string name="nav_home">בית</string>
     <string name="navigate_back_to">ניווט חזרה אל</string>
 
+    <string name="category_setup_title">הגדרת קטגוריות</string>
+    <string name="col_category">קטגוריה</string>
+    <string name="categories_hint">%1$d קטגוריות | הקש \'עריכה\' להוספה/מחיקה</string>
+    <string name="action_delete">מחק</string>
+    <string name="action_edit">עריכה</string>
+    <string name="action_done">סיום</string>
+    <string name="add_category">הוספת קטגוריה</string>
+    <string name="category_name_hint">שם קטגוריה (למשל 40-49)</string>
+    <string name="delete_category_confirm">למחוק את הקטגוריה \"%1$s\"?</string>
+    <string name="delete_tap_category">הקש על קטגוריה כדי למחוק אותה</string>
+    <string name="delete_off">מצב מחיקה כבוי</string>
+
     <string name="results_options_title">אפשרויות תוצאות</string>
     <string name="results_ordered_by">התוצאות ממוינות לפי:</string>
     <string name="timing_precision">דיוק תזמון:</string>

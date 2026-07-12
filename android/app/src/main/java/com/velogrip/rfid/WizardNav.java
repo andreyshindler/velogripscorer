@@ -22,6 +22,7 @@ public final class WizardNav {
             RaceSetupActivity.class,
             LapSetupActivity.class,
             DistanceSetupActivity.class,
+            CategorySetupActivity.class,
             RacerSetupActivity.class,
             ResultsOptionsActivity.class,
             HardwareSetupActivity.class,
@@ -33,6 +34,7 @@ public final class WizardNav {
             R.string.race_setup_title,
             R.string.lap_setup_title,
             R.string.distance_setup_title,
+            R.string.category_setup_title,
             R.string.racer_setup_title,
             R.string.results_options_title,
             R.string.hardware_setup_title,
@@ -43,10 +45,11 @@ public final class WizardNav {
     public static final int RACE_SETUP = 2;
     public static final int LAP_SETUP = 3;
     public static final int DISTANCE_SETUP = 4;
-    public static final int RACER_SETUP = 5;
-    public static final int RESULTS_OPTIONS = 6;
-    public static final int HARDWARE_SETUP = 7;
-    public static final int CHIP_TIMING = 8;
+    public static final int CATEGORY_SETUP = 5;
+    public static final int RACER_SETUP = 6;
+    public static final int RESULTS_OPTIONS = 7;
+    public static final int HARDWARE_SETUP = 8;
+    public static final int CHIP_TIMING = 9;
 
     private WizardNav() { }
 

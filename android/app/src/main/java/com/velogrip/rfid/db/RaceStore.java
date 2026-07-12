@@ -59,7 +59,7 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 3);
+        super(ctx, "race.db", null, 4);
     }
 
     @Override
@@ -71,6 +71,7 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
                 " rssi REAL, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
+        db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE INDEX idx_passings_epc ON passings(epc, read_at)");
         db.execSQL("CREATE INDEX idx_passings_uploaded ON passings(uploaded, id)");
     }
@@ -82,6 +83,9 @@ public final class RaceStore extends SQLiteOpenHelper {
         }
         if (oldVersion < 3) {
             db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
+        }
+        if (oldVersion < 4) {
+            db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
         }
     }
 
@@ -131,6 +135,59 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM waves");
         db.execSQL("DELETE FROM racers");
         db.execSQL("DELETE FROM distances");
+        db.execSQL("DELETE FROM categories");
+    }
+
+    // ---- categories (curated set for category results) ----
+
+    public static final class Category {
+        public final String name;
+        public final boolean enabled;
+        public Category(String name, boolean enabled) { this.name = name; this.enabled = enabled; }
+    }
+
+    /** Seeds the category table from the start list the first time it is empty. */
+    public void seedCategoriesFromStartList() {
+        if (count("SELECT COUNT(*) FROM categories") > 0) return;
+        SQLiteDatabase db = getWritableDatabase();
+        Cursor c = db.rawQuery("SELECT DISTINCT category FROM racers WHERE category != '' ORDER BY category", null);
+        try {
+            while (c.moveToNext()) {
+                ContentValues v = new ContentValues();
+                v.put("name", c.getString(0));
+                v.put("enabled", 1);
+                db.insertWithOnConflict("categories", null, v, SQLiteDatabase.CONFLICT_IGNORE);
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    public List<Category> categories() {
+        List<Category> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery("SELECT name, enabled FROM categories ORDER BY name", null);
+        try {
+            while (c.moveToNext()) out.add(new Category(c.getString(0), c.getInt(1) == 1));
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
+    public void addCategory(String name) {
+        ContentValues v = new ContentValues();
+        v.put("name", name.trim());
+        v.put("enabled", 1);
+        getWritableDatabase().insertWithOnConflict("categories", null, v, SQLiteDatabase.CONFLICT_IGNORE);
+    }
+
+    public void setCategoryEnabled(String name, boolean enabled) {
+        getWritableDatabase().execSQL("UPDATE categories SET enabled = ? WHERE name = ?",
+                new Object[]{enabled ? 1 : 0, name});
+    }
+
+    public void deleteCategory(String name) {
+        getWritableDatabase().execSQL("DELETE FROM categories WHERE name = ?", new Object[]{name});
     }
 
     // ---- lap targets per distance ("" = whole race when no distances) ----

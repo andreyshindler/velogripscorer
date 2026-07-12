@@ -92,6 +92,18 @@
     <string name="nav_home">Home</string>
     <string name="navigate_back_to">Navigate back to</string>
 
+    <string name="category_setup_title">Category Setup</string>
+    <string name="col_category">Category</string>
+    <string name="categories_hint">%1$d categories | Tap \'Edit\' to add/delete</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_done">Done</string>
+    <string name="add_category">Add category</string>
+    <string name="category_name_hint">Category name (e.g. 40-49)</string>
+    <string name="delete_category_confirm">Delete category \"%1$s\"?</string>
+    <string name="delete_tap_category">Tap a category to delete it</string>
+    <string name="delete_off">Delete mode off</string>
+
     <string name="results_options_title">Results Options</string>
     <string name="results_ordered_by">Results ordered by:</string>
     <string name="timing_precision">Timing precision:</string>
