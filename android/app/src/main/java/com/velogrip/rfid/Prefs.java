@@ -82,6 +82,11 @@ public final class Prefs {
                 .apply();
     }
 
+    // Set when the race is finished with "laps down": partial-lap racers are
+    // then finalised as finishers at their last crossing.
+    public boolean raceFinalized() { return sp.getBoolean("raceFinalized", false); }
+    public void setRaceFinalized(boolean on) { sp.edit().putBoolean("raceFinalized", on).apply(); }
+
     // Race start options.
     public long clockAdjustMs() { return sp.getLong("clockAdjustMs", 0); }
     public void setClockAdjustMs(long ms) { sp.edit().putLong("clockAdjustMs", ms).apply(); }

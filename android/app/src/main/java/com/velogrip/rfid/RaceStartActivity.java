@@ -73,6 +73,7 @@ public class RaceStartActivity extends Activity {
     }
 
     private void startRace() {
+        prefs.setRaceFinalized(false); // fresh race: no laps-down finalisation
         boolean mass = !RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
         long gun = System.currentTimeMillis() + clockAdjustMs;
         if (mass) {

@@ -57,6 +57,18 @@ public final class RaceEngine {
                                        List<RaceStore.Passing> passings,
                                        int suppressSecs, int minLapGapSecs, boolean recordLaps,
                                        Map<String, Integer> lapTargets) {
+        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps, lapTargets, false);
+    }
+
+    /**
+     * finalizeLapsDown: when the race is closed with racers still out, those
+     * with at least one crossing are finished at their last crossing with the
+     * laps they completed (ranked below full-distance finishers).
+     */
+    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
+                                       List<RaceStore.Passing> passings,
+                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
+                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown) {
         Map<String, Long> gunByWave = new HashMap<>();
         for (RaceStore.Wave w : waves) {
             if (w.startedAtMs != null) gunByWave.put(w.name, w.startedAtMs);
@@ -128,7 +140,7 @@ public final class RaceEngine {
             if (crossings.isEmpty()) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, "on_course", 0, 0));
-            } else if (!unlimited && crossings.size() < target) {
+            } else if (!unlimited && crossings.size() < target && !finalizeLapsDown) {
                 // laps completed so far, still on course to the lap target
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, "on_course", crossings.size(), 0));

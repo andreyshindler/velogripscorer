@@ -60,8 +60,7 @@ public class RaceTimingActivity extends Activity {
             i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             startActivity(i);
         });
-        findViewById(R.id.finishButton).setOnClickListener(v ->
-                startActivity(new Intent(this, RaceArchiveActivity.class)));
+        findViewById(R.id.finishButton).setOnClickListener(v -> finishRace());
         findViewById(R.id.clockButton).setOnClickListener(v -> recordNoBib());
         findViewById(R.id.prevPage).setOnClickListener(v -> { if (page > 0) { page--; render(); } });
         findViewById(R.id.nextPage).setOnClickListener(v -> { page++; render(); });
@@ -115,7 +114,8 @@ public class RaceTimingActivity extends Activity {
     private void render() {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets());
+                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
+                prefs.raceFinalized());
 
         java.util.Set<String> finishedBibs = new java.util.HashSet<>();
         for (RaceEngine.Result r : results) if ("finished".equals(r.status)) finishedBibs.add(bibKey(r.bib, ""));
@@ -291,7 +291,7 @@ public class RaceTimingActivity extends Activity {
                             restartRace();
                             break;
                         case 1:   // Finish race (race completed)
-                            startActivity(new Intent(this, RaceArchiveActivity.class));
+                            finishRace();
                             break;
                         case 2:   // Live results view / update
                             boolean on = !prefs.liveResults();
@@ -307,6 +307,38 @@ public class RaceTimingActivity extends Activity {
                     }
                 })
                 .setNegativeButton(R.string.close, null)
+                .show();
+    }
+
+    /** Finish race: if racers are still out, offer DNF or laps-down; else results. */
+    private void finishRace() {
+        List<RaceEngine.Result> results = RaceEngine.compute(
+                store.racers(), store.waves(), store.allPassings(),
+                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
+                prefs.raceFinalized());
+        final List<RaceEngine.Result> unfinished = new ArrayList<>();
+        for (RaceEngine.Result r : results) {
+            if ("on_course".equals(r.status) || "not_started".equals(r.status)) unfinished.add(r);
+        }
+        if (unfinished.isEmpty()) {
+            startActivity(new Intent(this, RaceArchiveActivity.class));
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.still_on_course)
+                .setItems(new String[]{getString(R.string.mark_dnf), getString(R.string.mark_laps_down)},
+                        (d, which) -> {
+                            if (which == 0) {                       // Mark racers as DNF
+                                for (RaceEngine.Result r : unfinished) store.setRacerStatus(r.bib, "DNF");
+                            } else {                                // Mark racers as laps down
+                                prefs.setRaceFinalized(true);
+                                for (RaceEngine.Result r : unfinished) {
+                                    if (r.laps == 0) store.setRacerStatus(r.bib, "DNF"); // never crossed
+                                }
+                            }
+                            startActivity(new Intent(this, RaceArchiveActivity.class));
+                        })
+                .setNegativeButton(R.string.cancel_popup, null)
                 .show();
     }
 
@@ -333,7 +365,8 @@ public class RaceTimingActivity extends Activity {
     private void showRaceProgress() {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets());
+                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
+                prefs.raceFinalized());
         int finished = 0, onCourse = 0, notStarted = 0, dns = 0;
         long lastElapsed = 0;
         for (RaceEngine.Result r : results) {
