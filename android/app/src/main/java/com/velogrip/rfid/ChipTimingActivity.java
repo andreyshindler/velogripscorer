@@ -60,23 +60,8 @@ public class ChipTimingActivity extends Activity {
 
         Button scan = findViewById(R.id.scanReader);
         scan.setOnClickListener(v -> {
-            save();
-            scan.setEnabled(false);
-            Toast.makeText(this, R.string.scan_started, Toast.LENGTH_SHORT).show();
-            int port = prefs.readerPort();
-            new Thread(() -> {
-                String found = ReaderScanner.scan(this, readerHost.getText().toString().trim(), port);
-                runOnUiThread(() -> {
-                    scan.setEnabled(true);
-                    if (found != null) {
-                        readerHost.setText(found);
-                        prefs.saveReaderHostPort(found, port);
-                        Toast.makeText(this, getString(R.string.scan_found, found), Toast.LENGTH_LONG).show();
-                    } else {
-                        Toast.makeText(this, R.string.scan_not_found, Toast.LENGTH_LONG).show();
-                    }
-                });
-            }).start();
+            save(); // persist the typed IP/port before scanning
+            startActivity(new Intent(this, ScanReaderActivity.class));
         });
 
         int[] unsupported = {R.id.swPartialChip, R.id.swChipStartTime,

@@ -226,6 +226,19 @@
     <string name="scan_found">נמצא קורא בכתובת %1$s</string>
     <string name="scan_not_found">לא נמצא קורא. התחבר ל-WiFi של נתב ה-RFID ובדוק את הפורט.</string>
 
+    <string name="scan_reader_title">סריקה לאיתור קורא</string>
+    <string name="scan_help">לפני שתקיש \'סרוק\' כדי לגלות את כתובת ה-IP של הקורא:\n\n1. הפעל את קורא ה-RFID וחבר אותו לנתב ה-WiFi בכבל רשת.\n2. חבר את המכשיר הזה לאותו נתב WiFi.\n\nהסריקה תעבור על הכתובות הזמינות בנתב עד שכתובת ה-IP של הקורא תימצא.</string>
+    <string name="scan_button">סרוק</string>
+    <string name="stop_button">עצור</string>
+    <string name="scanning_address">סורק כתובת: %1$s</string>
+    <string name="reader_address">כתובת הקורא</string>
+    <string name="scan_screen_hint">סרוק את הרשת המקומית לאיתור קוראים</string>
+    <string name="scan_complete">הסריקה הושלמה</string>
+    <string name="scan_stopped">הסריקה נעצרה</string>
+    <string name="scan_none_found">לא נמצא קורא ברשת זו</string>
+    <string name="scan_no_wifi">התחבר תחילה ל-WiFi של נתב ה-RFID, ואז סרוק.</string>
+    <string name="reader_saved">הקורא %1$s נשמר</string>
+
     <string-array name="protocols">
         <item>שורות ASCII (EPC בכל שורה)</item>
         <item>RFID-LLRP (Impinj/Zebra, פורט 5084)</item>

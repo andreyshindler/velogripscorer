@@ -226,6 +226,19 @@
     <string name="scan_found">Reader found at %1$s</string>
     <string name="scan_not_found">No reader found. Join the RFID router\'s WiFi and check the port.</string>
 
+    <string name="scan_reader_title">Scan for Reader</string>
+    <string name="scan_help">Before you tap \'Scan\' to find out the IP address of your reader:\n\n1. Power your RFID reader and connect it to your WiFi router via an Ethernet cable.\n2. Create a WiFi connection from this device to the same WiFi router.\n\nThe scan will step through the WiFi router\'s available addresses until the RFID reader\'s IP address is found.</string>
+    <string name="scan_button">Scan</string>
+    <string name="stop_button">Stop</string>
+    <string name="scanning_address">Scanning address: %1$s</string>
+    <string name="reader_address">Reader address</string>
+    <string name="scan_screen_hint">Scan local network for readers</string>
+    <string name="scan_complete">Scan complete</string>
+    <string name="scan_stopped">Scan stopped</string>
+    <string name="scan_none_found">No reader found on this subnet</string>
+    <string name="scan_no_wifi">Join the RFID router\'s WiFi first, then scan.</string>
+    <string name="reader_saved">Reader %1$s saved</string>
+
     <string-array name="protocols">
         <item>ASCII lines (EPC per line)</item>
         <item>RFID-LLRP (Impinj/Zebra, port 5084)</item>
