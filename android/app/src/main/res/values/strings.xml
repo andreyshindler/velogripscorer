@@ -62,6 +62,9 @@
     <string name="race_title">Race</string>
     <string name="add_wave">+ Add wave</string>
     <string name="download_startlist">⬇ Start list</string>
+    <string name="upload_race">⬆ Upload race</string>
+    <string name="upload_done">Race uploaded: %1$d passings synced.</string>
+    <string name="upload_partial">Uploaded %1$d passings, %2$d still pending — check connectivity.</string>
     <string name="wave_name_hint">New wave name (e.g. wave1)</string>
     <string name="manual_bib_hint">Manual entry: bib #</string>
     <string name="record_manual">⏱ Record</string>

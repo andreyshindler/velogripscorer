@@ -153,42 +153,19 @@ async function viewHome() {
     </div>
     <form class="searchbar" id="search-form" role="search">
       <input type="search" id="q" placeholder="${t('search_placeholder')}" aria-label="${t('search_placeholder')}">
-      <select id="cat" aria-label="${t('category')}">
-        <option value="">${t('all_categories')}</option>
-        ${['photo', 'design', 'code', 'writing', 'video', 'other'].map((c) => `<option value="${c}">${t('category_' + c)}</option>`).join('')}
-      </select>
-      <select id="sort" aria-label="sort">
-        <option value="newest">${t('sort_newest')}</option>
-        <option value="popular">${t('sort_popular')}</option>
-      </select>
       <button class="btn" type="submit">🔍</button>
     </form>
-    <div id="recommended"></div>
     <h2>${t('races')}</h2>
     <div class="grid" id="contest-list"></div>`;
 
   document.getElementById('search-form').onsubmit = (e) => { e.preventDefault(); loadContests(); };
-  document.getElementById('cat').onchange = loadContests;
-  document.getElementById('sort').onchange = loadContests;
   loadContests();
-
-  if (state.user) {
-    api('/contests/recommended').then(({ contests }) => {
-      if (!contests.length) return;
-      document.getElementById('recommended').innerHTML =
-        `<h2>${t('recommended')}</h2><div class="grid">${contests.map(contestCard).join('')}</div>`;
-    }).catch(() => {});
-  }
 }
 
 async function loadContests() {
   const q = document.getElementById('q').value;
-  const category = document.getElementById('cat').value;
-  const sort = document.getElementById('sort').value;
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  if (category) params.set('category', category);
-  if (sort === 'popular') params.set('sort', 'popular');
   const { contests } = await api(`/contests?${params}`);
   document.getElementById('contest-list').innerHTML = contests.length
     ? contests.map(contestCard).join('')
@@ -196,32 +173,22 @@ async function loadContests() {
 }
 
 function contestCard(c) {
-  const isRace = c.kind === 'race';
   const started = new Date(c.start_at) <= new Date();
   const statusPill = c.status === 'finished'
     ? `<span class="pill finished">${t('status_finished')}</span>`
-    : isRace
-      ? (started ? `<span class="pill live">● ${t('hero_live')}</span>` : `<span class="pill">${t('live_upcoming')}</span>`)
-      : (c.voting_open ? `<span class="pill live">${t('voting_open_now')}</span>` : `<span class="pill">${t('status_active')}</span>`);
+    : started ? `<span class="pill live">● ${t('hero_live')}</span>` : `<span class="pill">${t('live_upcoming')}</span>`;
   return `
     <a class="card contest-card" href="#/contest/${c.id}" style="color:inherit;text-decoration:none">
       <div>
-        <span class="pill">${isRace ? '🏁 ' + (esc(c.sport) || t('race_kind')) : t('category_' + c.category)}</span>
+        <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
         ${statusPill}
       </div>
       <h3>${esc(c.title)}</h3>
-      ${isRace
-        ? `<div class="meta">
-            ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
-            <span>🗓 ${fmtDate(c.start_at)}</span>
-            <span>👤 ${esc(c.organizer_name || '')}</span>
-          </div>`
-        : `<p class="muted" style="margin:0">${esc((c.description || '').slice(0, 110))}${(c.description || '').length > 110 ? '…' : ''}</p>
-          <div class="meta">
-            <span>👤 ${esc(c.organizer_name || '')}</span>
-            <span>📥 ${c.entry_count ?? 0} ${t('entries')}</span>
-            <span>⏱ ${fmtDate(c.end_at)}</span>
-          </div>`}
+      <div class="meta">
+        ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
+        <span>🗓 ${fmtDate(c.start_at)}</span>
+        <span>👤 ${esc(c.organizer_name || '')}</span>
+      </div>
       <div>${(c.tags || []).slice(0, 4).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>
     </a>`;
 }
@@ -272,21 +239,17 @@ function viewLogin() {
   };
 }
 
-// ---------- create contest ----------
+// ---------- create race ----------
 
 function viewCreate() {
   if (!state.user) { location.hash = '#/login'; return; }
   main.innerHTML = `
     <div class="card form-narrow">
-      <h1>${t('create_title')}</h1>
-      <div class="tabs" role="tablist">
-        <button role="tab" aria-selected="true" id="kind-race">🏁 ${t('race_kind')}</button>
-        <button role="tab" aria-selected="false" id="kind-voting">🗳 ${t('voting_kind')}</button>
-      </div>
+      <h1>${t('create_race_title')}</h1>
       <form id="create-form">
         <label for="c-title">${t('contest_title')}</label>
         <input id="c-title" required maxlength="120">
-        <div class="row2" id="race-only">
+        <div class="row2">
           <div>
             <label for="c-sport">${t('sport')}</label>
             <input id="c-sport" placeholder="${t('sport_hint')}" list="sport-list">
@@ -300,19 +263,7 @@ function viewCreate() {
           </div>
         </div>
         <label for="c-desc">${t('description')}</label>
-        <textarea id="c-desc" rows="4"></textarea>
-        <div class="row2">
-          <div id="voting-cat">
-            <label for="c-cat">${t('category')}</label>
-            <select id="c-cat">
-              ${['photo', 'design', 'code', 'writing', 'video', 'other'].map((c) => `<option value="${c}">${t('category_' + c)}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label for="c-tags">${t('tags')}</label>
-            <input id="c-tags" placeholder="mtb, xco">
-          </div>
-        </div>
+        <textarea id="c-desc" rows="3"></textarea>
         <div class="row2">
           <div><label for="c-start">${t('start_date')}</label><input id="c-start" type="datetime-local" required></div>
           <div><label for="c-end">${t('end_date')}</label><input id="c-end" type="datetime-local" required></div>
@@ -322,122 +273,36 @@ function viewCreate() {
             <label for="c-visibility">${t('visibility')}</label>
             <select id="c-visibility"><option value="public">${t('public')}</option><option value="private">${t('private')}</option></select>
           </div>
-          <div id="voting-mode-box">
-            <label for="c-mode">${t('voting_mode')}</label>
-            <select id="c-mode"><option value="open">${t('voting_mode_open')}</option><option value="closed">${t('voting_mode_closed')}</option></select>
+          <div>
+            <label for="c-tags">${t('tags')}</label>
+            <input id="c-tags" placeholder="mtb, xco">
           </div>
-        </div>
-        <div id="voting-only">
-          <div class="row2" id="vote-window" hidden>
-            <div><label for="c-vstart">${t('voting_window')} — ${t('start_date')}</label><input id="c-vstart" type="datetime-local"></div>
-            <div><label for="c-vend">${t('voting_window')} — ${t('end_date')}</label><input id="c-vend" type="datetime-local"></div>
-          </div>
-          <div class="row2">
-            <div><label for="c-scale">${t('scale_max')}</label><input id="c-scale" type="number" min="2" max="100" value="10"></div>
-            <div><label for="c-cap">${t('participant_cap')}</label><input id="c-cap" type="number" min="1"></div>
-          </div>
-          <label><input type="checkbox" id="c-blind" style="width:auto"> ${t('blind_voting')}</label>
-
-          <h3 class="mt">${t('criteria')}</h3>
-          <div class="criteria-editor" id="criteria-editor"></div>
-          <button type="button" class="btn small secondary" id="add-criterion">+ ${t('add_criterion')}</button>
-          <p class="sum-indicator" id="sum-indicator" aria-live="polite"></p>
-
-          <h3>${t('prizes')}</h3>
-          <div id="prizes-editor"></div>
-          <button type="button" class="btn small secondary" id="add-prize">+ ${t('add_prize')}</button>
         </div>
         <div class="mt"><button class="btn" type="submit">${t('create')}</button></div>
       </form>
     </div>`;
 
-  let kind = 'race';
-  const setKind = (value) => {
-    kind = value;
-    document.getElementById('kind-race').setAttribute('aria-selected', String(value === 'race'));
-    document.getElementById('kind-voting').setAttribute('aria-selected', String(value === 'voting'));
-    document.getElementById('voting-only').hidden = value === 'race';
-    document.getElementById('voting-cat').hidden = value === 'race';
-    document.getElementById('voting-mode-box').hidden = value === 'race';
-    document.getElementById('race-only').hidden = value !== 'race';
-  };
-  document.getElementById('kind-race').onclick = () => setKind('race');
-  document.getElementById('kind-voting').onclick = () => setKind('voting');
-
-  const editor = document.getElementById('criteria-editor');
-  const addCriterion = (name = '', weight = '') => {
-    const line = document.createElement('div');
-    line.className = 'crit-line';
-    line.innerHTML = `
-      <input class="crit-name" placeholder="${t('criterion_name')}" value="${esc(name)}" required>
-      <input class="crit-weight" type="number" min="1" max="100" placeholder="%" value="${esc(weight)}" required aria-label="${t('weight')}">
-      <button type="button" class="ghost crit-del" aria-label="remove">✕</button>`;
-    line.querySelector('.crit-del').onclick = () => { line.remove(); updateSum(); };
-    line.querySelector('.crit-weight').oninput = updateSum;
-    editor.appendChild(line);
-    updateSum();
-  };
-  const updateSum = () => {
-    const sum = [...editor.querySelectorAll('.crit-weight')].reduce((s, i) => s + (Number(i.value) || 0), 0);
-    const el = document.getElementById('sum-indicator');
-    el.textContent = t('weights_sum', { n: sum });
-    el.className = `sum-indicator ${sum === 100 ? 'good' : 'bad'}`;
-  };
-  document.getElementById('add-criterion').onclick = () => addCriterion();
-  addCriterion('Creativity', 40); addCriterion('Technical quality', 35); addCriterion('Theme adherence', 25);
-
-  const prizesEditor = document.getElementById('prizes-editor');
-  document.getElementById('add-prize').onclick = () => {
-    const line = document.createElement('div');
-    line.className = 'crit-line';
-    line.innerHTML = `
-      <input class="prize-name" placeholder="${t('prize_name')}">
-      <input class="prize-rank" type="number" min="1" value="${prizesEditor.children.length + 1}" aria-label="${t('prize_rank')}">
-      <button type="button" class="ghost prize-del" aria-label="remove">✕</button>`;
-    line.querySelector('.prize-del').onclick = () => line.remove();
-    prizesEditor.appendChild(line);
-  };
-
-  document.getElementById('c-mode').onchange = (e) => {
-    document.getElementById('vote-window').hidden = e.target.value !== 'closed';
-  };
-  setKind('race');
-
   document.getElementById('create-form').onsubmit = async (e) => {
     e.preventDefault();
-    const criteria = [...editor.querySelectorAll('.crit-line')].map((line) => ({
-      name: line.querySelector('.crit-name').value,
-      weight: Number(line.querySelector('.crit-weight').value),
-    }));
-    const prizes = [...prizesEditor.querySelectorAll('.crit-line')]
-      .map((line) => ({ name: line.querySelector('.prize-name').value, rank: Number(line.querySelector('.prize-rank').value), type: 'badge' }))
-      .filter((p) => p.name);
     const body = {
-      kind,
+      kind: 'race',
+      title: document.getElementById('c-title').value,
       sport: document.getElementById('c-sport').value,
       location: document.getElementById('c-location').value,
-      title: document.getElementById('c-title').value,
       description: document.getElementById('c-desc').value,
-      category: kind === 'race' ? 'other' : document.getElementById('c-cat').value,
+      category: 'other',
       tags: document.getElementById('c-tags').value.split(',').map((s) => s.trim()).filter(Boolean),
       visibility: document.getElementById('c-visibility').value,
-      voting_mode: document.getElementById('c-mode').value,
-      blind_voting: document.getElementById('c-blind').checked,
-      scale_max: Number(document.getElementById('c-scale').value) || 10,
-      participant_cap: Number(document.getElementById('c-cap').value) || undefined,
       start_at: new Date(document.getElementById('c-start').value).toISOString(),
       end_at: new Date(document.getElementById('c-end').value).toISOString(),
-      voting_start_at: document.getElementById('c-vstart').value ? new Date(document.getElementById('c-vstart').value).toISOString() : undefined,
-      voting_end_at: document.getElementById('c-vend').value ? new Date(document.getElementById('c-vend').value).toISOString() : undefined,
-      criteria: kind === 'race' ? [] : criteria,
-      prizes: kind === 'race' ? [] : prizes,
     };
     try {
       const contest = await api('/contests', { method: 'POST', body });
-      location.hash = `#/contest/${contest.id}`;
+      location.hash = `#/contest/${contest.id}/manage`;
     } catch (err) { toast(err.message, true); }
   };
 }
+
 
 // ---------- contest page ----------
 
@@ -447,33 +312,24 @@ async function viewContest(id, tab) {
   const generation = ++renderGeneration;
   const c = await api(`/contests/${id}`);
   if (generation !== renderGeneration) return; // a newer render superseded this one
-  const tabs = c.kind === 'race'
-    ? ['results', 'startlist', 'details']
-    : ['details', 'entries', 'vote', 'leaderboard', 'comments'];
-  if (c.is_organizer) tabs.push('timing');
-  if (!tabs.includes(tab)) tab = c.kind === 'race' ? 'results' : 'details';
+  const tabs = ['results', 'startlist', 'details'];
+  if (c.is_organizer) tabs.push('manage');
+  if (!tabs.includes(tab)) tab = 'results';
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
         <h1 style="margin:0 0 4px">${esc(c.title)}</h1>
         <div class="muted">
-          ${c.kind === 'race'
-            ? `<span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
-               ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
-               <span class="pill ${c.status === 'finished' ? 'finished' : 'live'}">
-                 ${c.status === 'finished' ? t('status_finished') : '● ' + t('hero_live')}
-               </span>`
-            : `<span class="pill">${t('category_' + c.category)}</span>
-               <span class="pill ${c.status === 'finished' ? 'finished' : c.voting_open ? 'live' : ''}">
-                 ${c.status === 'finished' ? t('status_finished') : c.voting_open ? t('voting_open_now') : t('status_active')}
-               </span>`}
+          <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+          ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
+          <span class="pill ${c.status === 'finished' ? 'finished' : 'live'}">
+            ${c.status === 'finished' ? t('status_finished') : '● ' + t('hero_live')}
+          </span>
           ${t('by')} <a href="#/profile/${c.organizer.id}">${esc(c.organizer.name)}</a>
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${state.user ? `<button class="btn small secondary" id="follow-btn">${c.is_following ? t('unfollow') : t('follow')}</button>` : ''}
-        ${state.user && c.status === 'active' && c.kind !== 'race' ? `<button class="btn small" id="join-btn">${t('join')}</button>` : ''}
-        ${c.is_organizer && c.status === 'active' ? `<button class="btn small danger" id="finish-btn">${t('finish_contest')}</button>` : ''}
       </div>
     </div>
     <div class="tabs" role="tablist">
@@ -489,27 +345,11 @@ async function viewContest(id, tab) {
     await api(`/contests/${id}/follow`, { method: c.is_following ? 'DELETE' : 'POST' });
     viewContest(id, tab);
   };
-  const joinBtn = document.getElementById('join-btn');
-  if (joinBtn) joinBtn.onclick = async () => {
-    try { await api(`/contests/${id}/join`, { method: 'POST', body: {} }); toast(t('joined')); }
-    catch (err) { toast(err.message, true); }
-  };
-  const finishBtn = document.getElementById('finish-btn');
-  if (finishBtn) finishBtn.onclick = async () => {
-    if (!confirm(t('finish_contest') + '?')) return;
-    try { await api(`/contests/${id}/finish`, { method: 'POST', body: {} }); viewContest(id, 'leaderboard'); }
-    catch (err) { toast(err.message, true); }
-  };
-
   const box = document.getElementById('tab-content');
   if (tab === 'results') renderRaceResults(box, c);
   else if (tab === 'startlist') renderStartlist(box, c);
   else if (tab === 'details') renderDetails(box, c);
-  else if (tab === 'entries') renderEntries(box, c, false);
-  else if (tab === 'vote') renderEntries(box, c, true);
-  else if (tab === 'leaderboard') renderLeaderboard(box, c);
-  else if (tab === 'comments') renderContestComments(box, c);
-  else if (tab === 'timing') renderTiming(box, c);
+  else if (tab === 'manage') renderManage(box, c);
 }
 
 function renderDetails(box, c) {
@@ -531,315 +371,12 @@ function renderDetails(box, c) {
           ${c.location ? `<li><span>${t('location')}</span><strong>${esc(c.location)}</strong></li>` : ''}
           <li><span>${t('starts')}</span><strong>${fmtDate(c.start_at)}</strong></li>
           <li><span>${t('ends')}</span><strong>${fmtDate(c.end_at)}</strong></li>
-          ${c.voting_mode === 'closed' ? `<li><span>${t('voting_window')}</span><strong>${fmtDate(c.voting_start_at)} → ${fmtDate(c.voting_end_at)}</strong></li>` : ''}
           <li><span>${t('visibility')}</span><strong>${t(c.visibility)}</strong></li>
-          <li><span>${t('blind_voting')}</span><strong>${c.blind_voting ? t('on') : t('off')}</strong></li>
-          <li><span>${t('entries')}</span><strong>${c.entry_count}</strong></li>
-          <li><span>${t('voters')}</span><strong>${c.voter_count}</strong></li>
           ${c.invite_code ? `<li><span>${t('invite_code')}</span><strong><code>${esc(c.invite_code)}</code></strong></li>` : ''}
         </ul>
-        ${state.user && c.status === 'active' ? `<div class="mt"><a class="btn" href="#/contest/${c.id}/entries">${t('submit_entry')}</a></div>` : ''}
+
       </div>
     </div>`;
-}
-
-// ---------- entries & voting ----------
-
-async function renderEntries(box, c, votingMode) {
-  const { entries } = await api(`/contests/${c.id}/entries`);
-  const canSubmit = state.user && c.status === 'active' && !votingMode;
-  box.innerHTML = `
-    ${canSubmit ? `<div class="card" id="submit-card">${submitFormHtml()}</div>` : ''}
-    <div class="grid mt" id="entries-grid">
-      ${entries.length ? '' : `<p class="muted">${t('no_entries')}</p>`}
-    </div>`;
-
-  if (canSubmit) wireSubmitForm(c);
-
-  const grid = document.getElementById('entries-grid');
-  for (const entry of entries) {
-    const card = document.createElement('div');
-    card.className = 'card entry-card';
-    card.innerHTML = entryCardHtml(entry, c, votingMode);
-    grid.appendChild(card);
-    wireEntryCard(card, entry, c, votingMode);
-  }
-}
-
-function entryMediaHtml(e) {
-  if (e.kind === 'image' && e.file_url) return `<img class="thumb" src="${BASE}${esc(e.file_url)}" alt="${esc(e.title)}">`;
-  if (e.kind === 'video' && e.file_url) return `<video controls preload="metadata" src="${BASE}${esc(e.file_url)}"></video>`;
-  if (e.kind === 'pdf' && e.file_url) return `<a class="btn small secondary" href="${BASE}${esc(e.file_url)}" target="_blank" rel="noopener">📄 PDF</a>`;
-  if (e.kind === 'code') return `<pre><code>${esc(e.body.slice(0, 1200))}</code></pre>`;
-  return e.body ? `<p style="white-space:pre-wrap">${esc(e.body.slice(0, 500))}${e.body.length > 500 ? '…' : ''}</p>` : '';
-}
-
-function entryCardHtml(e, c, votingMode) {
-  const own = state.user && e.user_id === state.user.id;
-  return `
-    <div class="entry-head">
-      ${avatar(e.author.avatar_url, e.author.name)}
-      <div>
-        <strong>${esc(e.title)}</strong><br>
-        <span class="muted" style="font-size:0.85rem">${t('by')} ${e.author.id ? `<a href="#/profile/${e.author.id}">${esc(e.author.name)}</a>` : esc(e.author.name)}</span>
-      </div>
-      <span class="score-big" style="margin-inline-start:auto" title="${t('score')}">${e.score}</span>
-    </div>
-    ${entryMediaHtml(e)}
-    ${e.description ? `<p class="muted" style="margin:0">${esc(e.description.slice(0, 200))}</p>` : ''}
-    <div class="meta muted" style="font-size:0.85rem">
-      ⭐ ${e.vote_count} ${t('votes')} · 💬 ${e.comment_count} · ${(e.tags || []).map((tag) => `#${esc(tag)}`).join(' ')}
-    </div>
-    ${votingMode ? voteWidgetHtml(e, c, own) : ''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      ${!votingMode && c.voting_open ? `<a class="btn small" href="#/contest/${c.id}/vote">${t('vote_for')}</a>` : ''}
-      <button class="btn small secondary comments-btn">💬 ${t('comments')}</button>
-      ${state.user ? `<button class="btn small secondary report-btn">🚩 ${t('report')}</button>` : ''}
-    </div>
-    <div class="comments-box" hidden></div>`;
-}
-
-function voteWidgetHtml(e, c, own) {
-  if (own) return `<p class="muted">${t('cannot_vote_own')}</p>`;
-  if (!state.user) return `<p class="muted"><a href="#/login">${t('login_to_vote')}</a></p>`;
-  if (!c.voting_open) return `<p class="muted">${t('voting_closed')}</p>`;
-  return `
-    <fieldset style="border:1px solid var(--border);border-radius:8px">
-      <legend style="font-weight:700">${t('vote_for')}</legend>
-      ${c.criteria.map((cr) => {
-        const prev = e.my_votes && e.my_votes[cr.id] !== undefined ? e.my_votes[cr.id] : Math.round(c.scale_max / 2);
-        return `
-          <div class="criterion-row">
-            <label style="margin:0" for="v-${e.id}-${cr.id}">${esc(cr.name)} <span class="muted">(${cr.weight}%)</span></label>
-            <input type="range" id="v-${e.id}-${cr.id}" data-crit="${cr.id}" data-weight="${cr.weight}"
-              min="0" max="${c.scale_max}" step="1" value="${prev}"
-              aria-label="${esc(cr.name)}" aria-valuemin="0" aria-valuemax="${c.scale_max}">
-            <output for="v-${e.id}-${cr.id}">${prev}</output>
-          </div>`;
-      }).join('')}
-      <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
-        <span>${t('weighted_total')}: <span class="weighted-preview" data-preview>–</span> / ${c.scale_max}</span>
-        <button class="btn small vote-submit">${t('confirm_vote')}</button>
-      </div>
-    </fieldset>`;
-}
-
-function wireEntryCard(card, entry, c, votingMode) {
-  const commentsBtn = card.querySelector('.comments-btn');
-  const commentsBox = card.querySelector('.comments-box');
-  commentsBtn.onclick = async () => {
-    commentsBox.hidden = !commentsBox.hidden;
-    if (!commentsBox.hidden) loadComments(commentsBox, entry);
-  };
-  const reportBtn = card.querySelector('.report-btn');
-  if (reportBtn) reportBtn.onclick = async () => {
-    const reason = prompt(t('report_reason'));
-    if (!reason) return;
-    try { await api('/reports', { method: 'POST', body: { target_type: 'entry', target_id: entry.id, reason } }); toast('✓'); }
-    catch (err) { toast(err.message, true); }
-  };
-
-  if (votingMode) {
-    const sliders = [...card.querySelectorAll('input[type="range"]')];
-    const preview = card.querySelector('[data-preview]');
-    const update = () => {
-      if (!preview) return;
-      const total = sliders.reduce((s, sl) => s + (Number(sl.dataset.weight) / 100) * Number(sl.value), 0);
-      preview.textContent = (Math.round(total * 100) / 100).toFixed(2);
-      sliders.forEach((sl) => { sl.nextElementSibling.textContent = sl.value; });
-    };
-    sliders.forEach((sl) => sl.addEventListener('input', update));
-    update();
-    const submitBtn = card.querySelector('.vote-submit');
-    if (submitBtn) submitBtn.onclick = async () => {
-      const scores = {};
-      sliders.forEach((sl) => { scores[sl.dataset.crit] = Number(sl.value); });
-      try {
-        const r = await api(`/entries/${entry.id}/vote`, { method: 'POST', body: { scores } });
-        toast(`${t('vote_saved')} (${r.entry_score})`);
-      } catch (err) { toast(err.message, true); }
-    };
-  }
-}
-
-async function loadComments(box, entry) {
-  const { comments } = await api(`/entries/${entry.id}/comments`);
-  box.innerHTML = `
-    ${state.user ? `
-      <form class="comment-form" style="display:flex;gap:8px;margin:8px 0">
-        <input name="body" placeholder="${t('add_comment')}" aria-label="${t('add_comment')}" required>
-        <button class="btn small">${t('post')}</button>
-      </form>` : ''}
-    <div class="comment-list">
-      ${comments.map((cm) => `
-        <div class="comment">
-          <div class="who">${avatar(cm.avatar_url, cm.name)} ${esc(cm.name)} <time>${fmtDate(cm.created_at)}</time>
-            ${state.user ? `<button class="ghost report-comment" data-id="${cm.id}" aria-label="${t('report')}" style="font-size:0.8rem">🚩</button>` : ''}
-          </div>
-          <div>${esc(cm.body)}</div>
-        </div>`).join('')}
-    </div>`;
-  const form = box.querySelector('.comment-form');
-  if (form) form.onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api(`/entries/${entry.id}/comments`, { method: 'POST', body: { body: form.body.value } });
-      loadComments(box, entry);
-    } catch (err) { toast(err.message, true); }
-  };
-  box.querySelectorAll('.report-comment').forEach((btn) => {
-    btn.onclick = async () => {
-      const reason = prompt(t('report_reason'));
-      if (!reason) return;
-      try { await api('/reports', { method: 'POST', body: { target_type: 'comment', target_id: Number(btn.dataset.id), reason } }); toast('✓'); }
-      catch (err) { toast(err.message, true); }
-    };
-  });
-}
-
-function submitFormHtml() {
-  return `
-    <h3 style="margin-top:0">${t('submit_entry')}</h3>
-    <form id="entry-form">
-      <label for="e-title">${t('entry_title')}</label>
-      <input id="e-title" required maxlength="120">
-      <label for="e-desc">${t('description')}</label>
-      <input id="e-desc" maxlength="300">
-      <label for="e-tags">${t('tags')}</label>
-      <input id="e-tags">
-      <div class="row2">
-        <div>
-          <label for="e-kind">${t('content_text')} / ${t('content_code')}</label>
-          <select id="e-kind"><option value="text">${t('content_text')}</option><option value="code">${t('content_code')}</option></select>
-        </div>
-        <div>
-          <label for="e-file">${t('upload_file')}</label>
-          <input id="e-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,application/pdf">
-        </div>
-      </div>
-      <label for="e-body">${t('content_text')}</label>
-      <textarea id="e-body" rows="5" spellcheck="false"></textarea>
-      <div id="e-preview" class="mt" aria-live="polite"></div>
-      <button class="btn mt" type="submit">${t('submit')}</button>
-    </form>`;
-}
-
-function wireSubmitForm(c) {
-  const file = document.getElementById('e-file');
-  const preview = document.getElementById('e-preview');
-  file.onchange = () => {
-    preview.innerHTML = '';
-    const f = file.files[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
-    if (f.type.startsWith('image/')) preview.innerHTML = `<p class="muted">${t('preview')}:</p><img src="${url}" alt="" style="max-width:280px;border-radius:8px">`;
-    else if (f.type.startsWith('video/')) preview.innerHTML = `<p class="muted">${t('preview')}:</p><video controls src="${url}" style="max-width:280px"></video>`;
-    else preview.innerHTML = `<p class="muted">📄 ${esc(f.name)} (${Math.round(f.size / 1024)} KB)</p>`;
-  };
-  document.getElementById('entry-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const form = new FormData();
-    form.set('title', document.getElementById('e-title').value);
-    form.set('description', document.getElementById('e-desc').value);
-    form.set('tags', document.getElementById('e-tags').value);
-    form.set('kind', document.getElementById('e-kind').value);
-    form.set('body', document.getElementById('e-body').value);
-    if (file.files[0]) form.set('file', file.files[0]);
-    try {
-      const r = await api(`/contests/${c.id}/entries`, { method: 'POST', form });
-      if (r.moderation && r.moderation !== 'ok') toast(r.moderation, true);
-      viewContest(c.id, 'entries');
-    } catch (err) { toast(err.message, true); }
-  };
-}
-
-// ---------- leaderboard (live via SSE) ----------
-
-async function renderLeaderboard(box, c) {
-  box.innerHTML = `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <span class="live-indicator" id="live-indicator">● ${t('live')} — <span id="updated-ago">${t('updated_ago', { s: 0 })}</span></span>
-        <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/leaderboard?format=csv" download>⬇ ${t('export_csv')}</a>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="board" id="board">
-          <thead><tr>
-            <th>${t('rank')}</th><th>${t('entry')}</th><th>${t('author')}</th>
-            <th>${t('score')}</th><th>${t('pct_of_max')}</th><th>${t('votes')}</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <h3>${t('score_history')}</h3>
-      <div id="chart-box"></div>
-    </div>`;
-
-  let lastUpdate = Date.now();
-  const drawBoard = (board, awards = []) => {
-    const tbody = box.querySelector('#board tbody');
-    const prevRanks = new Map([...tbody.querySelectorAll('tr')].map((tr) => [tr.dataset.entry, tr.rowIndex]));
-    tbody.innerHTML = board.map((r) => `
-      <tr data-entry="${r.entry_id}" class="${r.rank <= 3 ? 'top' + r.rank : ''}">
-        <td><span class="rank-medal">${MEDALS[r.rank] || r.rank}</span>
-          ${awards.find((a) => a.entry_id === r.entry_id) ? `<span class="pill live">${t('winner')}</span>` : ''}</td>
-        <td>${esc(r.title)}</td>
-        <td>${r.user_id ? `<a href="#/profile/${r.user_id}">${esc(r.author_name)}</a>` : esc(r.author_name)}</td>
-        <td><strong>${r.score}</strong></td>
-        <td><div class="bar" title="${r.pct_of_max}%"><div style="width:${Math.min(100, r.pct_of_max)}%"></div></div> ${r.pct_of_max}%</td>
-        <td>${r.votes}</td>
-      </tr>`).join('') || `<tr><td colspan="6" class="muted">${t('no_votes_yet')}</td></tr>`;
-    tbody.querySelectorAll('tr').forEach((tr) => {
-      const prev = prevRanks.get(tr.dataset.entry);
-      if (prev !== undefined && prev !== tr.rowIndex) {
-        tr.classList.add('flash');
-        setTimeout(() => tr.classList.remove('flash'), 1200);
-      }
-    });
-    lastUpdate = Date.now();
-  };
-
-  const data = await api(`/contests/${c.id}/leaderboard`);
-  drawBoard(data.leaderboard, data.awards);
-  drawHistoryChart(c);
-
-  const agoTimer = setInterval(() => {
-    const el = document.getElementById('updated-ago');
-    if (!el) return clearInterval(agoTimer);
-    el.textContent = t('updated_ago', { s: Math.round((Date.now() - lastUpdate) / 1000) });
-  }, 1000);
-
-  closeSse();
-  state.sse = new EventSource(`${BASE}/api/contests/${c.id}/stream`);
-  state.sse.addEventListener('leaderboard', (ev) => {
-    const payload = JSON.parse(ev.data);
-    drawBoard(payload.leaderboard, data.awards);
-    drawHistoryChart(c);
-  });
-}
-
-async function drawHistoryChart(c) {
-  const boxEl = document.getElementById('chart-box');
-  if (!boxEl) return;
-  const { history } = await api(`/contests/${c.id}/history`);
-  if (!history.length) { boxEl.innerHTML = `<p class="muted">${t('no_votes_yet')}</p>`; return; }
-  const byEntry = new Map();
-  history.forEach((h, i) => {
-    if (!byEntry.has(h.entry_id)) byEntry.set(h.entry_id, { title: h.title, points: [] });
-    byEntry.get(h.entry_id).points.push({ x: i, y: h.score });
-  });
-  const W = 700, H = 180, maxX = history.length - 1 || 1;
-  const maxY = Math.max(...history.map((h) => h.score), 1);
-  const colors = ['#2f5cff', '#ff8a3d', '#1d9d63', '#d3364a', '#8b5cf6', '#0ea5e9'];
-  let k = 0;
-  const lines = [...byEntry.values()].map((s) => {
-    const pts = s.points.map((p) => `${(p.x / maxX) * W},${H - (p.y / maxY) * (H - 10)}`).join(' ');
-    const color = colors[k++ % colors.length];
-    return `<polyline fill="none" stroke="${color}" stroke-width="2" points="${pts}"><title>${esc(s.title)}</title></polyline>`;
-  }).join('');
-  const legend = [...byEntry.values()].map((s, i) =>
-    `<span style="color:${colors[i % colors.length]};font-weight:700;font-size:0.8rem">— ${esc(s.title)}</span>`).join(' ');
-  boxEl.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('score_history')}">${lines}</svg><div>${legend}</div>`;
 }
 
 // ---------- public race views: live results & start list ----------
@@ -999,75 +536,60 @@ function parseStartListCsv(text) {
   })).filter((r) => r.participant || r.bib);
 }
 
-// ---------- timing tab: RFID readers, live reads, tag assignment ----------
+// ---------- manage tab (organizer): start list, app pairing, settings ----------
 
-async function renderTiming(box, c) {
+async function renderManage(box, c) {
   const generation = renderGeneration;
-  const [{ readers }, { tags }, wavesData] = await Promise.all([
-    api(`/contests/${c.id}/readers`),
+  const [{ tags }, wavesData] = await Promise.all([
     api(`/contests/${c.id}/tags`),
     api(`/contests/${c.id}/waves`),
   ]);
-  if (generation !== renderGeneration) return; // superseded while fetching
+  if (generation !== renderGeneration) return;
   const waves = wavesData.waves;
   const $ = (sel) => box.querySelector(sel);
+
   box.innerHTML = `
-    <p class="muted">${t('timing_help')}</p>
-    <div class="detail-grid">
-      <div class="card">
-        <h3 style="margin-top:0">${t('readers')}</h3>
-        <div id="readers-list">
-          ${readers.map((r) => `
-            <div class="comment" data-reader="${r.id}">
-              <div class="who">📡 ${esc(r.name)} ${r.location ? `<span class="pill">${esc(r.location)}</span>` : ''}
-                <span class="muted" style="font-weight:400">· ${r.read_count} ${t('reads')} · ${t('last_seen')}: ${r.last_seen ? fmtDate(r.last_seen) : t('never')}</span>
-                <button class="ghost reader-del" data-id="${r.id}" aria-label="${t('delete')}" style="margin-inline-start:auto">🗑</button>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center">
-                <code style="font-size:0.75rem;overflow-wrap:anywhere">${esc(r.token)}</code>
-                <button class="btn small secondary copy-token" data-token="${esc(r.token)}">${t('copy')}</button>
-              </div>
-            </div>`).join('') || `<p class="muted">—</p>`}
-        </div>
-        <form id="reader-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <input name="name" placeholder="${t('reader_name')}" required style="flex:1;min-width:130px">
-          <input name="location" placeholder="${t('reader_location')}" style="flex:1;min-width:130px">
-          <button class="btn small">+ ${t('add_reader')}</button>
-        </form>
+    <div class="card">
+      <h3 style="margin-top:0">📱 ${t('app_pairing')}</h3>
+      <p class="muted" style="margin:4px 0">${t('app_pairing_help')}</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <code style="font-size:0.8rem;overflow-wrap:anywhere">${esc(c.app_token || '')}</code>
+        <button class="btn small secondary" id="copy-token">${t('copy')}</button>
       </div>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <h3 style="margin-top:0">${t('tag_assignments')}</h3>
-          <div>
-            <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
-            <button class="btn small secondary" id="import-csv" title="${t('csv_help')}">⬆ ${t('import_csv')}</button>
-          </div>
+    </div>
+
+    <div class="card mt">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <h3 style="margin:0">${t('tab_startlist')} <span class="muted" style="font-weight:400">(${tags.length} ${t('racers_count')})</span></h3>
+        <div>
+          <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+          <button class="btn small" id="import-csv" title="${t('csv_help')}">⬆ ${t('import_csv')}</button>
         </div>
-        <p class="muted" style="font-size:0.78rem;margin:2px 0 8px">${t('csv_help')}</p>
-        <form id="tag-form" style="display:flex;gap:6px;flex-wrap:wrap">
-          <input name="epc" placeholder="${t('epc')}" required pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
-          <input name="bib" placeholder="${t('bib')}" style="width:70px">
-          <input name="participant" placeholder="${t('participant')}" required style="flex:2;min-width:110px">
-          <input name="category" placeholder="${t('category')}" style="flex:1;min-width:80px">
-          <select name="wave_id" aria-label="${t('wave')}" style="flex:1;min-width:90px">
-            <option value="">${t('wave')} —</option>
-            ${waves.map((w) => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
-          </select>
-          <button class="btn small">${t('assign')}</button>
-        </form>
-        <div id="tags-list" class="mt" style="max-height:220px;overflow:auto">
-          ${tags.map((a, i) => `
-            <div class="comment" style="display:flex;gap:8px;align-items:center">
-              <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
-              ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
-              ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
-              <code style="font-size:0.7rem;overflow-wrap:anywhere">${esc(a.epc)}</code>
-              <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
-                ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
-              </select>
-              <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}">🗑</button>
-            </div>`).join('') || `<p class="muted">—</p>`}
-        </div>
+      </div>
+      <p class="muted" style="font-size:0.78rem;margin:2px 0 8px">${t('csv_help')}</p>
+      <form id="tag-form" style="display:flex;gap:6px;flex-wrap:wrap">
+        <input name="bib" placeholder="${t('bib')}" style="width:70px">
+        <input name="participant" placeholder="${t('participant')}" required style="flex:2;min-width:110px">
+        <input name="category" placeholder="${t('category')}" style="flex:1;min-width:80px">
+        <select name="wave_id" aria-label="${t('wave')}" style="flex:1;min-width:90px">
+          <option value="">${t('wave')} —</option>
+          ${waves.map((w) => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
+        </select>
+        <input name="epc" placeholder="${t('epc_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="flex:2;min-width:120px">
+        <button class="btn small">${t('assign')}</button>
+      </form>
+      <div id="tags-list" class="mt" style="max-height:420px;overflow:auto">
+        ${tags.map((a, i) => `
+          <div class="comment" style="display:flex;gap:8px;align-items:center">
+            <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
+            ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
+            ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
+            <code style="font-size:0.7rem;overflow-wrap:anywhere" class="muted">${esc(a.epc)}</code>
+            <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
+              ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
+            </select>
+            <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}">🗑</button>
+          </div>`).join('') || `<p class="muted">${t('no_startlist')}</p>`}
       </div>
     </div>
 
@@ -1082,111 +604,67 @@ async function renderTiming(box, c) {
           <button class="btn small secondary">${t('save_settings')}</button>
         </form>
       </div>
+      <p class="muted" style="font-size:0.78rem">${t('waves_help')}</p>
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
-          <th>${t('wave')}</th><th>${t('participant')}</th><th>${t('started_at')}</th><th>${t('race_clock')}</th><th></th>
-        </tr></thead><tbody id="waves-body">
+          <th>${t('wave')}</th><th>${t('racers_count')}</th><th>${t('started_at')}</th><th></th>
+        </tr></thead><tbody>
           ${waves.map((w) => `
-            <tr data-wave="${w.id}" data-started="${w.started_at || ''}">
+            <tr>
               <td><strong>${esc(w.name)}</strong></td>
               <td>${w.racer_count}</td>
               <td>${w.started_at ? fmtDate(w.started_at) : `<span class="muted">${t('not_started')}</span>`}</td>
-              <td class="wave-clock" style="font-weight:700;font-variant-numeric:tabular-nums">—</td>
-              <td style="display:flex;gap:6px">
-                <button class="btn small ${w.started_at ? 'secondary' : ''} wave-start" data-id="${w.id}" data-started="${w.started_at ? 1 : 0}">▶ ${t('start_wave')}</button>
-                <button class="ghost wave-del" data-id="${w.id}" aria-label="${t('delete')}">🗑</button>
-              </td>
-            </tr>`).join('')}
+              <td><button class="ghost wave-del" data-id="${w.id}" aria-label="${t('delete')}">🗑</button></td>
+            </tr>`).join('') || `<tr><td colspan="4" class="muted">—</td></tr>`}
         </tbody></table>
       </div>
       <form id="wave-form" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <input name="name" placeholder="${t('wave')}" required style="max-width:220px">
-        <button class="btn small">+ ${t('add_wave')}</button>
+        <button class="btn small secondary">+ ${t('add_wave')}</button>
       </form>
-    </div>
-
-    <div class="card mt">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <h3 style="margin:0">${t('race_results')} <span class="live-indicator">● ${t('live')}</span></h3>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <form id="manual-form" style="display:flex;gap:6px">
-            <input name="bib" placeholder="${t('manual_entry')}" pattern="[0-9A-Za-z\\-]+" required style="width:160px">
-            <button class="btn small">⏱ ${t('record')}</button>
-          </form>
-          <a class="btn small secondary" href="#" id="results-csv">⬇ ${t('export_csv')}</a>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="board"><thead><tr>
-          <th>${t('rank')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-          <th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('status_col')}</th>
-        </tr></thead><tbody id="results-body"></tbody></table>
-      </div>
-    </div>
-
-    <div class="card mt">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <h3 style="margin:0">${t('live_reads')} <span class="live-indicator">● ${t('live')}</span></h3>
-        <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/reads?format=csv" id="reads-csv">⬇ ${t('export_csv')}</a>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="board"><thead><tr>
-          <th>${t('last_read')}</th><th>${t('epc')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('reader_col')}</th><th>RSSI</th>
-        </tr></thead><tbody id="reads-body"></tbody></table>
-      </div>
-      <h3>${t('passings')}</h3>
-      <div style="overflow-x:auto">
-        <table class="board"><thead><tr>
-          <th>${t('epc')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('passes')}</th><th>${t('first_read')}</th><th>${t('last_read')}</th><th>${t('elapsed')}</th>
-        </tr></thead><tbody id="passings-body"></tbody></table>
-      </div>
     </div>`;
 
-  // CSV link needs the auth token — fetch and download via blob instead.
-  $('#reads-csv').onclick = async (e) => {
-    e.preventDefault();
-    const res = await fetch(`${BASE}/api/contests/${c.id}/reads?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `reads-${c.id}.csv`;
-    a.click();
+  $('#copy-token').onclick = async () => {
+    try { await navigator.clipboard.writeText(c.app_token || ''); toast(t('copied')); }
+    catch { prompt(t('copy'), c.app_token || ''); }
   };
 
-  $('#reader-form').onsubmit = async (e) => {
-    e.preventDefault();
+  // ---- CSV start-list import ----
+  const csvFile = $('#csv-file');
+  $('#import-csv').onclick = () => csvFile.click();
+  csvFile.onchange = async () => {
+    const file = csvFile.files[0];
+    if (!file) return;
     try {
-      await api(`/contests/${c.id}/readers`, { method: 'POST', body: { name: e.target.name.value, location: e.target.location.value } });
-      viewContest(c.id, 'timing');
+      const text = (await file.text()).replace(/^\uFEFF/, ''); // strip Excel BOM
+      const racers = parseStartListCsv(text);
+      if (!racers.length) throw new Error(t('csv_help'));
+      const result = await api(`/contests/${c.id}/tags/bulk`, { method: 'POST', body: { racers } });
+      toast(t('import_done', { n: result.imported, s: result.skipped })
+        + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
+      viewContest(c.id, 'manage');
     } catch (err) { toast(err.message, true); }
+    csvFile.value = '';
   };
-  box.querySelectorAll('.reader-del').forEach((btn) => {
-    btn.onclick = async () => {
-      if (!confirm(t('delete') + '?')) return;
-      await api(`/contests/${c.id}/readers/${btn.dataset.id}`, { method: 'DELETE' });
-      viewContest(c.id, 'timing');
-    };
-  });
-  box.querySelectorAll('.copy-token').forEach((btn) => {
-    btn.onclick = async () => {
-      try { await navigator.clipboard.writeText(btn.dataset.token); toast(t('copied')); }
-      catch { prompt(t('copy'), btn.dataset.token); }
-    };
-  });
+
   $('#tag-form').onsubmit = async (e) => {
     e.preventDefault();
+    const form = e.target;
+    const epc = form.epc.value.trim() || (/^\d{1,10}$/.test(form.bib.value.trim())
+      ? 'AA' + form.bib.value.trim().padStart(4, '0') : '');
     try {
+      if (!epc) throw new Error(t('epc_or_bib'));
       await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
-        epc: e.target.epc.value, bib: e.target.bib.value, participant: e.target.participant.value,
-        category: e.target.category.value, wave_id: e.target.wave_id.value ? Number(e.target.wave_id.value) : null,
+        epc, bib: form.bib.value, participant: form.participant.value,
+        category: form.category.value, wave_id: form.wave_id.value ? Number(form.wave_id.value) : null,
       }});
-      viewContest(c.id, 'timing');
+      viewContest(c.id, 'manage');
     } catch (err) { toast(err.message, true); }
   };
   box.querySelectorAll('.tag-del').forEach((btn) => {
     btn.onclick = async () => {
       await api(`/contests/${c.id}/tags/${btn.dataset.epc}`, { method: 'DELETE' });
-      viewContest(c.id, 'timing');
+      viewContest(c.id, 'manage');
     };
   });
   box.querySelectorAll('.tag-status').forEach((sel) => {
@@ -1202,47 +680,18 @@ async function renderTiming(box, c) {
     };
   });
 
-  // ---- CSV start-list import ----
-  const csvFile = $('#csv-file');
-  $('#import-csv').onclick = () => csvFile.click();
-  csvFile.onchange = async () => {
-    const file = csvFile.files[0];
-    if (!file) return;
-    try {
-      const text = (await file.text()).replace(/^\uFEFF/, ''); // strip Excel BOM
-      const racers = parseStartListCsv(text);
-      if (!racers.length) throw new Error(t('csv_help'));
-      const result = await api(`/contests/${c.id}/tags/bulk`, { method: 'POST', body: { racers } });
-      toast(t('import_done', { n: result.imported, s: result.skipped })
-        + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
-      viewContest(c.id, 'timing');
-    } catch (err) { toast(err.message, true); }
-    csvFile.value = '';
-  };
-
-  // ---- waves & race start ----
   $('#wave-form').onsubmit = async (e) => {
     e.preventDefault();
     try {
       await api(`/contests/${c.id}/waves`, { method: 'POST', body: { name: e.target.name.value } });
-      viewContest(c.id, 'timing');
+      viewContest(c.id, 'manage');
     } catch (err) { toast(err.message, true); }
   };
-  box.querySelectorAll('.wave-start').forEach((btn) => {
-    btn.onclick = async () => {
-      const restart = btn.dataset.started === '1';
-      if (restart && !confirm(t('restart_wave_confirm'))) return;
-      try {
-        await api(`/contests/${c.id}/waves/${btn.dataset.id}/start`, { method: 'POST', body: restart ? { force: true } : {} });
-        viewContest(c.id, 'timing');
-      } catch (err) { toast(err.message, true); }
-    };
-  });
   box.querySelectorAll('.wave-del').forEach((btn) => {
     btn.onclick = async () => {
       if (!confirm(t('delete') + '?')) return;
       await api(`/contests/${c.id}/waves/${btn.dataset.id}`, { method: 'DELETE' });
-      viewContest(c.id, 'timing');
+      viewContest(c.id, 'manage');
     };
   });
   $('#timing-settings').onsubmit = async (e) => {
@@ -1252,113 +701,10 @@ async function renderTiming(box, c) {
         suppress_secs: Number(e.target.suppress.value), min_lap_gap_secs: Number(e.target.lapgap.value),
       }});
       toast('✓');
-      refreshResults();
     } catch (err) { toast(err.message, true); }
   };
-  $('#manual-form').onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api(`/contests/${c.id}/manual-read`, { method: 'POST', body: { bib: e.target.bib.value } });
-      e.target.bib.value = '';
-      toast('⏱ ✓');
-    } catch (err) { toast(err.message, true); }
-  };
-  $('#results-csv').onclick = async (e) => {
-    e.preventDefault();
-    const res = await fetch(`${BASE}/api/contests/${c.id}/race-results?format=csv`, { headers: { Authorization: `Bearer ${state.token}` } });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(await res.blob());
-    a.download = `race-results-${c.id}.csv`;
-    a.click();
-  };
-
-  // per-wave race clocks tick every second
-  const clockTimer = setInterval(() => {
-    const rows = box.querySelectorAll('#waves-body tr');
-    if (!rows.length) return clearInterval(clockTimer);
-    rows.forEach((tr) => {
-      const started = tr.dataset.started;
-      if (!started) return;
-      const secs = Math.max(0, Math.floor((Date.now() - Date.parse(started)) / 1000));
-      const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
-      tr.querySelector('.wave-clock').textContent =
-        `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    });
-  }, 1000);
-
-  const STATUS_LABEL = { finished: t('status_finished_r'), on_course: t('status_on_course'), not_started: t('status_not_started') };
-  async function refreshResults() {
-    const { results } = await api(`/contests/${c.id}/race-results`);
-    const body = $('#results-body');
-    if (!body) return;
-    body.innerHTML = results.map((r) => `
-      <tr class="${r.rank <= 3 ? 'top' + r.rank : ''}">
-        <td>${r.rank ? MEDALS[r.rank] || r.rank : ''}</td>
-        <td><strong>${esc(r.bib || '')}</strong></td>
-        <td>${esc(r.participant)}</td>
-        <td>${esc(r.category || '')}</td>
-        <td>${esc(r.wave || '')}</td>
-        <td>${r.laps}</td>
-        <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed || '—'}</strong></td>
-        <td class="${r.status === 'finished' ? '' : 'muted'}">${STATUS_LABEL[r.status] || r.status}</td>
-      </tr>`).join('') || `<tr><td colspan="8" class="muted">—</td></tr>`;
-  }
-  refreshResults();
-
-  const readRow = (r) => `
-    <tr><td>${fmtDate(r.read_at)}</td><td><code style="font-size:0.75rem">${esc(r.epc)}</code></td>
-    <td>${esc(r.bib || '')}</td><td>${r.participant ? esc(r.participant) : `<span class="muted">${t('unassigned')}</span>`}</td>
-    <td>${esc(r.reader_name || r.reader?.name || '')}</td><td>${r.rssi ?? ''}</td></tr>`;
-
-  const refreshPassings = async () => {
-    const { passings } = await api(`/contests/${c.id}/passings`);
-    const body = $('#passings-body');
-    if (!body) return;
-    body.innerHTML = passings.map((p) => `
-      <tr><td><code style="font-size:0.75rem">${esc(p.epc)}</code></td><td>${esc(p.bib || '')}</td>
-      <td>${p.participant ? esc(p.participant) : `<span class="muted">${t('unassigned')}</span>`}</td>
-      <td>${p.passes}</td><td>${fmtDate(p.first_read)}</td><td>${fmtDate(p.last_read)}</td>
-      <td>${Math.floor(p.elapsed_seconds / 60)}:${String(p.elapsed_seconds % 60).padStart(2, '0')}</td></tr>`).join('')
-      || `<tr><td colspan="7" class="muted">${t('no_reads')}</td></tr>`;
-  };
-
-  const { reads } = await api(`/contests/${c.id}/reads?limit=100`);
-  const tbody = $('#reads-body');
-  tbody.innerHTML = reads.map(readRow).join('') || `<tr><td colspan="6" class="muted">${t('no_reads')}</td></tr>`;
-  refreshPassings();
-
-  closeSse();
-  state.sse = new EventSource(`${BASE}/api/contests/${c.id}/stream`);
-  state.sse.addEventListener('tag_reads', (ev) => {
-    const payload = JSON.parse(ev.data);
-    const rows = payload.reads.map((r) => readRow({ ...r, reader_name: payload.reader.name })).join('');
-    if (reads.length === 0 && tbody.children.length === 1 && tbody.textContent.includes(t('no_reads'))) tbody.innerHTML = '';
-    tbody.insertAdjacentHTML('afterbegin', rows);
-    while (tbody.children.length > 100) tbody.removeChild(tbody.lastChild);
-    refreshPassings();
-    refreshResults();
-  });
-  state.sse.addEventListener('wave_start', () => {
-    viewContest(c.id, 'timing');
-  });
 }
 
-// ---------- contest comments tab (aggregates entry comments) ----------
-
-async function renderContestComments(box, c) {
-  const { entries } = await api(`/contests/${c.id}/entries`);
-  box.innerHTML = entries.length
-    ? entries.map((e) => `
-        <div class="card mt">
-          <strong>${esc(e.title)}</strong> <span class="muted">(${e.comment_count} 💬)</span>
-          <div class="comments-box" data-entry="${e.id}"></div>
-        </div>`).join('')
-    : `<p class="muted">${t('no_entries')}</p>`;
-  box.querySelectorAll('.comments-box').forEach((cb) => {
-    const entry = entries.find((e) => e.id === Number(cb.dataset.entry));
-    loadComments(cb, entry);
-  });
-}
 
 // ---------- profile ----------
 

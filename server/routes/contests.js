@@ -79,7 +79,12 @@ function serializeContest(contest, user) {
       ? !!db.prepare('SELECT 1 FROM follows WHERE user_id = ? AND contest_id = ?').get(user.id, contest.id)
       : false,
   };
-  if (!isOrganizer(contest, user)) delete out.invite_code;
+  if (!isOrganizer(contest, user)) {
+    delete out.invite_code;
+  } else {
+    const reader = db.prepare('SELECT token FROM readers WHERE contest_id = ? ORDER BY id LIMIT 1').get(contest.id);
+    out.app_token = reader ? reader.token : null;
+  }
   return out;
 }
 
@@ -211,6 +216,12 @@ router.post('/contests', requireAuth, (req, res) => {
         String(b.location || '').trim()
       );
     const contestId = info.lastInsertRowid;
+    if (kind === 'race') {
+      // one device token per race, created up front: the organizer pastes it
+      // into the Android timing app; no manual "reader" setup needed.
+      db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+        .run(contestId, 'Timing app', `vgr_${crypto.randomBytes(24).toString('hex')}`, '');
+    }
     if (kind === 'voting') {
       const stmt = db.prepare('INSERT INTO criteria (contest_id, name, weight) VALUES (?, ?, ?)');
       for (const c of b.criteria) stmt.run(contestId, String(c.name).trim(), Math.round(Number(c.weight)));

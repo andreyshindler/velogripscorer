@@ -85,6 +85,49 @@ public class RaceActivity extends Activity {
 
         Button download = findViewById(R.id.downloadStartList);
         download.setOnClickListener(v -> downloadStartList(download));
+
+        Button upload = findViewById(R.id.uploadRace);
+        upload.setOnClickListener(v -> uploadRace(upload));
+    }
+
+    /** Explicit "upload race to the web now": flushes gun times and every
+     *  pending passing in one go, independent of the background bridge. */
+    private void uploadRace(Button button) {
+        if (prefs.serverUrl().isEmpty() || prefs.readerToken().isEmpty()) {
+            Toast.makeText(this, R.string.sync_needs_config, Toast.LENGTH_LONG).show();
+            return;
+        }
+        button.setEnabled(false);
+        new Thread(() -> {
+            String message;
+            try {
+                Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
+                for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
+                    if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) {
+                        store.markWaveSynced(wave.name);
+                    }
+                }
+                long uploaded = 0;
+                while (true) {
+                    List<RaceStore.Passing> batch = store.pendingUpload(200);
+                    if (batch.isEmpty()) break;
+                    if (!uploader.upload(batch)) break;
+                    store.markUploaded(batch.get(batch.size() - 1).id);
+                    uploaded += batch.size();
+                }
+                long pending = store.pendingCount();
+                message = pending == 0
+                        ? getString(R.string.upload_done, uploaded)
+                        : getString(R.string.upload_partial, uploaded, pending);
+            } catch (Exception e) {
+                message = getString(R.string.sync_failed, e.getMessage());
+            }
+            final String toastText = message;
+            runOnUiThread(() -> {
+                button.setEnabled(true);
+                Toast.makeText(this, toastText, Toast.LENGTH_LONG).show();
+            });
+        }).start();
     }
 
     private void downloadStartList(Button button) {

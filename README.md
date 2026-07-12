@@ -1,11 +1,18 @@
 # 🏁 VeloGripScorer
 
-A race-timing platform in the spirit of webscorer.com: organizers create **races**,
-build start lists (bib / name / category / wave), start waves with a gun time, and
-the public watches **live results** — Place, Bib, Category place, Laps, Time, Behind,
-DNS/DNF/DSQ — updated in real time from RFID chip reads delivered by the companion
-**Android timing app** (`android/`). A second contest type, community-voting
-competitions with weighted judging criteria, is also included.
+A race-timing platform in the spirit of webscorer.com. The division of labor:
+
+- **Web (this server)** — create races, upload start lists (CSV: bib / name /
+  category / wave / chip), get the app pairing code, and publish results: the
+  public watches live standings — Place, Bib, Category place, Laps, Time,
+  Behind, DNS/DNF/DSQ — and browses the archive of past races.
+- **Android app (`android/`)** — the timing computer at the venue: connects to
+  the RFID reader over the router's LAN, starts waves at the gun, computes
+  standings offline, and uploads the race to the web (live when there's
+  connectivity, or with one tap afterwards).
+
+(The community-voting contest engine from the original spec still exists at the
+API level but is no longer exposed in the UI.)
 
 ## Quick start
 

@@ -62,6 +62,9 @@
     <string name="race_title">מרוץ</string>
     <string name="add_wave">+ הוסף מקצה</string>
     <string name="download_startlist">⬇ רשימת זינוק</string>
+    <string name="upload_race">⬆ העלה מרוץ</string>
+    <string name="upload_done">המרוץ הועלה: %1$d מעברים סונכרנו.</string>
+    <string name="upload_partial">הועלו %1$d מעברים, %2$d עדיין ממתינים — בדוק חיבור.</string>
     <string name="wave_name_hint">שם מקצה חדש (למשל wave1)</string>
     <string name="manual_bib_hint">הזנה ידנית: מספר חזה</string>
     <string name="record_manual">⏱ רשום</string>
