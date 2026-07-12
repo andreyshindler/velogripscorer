@@ -71,6 +71,8 @@ public class BridgeService extends Service {
     private final AtomicReference<Network> readerNetwork = new AtomicReference<>(null);
     private final AtomicReference<String> wifiState = new AtomicReference<>("default");
     private final Map<String, Long> lastSeen = new HashMap<>();
+    private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
+    private long registeredAt = 0;
 
     private Prefs prefs;
     private RaceStore store;
@@ -303,6 +305,7 @@ public class BridgeService extends Service {
         long now = System.currentTimeMillis();
         int window = prefs.dedupeWindowMs();
         for (TagRead read : reads) {
+            if (!registered(read.epc)) continue;               // ignore tags not on the start list
             Long prev = lastSeen.get(read.epc);
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
@@ -313,6 +316,23 @@ public class BridgeService extends Service {
             sendBroadcast(status);
         }
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events
+    }
+
+    /** True if this chip belongs to a racer on the start list. Refreshed every
+     *  few seconds so late edits take effect. When the start list is empty
+     *  (e.g. building one by scanning) every tag is accepted. */
+    private boolean registered(String epc) {
+        long now = System.currentTimeMillis();
+        if (now - registeredAt > 5000) {
+            java.util.HashSet<String> set = new java.util.HashSet<>();
+            for (RaceStore.Racer r : store.racers()) {
+                if (r.epc != null && !r.epc.isEmpty()) set.add(r.epc);
+            }
+            registeredEpcs = set;
+            registeredAt = now;
+        }
+        java.util.Set<String> set = registeredEpcs;
+        return set.isEmpty() || set.contains(epc);
     }
 
     // ---- Upload loop ----
