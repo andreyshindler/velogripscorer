@@ -152,6 +152,15 @@
     <string name="progress_list_footer">%1$s %2$s racers</string>
     <string name="category_none">— None —</string>
     <string name="cancel_no_bib_body">Delete this unassigned No Bib time?</string>
+    <string name="race_control_subtitle">Choose an action for this race</string>
+    <string name="rc_restart_title">Restart race</string>
+    <string name="rc_restart_sub">False start — reset the clock and clear times</string>
+    <string name="rc_finish_title">Finish race</string>
+    <string name="rc_finish_sub">Race completed — go to the results</string>
+    <string name="rc_live_title">Live results</string>
+    <string name="rc_live_sub">View or update finishers as they cross</string>
+    <string name="rc_progress_title">Race progress</string>
+    <string name="rc_progress_sub">Finished vs. on course, per distance</string>
     <string name="rc_settings_short">Settings</string>
     <string name="no_finishers_yet">No finishers yet.</string>
     <string name="no_on_course">No racers on course.</string>

@@ -11,7 +11,9 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -717,28 +719,115 @@ public class RaceTimingActivity extends Activity {
     }
 
     private void raceControl() {
-        final String[] options = {
-                getString(R.string.rc_restart), getString(R.string.rc_finish), getString(R.string.rc_live),
-                getString(R.string.rc_progress)};
-        new android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.choose_race_control)
-                .setItems(options, (d, which) -> {
-                    switch (which) {
-                        case 0:   // Restart race (false start)
-                            restartRace();
-                            break;
-                        case 1:   // Finish race (race completed)
-                            finishRace();
-                            break;
-                        case 2:   // Live results view / update
-                            startActivity(new Intent(this, LiveResultsActivity.class));
-                            break;
-                        default:  // Race progress (view)
-                            showRaceProgress();
-                    }
-                })
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        head.setPadding(dp(22), dp(18), dp(22), dp(10));
+        TextView title = new TextView(this);
+        title.setText(R.string.race_control);
+        title.setTextSize(21);
+        title.setTextColor(0xFF17201B);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView subtitle = new TextView(this);
+        subtitle.setText(R.string.race_control_subtitle);
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(0xFF6A7771);
+        subtitle.setPadding(0, dp(2), 0, 0);
+        head.addView(title);
+        head.addView(subtitle);
+        content.addView(head);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
+                .setView(scroll)
                 .setNegativeButton(R.string.close, null)
-                .show();
+                .create();
+
+        content.addView(controlRow(R.drawable.ic_ctrl_restart, 0xFFE39A2B, 0xFFFBEFD8,
+                R.string.rc_restart_title, R.string.rc_restart_sub,
+                () -> { dlg.dismiss(); restartRace(); }));
+        content.addView(controlDivider());
+        content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFF4F9E27, 0xFFE6F2DA,
+                R.string.rc_finish_title, R.string.rc_finish_sub,
+                () -> { dlg.dismiss(); finishRace(); }));
+        content.addView(controlDivider());
+        content.addView(controlRow(R.drawable.ic_ctrl_list, 0xFF3F6FD1, 0xFFE2EAFA,
+                R.string.rc_live_title, R.string.rc_live_sub,
+                () -> { dlg.dismiss(); startActivity(new Intent(this, LiveResultsActivity.class)); }));
+        content.addView(controlDivider());
+        content.addView(controlRow(R.drawable.ic_ctrl_bars, 0xFF159C93, 0xFFD9F1EF,
+                R.string.rc_progress_title, R.string.rc_progress_sub,
+                () -> { dlg.dismiss(); showRaceProgress(); }));
+
+        dlg.show();
+    }
+
+    /** One styled Race-control row: a rounded, tinted icon badge, a title and a
+     *  one-line hint, and a chevron. */
+    private View controlRow(int iconRes, int iconColor, int badgeBg,
+                            int titleRes, int subRes, Runnable onTap) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(22), dp(13), dp(22), dp(13));
+        android.util.TypedValue tv = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+        row.setBackgroundResource(tv.resourceId);
+        row.setClickable(true);
+
+        ImageView badge = new ImageView(this);
+        badge.setImageResource(iconRes);
+        badge.setColorFilter(iconColor);
+        badge.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        int pad = dp(11);
+        badge.setPadding(pad, pad, pad, pad);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(badgeBg);
+        bg.setCornerRadius(dp(14));
+        badge.setBackground(bg);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(46), dp(46));
+        blp.setMarginEnd(dp(15));
+        badge.setLayoutParams(blp);
+
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        text.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView t = new TextView(this);
+        t.setText(titleRes);
+        t.setTextSize(16.5f);
+        t.setTextColor(0xFF17201B);
+        t.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView s = new TextView(this);
+        s.setText(subRes);
+        s.setTextSize(12.5f);
+        s.setTextColor(0xFF6A7771);
+        s.setPadding(0, dp(2), 0, 0);
+        text.addView(t);
+        text.addView(s);
+
+        TextView chev = new TextView(this);
+        chev.setText("❯");
+        chev.setTextSize(15);
+        chev.setTextColor(0x99555555);
+
+        row.addView(badge);
+        row.addView(text);
+        row.addView(chev);
+        row.setOnClickListener(v -> onTap.run());
+        return row;
+    }
+
+    private View controlDivider() {
+        View v = new View(this);
+        v.setBackgroundColor(0xFFECEFEB);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 1);
+        lp.setMargins(dp(22 + 46 + 15), 0, 0, 0); // indent past the icon
+        v.setLayoutParams(lp);
+        return v;
     }
 
     /** Finish race: if racers are still out, ask whether to mark them DNS or
