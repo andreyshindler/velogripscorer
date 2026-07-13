@@ -431,6 +431,24 @@ public class RaceTimingActivity extends Activity {
         return row;
     }
 
+    private android.widget.NumberPicker wheel(int min, int max, int value,
+                                              android.widget.NumberPicker.Formatter fmt) {
+        android.widget.NumberPicker p = new android.widget.NumberPicker(this);
+        p.setMinValue(min);
+        p.setMaxValue(max);
+        p.setValue(Math.max(min, Math.min(max, value)));
+        if (fmt != null) p.setFormatter(fmt);
+        return p;
+    }
+
+    private TextView sep(String s) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(22);
+        t.setPadding(dp(3), 0, dp(3), 0);
+        return t;
+    }
+
     /** Rounded tile background (smooth edges, matching the clock button). */
     private android.graphics.drawable.GradientDrawable roundedTile(int color) {
         android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
@@ -482,15 +500,28 @@ public class RaceTimingActivity extends Activity {
     }
 
     private void editTime(RaceEngine.Result r) {
-        final EditText input = new EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_DATETIME);
-        input.setText(RaceEngine.formatElapsed(r.elapsedMs, prefs.timingDecimals()));
-        input.setSelection(input.getText().length());
+        // Scroll-wheel time editor: h : mm : ss . t
+        long tenths = Math.round(r.elapsedMs / 100.0);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setGravity(Gravity.CENTER);
+        int pad = dp(12);
+        box.setPadding(pad, pad, pad, pad);
+
+        final android.widget.NumberPicker hh = wheel(0, 23, (int) (tenths / 36000), null);
+        final android.widget.NumberPicker mm = wheel(0, 59, (int) ((tenths / 600) % 60), i -> String.format(Locale.US, "%02d", i));
+        final android.widget.NumberPicker ss = wheel(0, 59, (int) ((tenths / 10) % 60), i -> String.format(Locale.US, "%02d", i));
+        final android.widget.NumberPicker tt = wheel(0, 9, (int) (tenths % 10), null);
+        box.addView(hh); box.addView(sep(":")); box.addView(mm);
+        box.addView(sep(":")); box.addView(ss); box.addView(sep("."));
+        box.addView(tt);
+
         new android.app.AlertDialog.Builder(this)
                 .setTitle(getString(R.string.edit_time_for, r.bib, r.name))
-                .setView(input)
-                .setPositiveButton(R.string.enter, (d, w) -> {
-                    long ms = parseElapsed(input.getText().toString());
+                .setView(box)
+                .setPositiveButton(R.string.enter, (dlg, w) -> {
+                    long ms = ((hh.getValue() * 3600L + mm.getValue() * 60L + ss.getValue()) * 1000L)
+                            + tt.getValue() * 100L;
                     Long gun = gunTime();
                     if (gun == null) { Toast.makeText(this, R.string.not_started_wave, Toast.LENGTH_LONG).show(); return; }
                     setRacerFinish(r.bib, gun + ms);
