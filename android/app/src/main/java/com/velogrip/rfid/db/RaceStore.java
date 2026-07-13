@@ -68,18 +68,24 @@ public final class RaceStore extends SQLiteOpenHelper {
         public final Double rssi;
         public final Integer antenna;
         public final long readAtMs;
+        public final boolean manual;   // true = operator tap, exempt from RFID filtering
 
         public Passing(long id, String epc, Double rssi, long readAtMs) {
-            this(id, epc, rssi, null, readAtMs);
+            this(id, epc, rssi, null, readAtMs, false);
         }
 
         public Passing(long id, String epc, Double rssi, Integer antenna, long readAtMs) {
-            this.id = id; this.epc = epc; this.rssi = rssi; this.antenna = antenna; this.readAtMs = readAtMs;
+            this(id, epc, rssi, antenna, readAtMs, false);
+        }
+
+        public Passing(long id, String epc, Double rssi, Integer antenna, long readAtMs, boolean manual) {
+            this.id = id; this.epc = epc; this.rssi = rssi; this.antenna = antenna;
+            this.readAtMs = readAtMs; this.manual = manual;
         }
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 8);
+        super(ctx, "race.db", null, 9);
     }
 
     @Override
@@ -91,7 +97,8 @@ public final class RaceStore extends SQLiteOpenHelper {
                 " team TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE TABLE waves (name TEXT PRIMARY KEY, started_at INTEGER, synced INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
-                " rssi REAL, antenna INTEGER, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
+                " rssi REAL, antenna INTEGER, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0," +
+                " manual INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE distances (name TEXT PRIMARY KEY, laps INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL DEFAULT ''," +
@@ -125,6 +132,9 @@ public final class RaceStore extends SQLiteOpenHelper {
         if (oldVersion < 8) {
             db.execSQL("ALTER TABLE racers ADD COLUMN team TEXT NOT NULL DEFAULT ''");
         }
+        if (oldVersion < 9) {
+            db.execSQL("ALTER TABLE passings ADD COLUMN manual INTEGER NOT NULL DEFAULT 0");
+        }
     }
 
     // ---- passings ----
@@ -155,11 +165,14 @@ public final class RaceStore extends SQLiteOpenHelper {
         return out;
     }
 
-    /** Records a finish for a specific chip at a given time (grid tap / No Bib). */
+    /** Records a finish for a specific chip at a given time (grid tap / No Bib).
+     *  Flagged manual so the engine exempts it from RFID start-suppression and
+     *  lap-gap filtering — each deliberate tap counts as one crossing. */
     public void recordPassing(String epc, long atMs) {
         ContentValues values = new ContentValues();
         values.put("epc", epc);
         values.put("read_at", atMs);
+        values.put("manual", 1);
         getWritableDatabase().insert("passings", null, values);
     }
 
@@ -402,11 +415,11 @@ public final class RaceStore extends SQLiteOpenHelper {
     public List<Passing> allPassings() {
         List<Passing> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT id, epc, rssi, read_at FROM passings ORDER BY read_at", null);
+                "SELECT id, epc, rssi, read_at, manual FROM passings ORDER BY read_at", null);
         try {
             while (c.moveToNext()) {
                 out.add(new Passing(c.getLong(0), c.getString(1),
-                        c.isNull(2) ? null : c.getDouble(2), c.getLong(3)));
+                        c.isNull(2) ? null : c.getDouble(2), null, c.getLong(3), c.getInt(4) == 1));
             }
         } finally {
             c.close();

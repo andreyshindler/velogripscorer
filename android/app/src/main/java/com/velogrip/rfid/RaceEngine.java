@@ -34,6 +34,13 @@ public final class RaceEngine {
         }
     }
 
+    /** A crossing time plus whether it came from a deliberate operator tap. */
+    private static final class Read {
+        final long at;
+        final boolean manual;
+        Read(long at, boolean manual) { this.at = at; this.manual = manual; }
+    }
+
     private RaceEngine() { }
 
     public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
@@ -73,11 +80,11 @@ public final class RaceEngine {
         for (RaceStore.Wave w : waves) {
             if (w.startedAtMs != null) gunByWave.put(w.name, w.startedAtMs);
         }
-        Map<String, List<Long>> readsByEpc = new HashMap<>();
+        Map<String, List<Read>> readsByEpc = new HashMap<>();
         for (RaceStore.Passing p : passings) {
-            List<Long> list = readsByEpc.get(p.epc);
+            List<Read> list = readsByEpc.get(p.epc);
             if (list == null) readsByEpc.put(p.epc, list = new ArrayList<>());
-            list.add(p.readAtMs);
+            list.add(new Read(p.readAtMs, p.manual));
         }
 
         long suppressMs = suppressSecs * 1000L;
@@ -113,9 +120,9 @@ public final class RaceEngine {
                         racer.distance, racer.gender,"not_started", 0, 0));
                 continue;
             }
-            List<Long> raw = new ArrayList<>();
+            List<Read> raw = new ArrayList<>();
             for (RaceStore.Racer member : group) {
-                List<Long> reads = readsByEpc.get(member.epc);
+                List<Read> reads = readsByEpc.get(member.epc);
                 if (reads != null) raw.addAll(reads);
             }
             int target;
@@ -127,12 +134,18 @@ public final class RaceEngine {
             }
             List<Long> crossings = new ArrayList<>();
             if (!raw.isEmpty()) {
-                Collections.sort(raw);
-                for (long at : raw) {
-                    if (at < gun + suppressMs) continue;
+                Collections.sort(raw, new Comparator<Read>() {
+                    @Override public int compare(Read a, Read b) { return Long.compare(a.at, b.at); }
+                });
+                for (Read rd : raw) {
+                    // Manual operator taps are deliberate: they skip the RFID
+                    // start-suppression window and the lap-gap de-dup, so each
+                    // tap counts as one crossing.
+                    if (!rd.manual && rd.at < gun + suppressMs) continue;
                     if (crossings.size() >= target) break; // race done for this racer
-                    if (crossings.isEmpty() || at - crossings.get(crossings.size() - 1) >= lapGapMs) {
-                        crossings.add(at);
+                    if (rd.manual || crossings.isEmpty()
+                            || rd.at - crossings.get(crossings.size() - 1) >= lapGapMs) {
+                        crossings.add(rd.at);
                     }
                 }
             }

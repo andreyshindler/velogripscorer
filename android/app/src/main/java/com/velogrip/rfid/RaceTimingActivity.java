@@ -47,6 +47,7 @@ public class RaceTimingActivity extends Activity {
     private boolean showNames = false; // show racer name/category on the tiles
     private long lastSplitMs = -1;
     private String lastTapText;      // "13th 2:19:16.9 +…: name" for the hint strip
+    private String scrollToBib;      // after a tap-finish, scroll the results to this racer
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
     // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
@@ -222,6 +223,7 @@ public class RaceTimingActivity extends Activity {
             store.recordPassing(r.epc, swapTimeMs);
             Toast.makeText(this, "⇄ #" + r.bib + "  " + r.name, Toast.LENGTH_SHORT).show();
             swapBib = null;
+            scrollToBib = r.bib;
             render();
             return;
         }
@@ -233,6 +235,7 @@ public class RaceTimingActivity extends Activity {
             store.recordPassing(r.epc, time.readAtMs);
             store.deletePending(time.id);
             Toast.makeText(this, "⏱ #" + r.bib + "  " + r.name, Toast.LENGTH_SHORT).show();
+            scrollToBib = r.bib;
         } else {
             store.addPendingRacer(r.epc, r.bib, r.name);
         }
@@ -475,6 +478,7 @@ public class RaceTimingActivity extends Activity {
         long prevElapsed = -1;
         long leaderElapsed = -1;
         lastTapText = null;
+        View scrollTarget = null;
         for (Object item : ranked) {
             final int seq = place++;
             long elapsed = rowElapsed(item, gun);
@@ -486,9 +490,11 @@ public class RaceTimingActivity extends Activity {
 
             if (item instanceof RaceEngine.Result) {
                 final RaceEngine.Result r = (RaceEngine.Result) item;
-                resultsBox.addView(resultRow(String.valueOf(seq), r.bib, r.name, time, false,
+                View rv = resultRow(String.valueOf(seq), r.bib, r.name, time, false,
                         () -> editTime(r), () -> openRacerInfo(r.bib),
-                        () -> cancelEntry(seq, r), () -> bibActions(seq, r)));
+                        () -> cancelEntry(seq, r), () -> bibActions(seq, r));
+                resultsBox.addView(rv);
+                if (scrollToBib != null && scrollToBib.equals(r.bib)) scrollTarget = rv;
                 lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
                         r.name == null || r.name.isEmpty() ? r.bib : r.name);
             } else {
@@ -509,6 +515,15 @@ public class RaceTimingActivity extends Activity {
                                 store.deletePending(p.id); render(); }, () -> openRacerInfo(p.bib)));
             }
         }
+
+        // After a tap-finish, bring that racer's row into view instead of making
+        // the operator scroll the finish list down to find it.
+        if (scrollTarget != null && !fastTap) {
+            final View target = scrollTarget;
+            final ScrollView sv = findViewById(R.id.resultsScroll);
+            sv.post(() -> sv.smoothScrollTo(0, Math.max(0, target.getTop())));
+        }
+        scrollToBib = null;
     }
 
     /** Elapsed time (ms) of a results row — a finisher's elapsed, or a banked
@@ -557,6 +572,7 @@ public class RaceTimingActivity extends Activity {
         nm.setTextSize(17);
         nm.setTextColor(0xFF111111);
         nm.setPadding(dp(8), 0, dp(8), 0);
+        nm.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START); // left-align, even Hebrew names
         nm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         TextView tv = chip(time, LinearLayout.LayoutParams.WRAP_CONTENT, 0xFFF2E400);
         if (onTimeTap != null) tv.setOnClickListener(v -> onTimeTap.run()); // tap the time to edit it
