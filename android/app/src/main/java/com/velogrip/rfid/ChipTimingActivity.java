@@ -3,9 +3,12 @@ package com.velogrip.rfid;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -54,6 +57,9 @@ public class ChipTimingActivity extends Activity {
         chipsPerRacer.setText(String.valueOf(prefs.chipsPerRacer()));
         suppress.setText(mmss(prefs.suppressSecs()));
         lapGap.setText(mmss(prefs.lapGapSecs()));
+        // Set these two timers with a scroll-wheel picker instead of typing.
+        makeScrollable(suppress, R.string.no_detect_after_start);
+        makeScrollable(lapGap, R.string.no_redetect_after_lap);
         antennaPower.setText(String.valueOf(prefs.antennaPower()));
         chipIdBib.setChecked(prefs.chipIdEqualsBib());
         beepUnknown.setChecked(prefs.beepUnknownChip());
@@ -136,6 +142,50 @@ public class ChipTimingActivity extends Activity {
         if (Prefs.PROTOCOL_UHF.equals(protocol)) return getString(R.string.proto_uhf);
         if (Prefs.PROTOCOL_DEMO.equals(protocol)) return getString(R.string.proto_demo);
         return getString(R.string.proto_ascii);
+    }
+
+    /** Turn a time field into a tap-to-open mm:ss scroll-wheel picker. */
+    private void makeScrollable(EditText field, int titleRes) {
+        field.setFocusable(false);
+        field.setClickable(true);
+        field.setOnClickListener(v -> showMmssPicker(field, titleRes));
+    }
+
+    private void showMmssPicker(EditText field, int titleRes) {
+        int total = parseMmss(field.getText().toString());
+        float d = getResources().getDisplayMetrics().density;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setGravity(Gravity.CENTER);
+        int pad = Math.round(16 * d);
+        box.setPadding(pad, pad, pad, pad);
+
+        NumberPicker min = new NumberPicker(this);
+        min.setMinValue(0);
+        min.setMaxValue(59);
+        min.setValue(total / 60);
+        NumberPicker sec = new NumberPicker(this);
+        sec.setMinValue(0);
+        sec.setMaxValue(59);
+        sec.setValue(total % 60);
+        sec.setFormatter(i -> String.format(Locale.US, "%02d", i));
+
+        TextView colon = new TextView(this);
+        colon.setText(":");
+        colon.setTextSize(26);
+        colon.setPadding(pad / 2, 0, pad / 2, 0);
+
+        box.addView(min);
+        box.addView(colon);
+        box.addView(sec);
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(titleRes)
+                .setView(box)
+                .setPositiveButton(android.R.string.ok,
+                        (dlg, w) -> field.setText(mmss(min.getValue() * 60 + sec.getValue())))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private static String mmss(int totalSeconds) {
