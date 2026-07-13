@@ -184,6 +184,9 @@ public class SegmentResultsActivity extends Activity {
         nm.setText(row.name);
         nm.setTextSize(17);
         nm.setTextColor(0xFF111111);
+        // Keep a gap on both sides so a right-aligned Hebrew name never touches
+        // the bib on one side or the time on the other.
+        nm.setPadding(dp(10), 0, dp(12), 0);
         nm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         r.addView(nm);
         TextView tv = new TextView(this);
@@ -191,7 +194,8 @@ public class SegmentResultsActivity extends Activity {
         tv.setTextSize(17);
         tv.setTextColor(0xFF111111);
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
-        tv.setPadding(0, 0, dp(8), 0);
+        tv.setGravity(Gravity.END);
+        tv.setPadding(dp(6), 0, dp(8), 0);
         r.addView(tv);
 
         TextView chevron = new TextView(this);

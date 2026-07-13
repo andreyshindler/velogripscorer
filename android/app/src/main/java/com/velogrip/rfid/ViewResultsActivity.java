@@ -163,6 +163,10 @@ public class ViewResultsActivity extends Activity {
         tv.setText(label);
         tv.setTextSize(17);
         tv.setTextColor(0xFF111111);
+        // Align every label to the row's start edge so Hebrew categories
+        // (e.g. "עד 44") line up in the same column as the English ones
+        // instead of jumping to the right.
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(tv);
 
