@@ -42,8 +42,9 @@ public class RaceTimingActivity extends Activity {
     private int totalPages = 1, racerTotalCache;
     private String lastPagerSig = "";
     private boolean fastTap = false; // hide results, grid fills the screen
-    private boolean showSplits = true;
+    private boolean showNames = false; // show racer name/category on the tiles
     private long lastSplitMs = -1;
+    private String lastTapText;      // "13th 2:19:16.9 +…: name" for the hint strip
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
     // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
@@ -87,14 +88,15 @@ public class RaceTimingActivity extends Activity {
         findViewById(R.id.prevPage).setOnClickListener(v -> pager.goToPage(pager.currentPage() - 1, true));
         findViewById(R.id.nextPage).setOnClickListener(v -> pager.goToPage(pager.currentPage() + 1, true));
 
-        findViewById(R.id.aSplits).setOnClickListener(v -> { showSplits = true; render(); });
-        findViewById(R.id.bHide).setOnClickListener(v -> { showSplits = false; render(); });
+        findViewById(R.id.aSplits).setOnClickListener(v -> { showNames = !showNames; applyNamesMode(); });
         findViewById(R.id.aControl).setOnClickListener(v -> raceControl());
         findViewById(R.id.aMoreT).setOnClickListener(v -> togglePage(true));
         findViewById(R.id.bMoreT).setOnClickListener(v -> togglePage(false));
         findViewById(R.id.aNormal).setOnClickListener(v -> { fastTap = !fastTap; applyViewMode(); });
         findViewById(R.id.aStartList).setOnClickListener(v -> startActivity(new Intent(this, StartListActivity.class)));
-        int[] stubs = {R.id.bPause, R.id.bDist, R.id.bCat};
+        findViewById(R.id.bPause).setOnClickListener(v ->
+                startActivity(new Intent(this, RaceProgressActivity.class)));
+        int[] stubs = {R.id.bHide, R.id.bDist, R.id.bCat};
         for (int id : stubs) findViewById(id).setOnClickListener(v ->
                 Toast.makeText(this, R.string.view_option_unsupported, Toast.LENGTH_SHORT).show());
 
@@ -136,13 +138,23 @@ public class RaceTimingActivity extends Activity {
         pager.post(this::render);     // after layout, the pager height is known
     }
 
-    /** Boxes per page: fixed in Normal view; as many rows as fit in Fast-tap. */
+    /** Show names uses wider tiles, so fewer columns. */
+    private int cols() { return showNames ? 2 : 4; }
+
+    private void applyNamesMode() {
+        ((TextView) findViewById(R.id.aNamesLabel)).setText(showNames ? R.string.hide_name : R.string.show_names);
+        lastPagerSig = "";        // column count / tile content changed -> rebuild
+        pager.post(this::render);
+    }
+
+    /** Boxes per page: fixed rows in Normal view; as many rows as fit in Fast-tap. */
     private int pageSize() {
-        if (!fastTap) return PAGE_SIZE;
+        int c = cols();
+        int rowH = dp(showNames ? 88 : 72);
+        if (!fastTap) return 5 * c;            // ~5 rows
         int h = pager.getHeight();
-        if (h <= 0) return 24;                 // fallback until the pager is measured
-        int rows = Math.max(1, h / dp(72));    // ~72dp per box row
-        return rows * 4;
+        if (h <= 0) return 6 * c;              // fallback until the pager is measured
+        return Math.max(1, h / rowH) * c;
     }
 
     // ---- race clock ----
@@ -266,11 +278,35 @@ public class RaceTimingActivity extends Activity {
     private void updateHint() {
         if (swapBib != null) {
             hint.setText(R.string.tap_correct_racer);
-        } else if (showSplits && lastSplitMs >= 0) {
-            hint.setText(getString(R.string.finish_split, RaceEngine.formatElapsed(lastSplitMs, 1)));
+            return;
+        }
+        String pages = getString(R.string.page_counts, racerTotalCache, page + 1, totalPages);
+        if (lastTapText != null) {
+            hint.setText(lastTapText + "   " + pages);
         } else {
             hint.setText(getString(R.string.timing_hint, racerTotalCache, page + 1, totalPages));
         }
+    }
+
+    private String ordinal(int n) {
+        int mod100 = n % 100;
+        if (mod100 >= 11 && mod100 <= 13) return n + "th";
+        switch (n % 10) {
+            case 1: return n + "st";
+            case 2: return n + "nd";
+            case 3: return n + "rd";
+            default: return n + "th";
+        }
+    }
+
+    private TextView line(String text, int sizeSp, boolean bold, int color) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextSize(sizeSp);
+        t.setGravity(Gravity.CENTER);
+        t.setTextColor(color);
+        if (bold) t.setTypeface(null, android.graphics.Typeface.BOLD);
+        return t;
     }
 
     /** Tap the seq number: confirm cancelling this recorded entry. */
@@ -341,7 +377,7 @@ public class RaceTimingActivity extends Activity {
         int pages = Math.max(1, (int) Math.ceil(tiles.size() / (double) size));
         for (int pg = 0; pg < pages; pg++) {
             GridLayout g = new GridLayout(this);
-            g.setColumnCount(4);
+            g.setColumnCount(cols());
             g.setLayoutParams(new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT));
             fillGrid(g, tiles.subList(pg * size, Math.min(tiles.size(), (pg + 1) * size)),
                     doneBibs, pendingBibs);
@@ -363,7 +399,7 @@ public class RaceTimingActivity extends Activity {
                 View blank = new View(this);
                 GridLayout.LayoutParams blp = new GridLayout.LayoutParams();
                 blp.width = 0;
-                blp.height = dp(64);
+                blp.height = dp(showNames ? 86 : 64);
                 blp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
                 blp.setMargins(margin, margin, margin, margin);
                 blank.setLayoutParams(blp);
@@ -373,34 +409,29 @@ public class RaceTimingActivity extends Activity {
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER);
-            tile.setPadding(dp(6), dp(14), dp(6), dp(14));
+            tile.setPadding(dp(8), dp(12), dp(8), dp(12));
 
-            TextView top = new TextView(this);
-            top.setTextSize(20);
-            top.setTypeface(null, android.graphics.Typeface.BOLD);
-            top.setGravity(Gravity.CENTER);
-            TextView bottom = new TextView(this);
-            bottom.setTextSize(13);
-            bottom.setGravity(Gravity.CENTER);
-
-            if (t instanceof String) { // No Bib
+            if (t instanceof String) { // No Bib / Unknown Racer
                 tile.setBackground(roundedTile(0xFF8A8F98));
-                top.setText(R.string.no_bib);
-                top.setTextColor(0xFFFFFFFF);
-                bottom.setText("");
+                tile.addView(line(getString(showNames ? R.string.unknown_racer : R.string.no_bib),
+                        showNames ? 17 : 20, true, 0xFFFFFFFF));
                 tile.setOnClickListener(v -> recordNoBib());
             } else {
                 final RaceStore.Racer r = (RaceStore.Racer) t;
                 boolean waiting = pendingBibs.contains(r.bib);
                 tile.setBackground(roundedTile(waiting ? 0xFFEDE023 : 0xFF8DC63F)); // yellow when time pending
-                top.setText(r.bib);
-                top.setTextColor(0xFF1A1A1A);
-                bottom.setText(waiting ? R.string.time_pending : R.string.tap_to_finish);
-                bottom.setTextColor(0xFF1A3A0A);
+                if (showNames) {
+                    tile.addView(line(r.bib + " - " + r.name, 17, true, 0xFF1A1A1A));
+                    String sub = r.distance
+                            + (r.category.isEmpty() ? "" : (r.distance.isEmpty() ? "" : " - ") + r.category);
+                    if (!sub.isEmpty()) tile.addView(line(sub, 13, false, 0xFF294715));
+                    tile.addView(line(getString(waiting ? R.string.time_pending : R.string.tap_to_finish), 12, false, 0xFF1A3A0A));
+                } else {
+                    tile.addView(line(r.bib, 20, true, 0xFF1A1A1A));
+                    tile.addView(line(getString(waiting ? R.string.time_pending : R.string.tap_to_finish), 13, false, 0xFF1A3A0A));
+                }
                 tile.setOnClickListener(v -> onRacerTap(r));
             }
-            tile.addView(top);
-            tile.addView(bottom);
 
             GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
             lp.width = 0;
@@ -417,6 +448,8 @@ public class RaceTimingActivity extends Activity {
         int decimals = prefs.timingDecimals();
         int place = 1;
         long prevElapsed = -1;
+        long leaderElapsed = -1;
+        lastTapText = null;
         for (final RaceEngine.Result r : results) {
             if (!"finished".equals(r.status)) continue;
             String time = RaceEngine.formatElapsed(r.elapsedMs, decimals);
@@ -426,6 +459,10 @@ public class RaceTimingActivity extends Activity {
                     () -> cancelEntry(seq, r), () -> bibActions(seq, r)));
             if (prevElapsed >= 0) lastSplitMs = r.elapsedMs - prevElapsed;
             prevElapsed = r.elapsedMs;
+            if (leaderElapsed < 0) leaderElapsed = r.elapsedMs;
+            String gap = RaceEngine.formatElapsed(Math.max(0, r.elapsedMs - leaderElapsed), 1);
+            lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
+                    r.name == null || r.name.isEmpty() ? r.bib : r.name);
         }
         // pending entries at the bottom: bib waiting for a time, or a time
         // waiting for a bib

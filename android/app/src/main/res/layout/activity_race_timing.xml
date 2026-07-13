@@ -165,8 +165,8 @@
         android:orientation="horizontal"
         android:paddingVertical="6dp">
         <LinearLayout android:id="@+id/aSplits" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="±" />
-            <TextView style="@style/BottomText" android:text="@string/show_splits" />
+            <TextView style="@style/BottomIcon" android:text="🏃" />
+            <TextView android:id="@+id/aNamesLabel" style="@style/BottomText" android:text="@string/show_names" />
         </LinearLayout>
         <LinearLayout android:id="@+id/aControl" style="@style/BottomAction">
             <TextView style="@style/BottomIcon" android:text="⏹" android:textColor="#E74C3C" />
@@ -196,8 +196,8 @@
         android:paddingVertical="6dp"
         android:visibility="gone">
         <LinearLayout android:id="@+id/bPause" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="⏸" />
-            <TextView style="@style/BottomText" android:text="@string/pause_scroll" />
+            <TextView style="@style/BottomIcon" android:text="📊" />
+            <TextView style="@style/BottomText" android:text="@string/progress" />
         </LinearLayout>
         <LinearLayout android:id="@+id/bHide" style="@style/BottomAction">
             <TextView style="@style/BottomIcon" android:text="±" />

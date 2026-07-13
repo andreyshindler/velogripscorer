@@ -171,6 +171,13 @@
             android:parentActivityName=".MainActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".RaceProgressActivity"
+            android:label="@string/race_progress_title"
+            android:parentActivityName=".RaceTimingActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:exported="false" />
+
         <service
             android:name=".BridgeService"
             android:foregroundServiceType="dataSync"
