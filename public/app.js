@@ -711,13 +711,13 @@ async function viewPublicResults(id, tab) {
     const qi = location.hash.indexOf('?');
     const qs = qi >= 0 ? new URLSearchParams(location.hash.slice(qi + 1)) : null;
     if (tab === 'live' && qs && qs.has('dist')) {
-      body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
+      body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '', c.status === 'finished');
     } else if (qs && qs.has('dist')) {
       body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
     } else if (tab === 'full') body.innerHTML = fullResultsTable(results);
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
     else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
-    else body.innerHTML = raceWinnersTables(id, results);
+    else body.innerHTML = raceWinnersTables(id, results, c.status === 'finished');
   };
   render(data.results);
 
@@ -823,7 +823,7 @@ function fmtElapsedMs(ms) {
 
 // Live race / progress view: scope summary (finished / on course / not
 // started) plus the live finish order. Refreshes with the results via SSE.
-function liveRaceView(results, id, dist, cat, gender) {
+function liveRaceView(results, id, dist, cat, gender, raceDone) {
   let scope = results.filter((r) => (r.distance || '') === dist);
   if (gender === 'Male') scope = scope.filter((r) => isMaleW(r.gender));
   else if (gender === 'Female') scope = scope.filter((r) => isFemaleW(r.gender));
@@ -852,7 +852,7 @@ function liveRaceView(results, id, dist, cat, gender) {
       .map((r) => `<span class="pill">${esc(r.bib || '')} · ${esc(r.participant)}</span>`).join('')}</div>` : '';
   return `
     <p style="margin:12px 0 8px"><a href="#/results/${id}/winners" style="color:var(--brand,#2f8a57);font-weight:700">${t('race_winners')}</a>
-      <span class="muted"> » ${crumb} — ${t('live_race')}</span></p>
+      <span class="muted"> » ${crumb} — ${raceDone ? t('results_word') : t('live_race')}</span></p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       ${stat(scope.length, t('racers'), 'total')}
       ${stat(finished.length, t('status_finished_r'), 'finished')}
@@ -906,7 +906,7 @@ function filteredResultsTable(results, id, dist, cat, gender) {
     </tr></thead><tbody>${finishedHtml}${othersHtml}</tbody></table></div>`;
 }
 
-function raceWinnersTables(id, results) {
+function raceWinnersTables(id, results, raceDone) {
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
   return `<p class="muted" style="margin:8px 0">▸ ${t('click_green_category')}</p>` + dists.map((d) => {
@@ -922,7 +922,7 @@ function raceWinnersTables(id, results) {
         <td>${leader ? esc(leader.participant) : '–'}</td>
         <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
         <td><strong>${scope.length}</strong></td>
-        <td><a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${t('live_race')}</a></td>
+        <td><a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${raceDone ? t('results_word') : t('live_race')}</a></td>
         ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
       </tr>`;
     };
@@ -930,7 +930,7 @@ function raceWinnersTables(id, results) {
       <table class="board winners mt">
         <thead><tr>
           <th>${esc(d || t('overall'))}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
-          <th>${t('total_racers')}</th><th>${t('progress_view')}</th>
+          <th>${t('total_racers')}</th><th>${raceDone ? t('results_word') : t('progress_view')}</th>
           ${multiLap ? `<th>${t('lap_times')}</th>` : ''}
         </tr></thead>
         <tbody>
