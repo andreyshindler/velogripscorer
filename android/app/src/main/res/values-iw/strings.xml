@@ -143,6 +143,7 @@
     <string name="cancel_popup">ביטול</string>
     <string name="still_on_course">יש עדיין רוכבים על המסלול.</string>
     <string name="mark_dnf">סמן רוכבים כ-DNF</string>
+    <string name="mark_dns">סמן רוכבים כ-DNS</string>
     <string name="mark_laps_down">סמן רוכבים כ״הקפה מאחור״</string>
     <string name="live_results_on">תוצאות חיות פעילות — הדירוג יועלה במהלך המרוץ.</string>
     <string name="live_results_off">תוצאות חיות כבויות.</string>

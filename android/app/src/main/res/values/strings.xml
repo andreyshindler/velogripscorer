@@ -143,6 +143,7 @@
     <string name="cancel_popup">Cancel popup</string>
     <string name="still_on_course">There are still racers on course.</string>
     <string name="mark_dnf">Mark racers as DNF</string>
+    <string name="mark_dns">Mark racers as DNS</string>
     <string name="mark_laps_down">Mark racers as laps down</string>
     <string name="live_results_on">Live results ON — standings upload as the race runs.</string>
     <string name="live_results_off">Live results OFF.</string>

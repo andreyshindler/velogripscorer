@@ -488,36 +488,44 @@ public class RaceTimingActivity extends Activity {
                 .show();
     }
 
-    /** Finish race: any racer with no finish time is marked DNS, then results. */
+    /** Finish race: if racers are still out, ask whether to mark them DNS or
+     *  DNF; either way (or when everyone finished) go to the results. */
     private void finishRace() {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
                 prefs.raceFinalized());
-        final List<RaceEngine.Result> noTime = new ArrayList<>();
+        final List<RaceEngine.Result> onCourse = new ArrayList<>();
         for (RaceEngine.Result r : results) {
-            // no finish time and not already given a declared status -> DNS
-            if (!"finished".equals(r.status)
-                    && (r.status == null || r.status.isEmpty()
-                        || "on_course".equals(r.status) || "not_started".equals(r.status))) {
-                noTime.add(r);
-            }
+            if ("on_course".equals(r.status) || "not_started".equals(r.status)) onCourse.add(r);
         }
-        String message = noTime.isEmpty()
-                ? getString(R.string.finish_race_confirm)
-                : getString(R.string.finish_race_dns, noTime.size());
+        if (onCourse.isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.rc_finish)
+                    .setMessage(R.string.finish_race_confirm)
+                    .setPositiveButton(R.string.finish_race_ok, (d, w) -> goToResults())
+                    .setNegativeButton(R.string.cancel_popup, null)
+                    .show();
+            return;
+        }
+        // Racers still out: mark them DNS or DNF before showing results.
         new android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.rc_finish)
-                .setMessage(message)
-                .setPositiveButton(R.string.finish_race_ok, (d, w) -> {
-                    for (RaceEngine.Result r : noTime) {
-                        if (!r.bib.isEmpty()) store.setRacerStatus(r.bib, "DNS"); // no time -> DNS
-                    }
-                    stopReader(); // race over: stop capturing
-                    startActivity(new Intent(this, ViewResultsActivity.class));
-                })
+                .setTitle(R.string.still_on_course)
+                .setItems(new String[]{getString(R.string.mark_dns), getString(R.string.mark_dnf)},
+                        (d, which) -> {
+                            String status = which == 0 ? "DNS" : "DNF";
+                            for (RaceEngine.Result r : onCourse) {
+                                if (!r.bib.isEmpty()) store.setRacerStatus(r.bib, status);
+                            }
+                            goToResults();
+                        })
                 .setNegativeButton(R.string.cancel_popup, null)
                 .show();
+    }
+
+    private void goToResults() {
+        stopReader(); // race over: stop capturing
+        startActivity(new Intent(this, ViewResultsActivity.class));
     }
 
     /** Restart (false start): keep or discard recorded times, un-gun the race

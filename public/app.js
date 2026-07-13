@@ -62,7 +62,6 @@ const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 function renderChrome() {
   const authArea = document.getElementById('auth-area');
-  document.getElementById('nav-create').hidden = !state.user;
   document.getElementById('nav-startlists').hidden = !state.user;
   document.getElementById('nav-admin').hidden = !(state.user && state.user.role === 'admin');
   document.getElementById('bell').hidden = !state.user;
@@ -132,7 +131,6 @@ async function route() {
   try {
     if (!page) return viewHome();
     if (page === 'login') return viewLogin();
-    if (page === 'create') return viewCreate();
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
@@ -152,7 +150,6 @@ async function viewHome() {
     <div class="hero">
       <h1>🏁 ${t('hero_title')}</h1>
       <p>${t('hero_sub')}</p>
-      <a class="btn" href="${state.user ? '#/create' : '#/login'}">${t('create_race')}</a>
     </div>
     <form class="searchbar" id="search-form" role="search">
       <input type="search" id="q" placeholder="${t('search_placeholder')}" aria-label="${t('search_placeholder')}">
@@ -241,71 +238,6 @@ function viewLogin() {
     } catch (err) { toast(err.message, true); }
   };
 }
-
-// ---------- create race ----------
-
-function viewCreate() {
-  if (!state.user) { location.hash = '#/login'; return; }
-  main.innerHTML = `
-    <div class="card form-narrow">
-      <h1>${t('create_race_title')}</h1>
-      <form id="create-form">
-        <label for="c-title">${t('contest_title')}</label>
-        <input id="c-title" required maxlength="120">
-        <div class="row2">
-          <div>
-            <label for="c-sport">${t('sport')}</label>
-            <input id="c-sport" placeholder="${t('sport_hint')}" list="sport-list">
-            <datalist id="sport-list">
-              ${['Cycling — Road', 'Cycling — MTB XCO', 'Cycling — Gravel', 'Running', 'Trail running', 'Triathlon', 'Duathlon', 'Motocross'].map((s) => `<option value="${s}">`).join('')}
-            </datalist>
-          </div>
-          <div>
-            <label for="c-location">${t('location')}</label>
-            <input id="c-location" placeholder="${t('location_hint')}">
-          </div>
-        </div>
-        <label for="c-desc">${t('description')}</label>
-        <textarea id="c-desc" rows="3"></textarea>
-        <div class="row2">
-          <div><label for="c-start">${t('start_date')}</label><input id="c-start" type="datetime-local" required></div>
-          <div><label for="c-end">${t('end_date')}</label><input id="c-end" type="datetime-local" required></div>
-        </div>
-        <div class="row2">
-          <div>
-            <label for="c-visibility">${t('visibility')}</label>
-            <select id="c-visibility"><option value="public">${t('public')}</option><option value="private">${t('private')}</option></select>
-          </div>
-          <div>
-            <label for="c-tags">${t('tags')}</label>
-            <input id="c-tags" placeholder="mtb, xco">
-          </div>
-        </div>
-        <div class="mt"><button class="btn" type="submit">${t('create')}</button></div>
-      </form>
-    </div>`;
-
-  document.getElementById('create-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const body = {
-      kind: 'race',
-      title: document.getElementById('c-title').value,
-      sport: document.getElementById('c-sport').value,
-      location: document.getElementById('c-location').value,
-      description: document.getElementById('c-desc').value,
-      category: 'other',
-      tags: document.getElementById('c-tags').value.split(',').map((s) => s.trim()).filter(Boolean),
-      visibility: document.getElementById('c-visibility').value,
-      start_at: new Date(document.getElementById('c-start').value).toISOString(),
-      end_at: new Date(document.getElementById('c-end').value).toISOString(),
-    };
-    try {
-      const contest = await api('/contests', { method: 'POST', body });
-      location.hash = `#/contest/${contest.id}/manage`;
-    } catch (err) { toast(err.message, true); }
-  };
-}
-
 
 // ---------- my start lists ----------
 
