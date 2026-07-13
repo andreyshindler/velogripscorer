@@ -3,8 +3,10 @@ package com.velogrip.rfid;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.velogrip.rfid.db.RaceStore;
@@ -59,7 +61,7 @@ public class RacerInfoActivity extends Activity {
                 store.editRacer(bib, val, r.category, r.wave)));
         box.addView(editableRow(getString(R.string.distance), r.distance, val ->
                 store.setRacerDistance(bib, val)));
-        box.addView(editableRow(getString(R.string.category), r.category, val ->
+        box.addView(categoryRow(r.category, val ->
                 store.editRacer(bib, r.name, val, r.wave)));
         box.addView(editableRow(getString(R.string.wave), r.wave, val ->
                 store.editRacer(bib, r.name, r.category, val)));
@@ -89,6 +91,39 @@ public class RacerInfoActivity extends Activity {
         edit.setOnClickListener(v -> { onSave.accept(field.getText().toString().trim()); render(); });
         row.addView(field);
         row.addView(edit);
+        return row;
+    }
+
+    /** Category as a dropdown of every category in the start list (plus a
+     *  "none" option); saves the moment you pick a new one. */
+    private LinearLayout categoryRow(String current, java.util.function.Consumer<String> onSave) {
+        LinearLayout row = baseRow(getString(R.string.category));
+
+        java.util.TreeSet<String> cats = new java.util.TreeSet<>();
+        for (RaceStore.Racer x : store.startListEntries()) if (!x.category.isEmpty()) cats.add(x.category);
+        if (current != null && !current.isEmpty()) cats.add(current);
+
+        final java.util.List<String> values = new java.util.ArrayList<>();
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        values.add(""); labels.add(getString(R.string.category_none));
+        for (String c : cats) { values.add(c); labels.add(c); }
+
+        Spinner sp = new Spinner(this);
+        ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sp.setAdapter(ad);
+        final int initial = Math.max(0, values.indexOf(current == null ? "" : current));
+        sp.setSelection(initial);
+        sp.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        sp.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> p, android.view.View v, int pos, long id) {
+                if (pos == initial) return;            // skip the initial programmatic selection
+                onSave.accept(values.get(pos));
+                render();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p) { }
+        });
+        row.addView(sp);
         return row;
     }
 
