@@ -135,6 +135,19 @@ document.getElementById('lang-toggle').addEventListener('click', () => {
   route();
 });
 
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+});
+// Sync the toggle icon with the theme set by the no-flash head script.
+applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+
 // ---------- router ----------
 
 const main = document.getElementById('main');

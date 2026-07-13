@@ -6,6 +6,14 @@
   <title>VeloGripScorer — Online Competitions</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>">
+  <script>
+    // Apply the saved (or system) theme before first paint to avoid a flash.
+    (function () {
+      var t = localStorage.getItem('theme');
+      if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main" data-i18n="skip_to_content">Skip to content</a>
@@ -18,6 +26,7 @@
       <a href="#/admin" id="nav-admin" hidden data-i18n="nav_admin">Admin</a>
     </nav>
     <div class="topbar-right">
+      <button id="theme-toggle" class="ghost" aria-label="Toggle dark mode">🌙</button>
       <button id="lang-toggle" class="ghost" aria-label="Switch language">עברית</button>
       <div class="bell-wrap">
         <button id="bell" class="ghost" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" hidden>
