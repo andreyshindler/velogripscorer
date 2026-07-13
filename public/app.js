@@ -349,7 +349,7 @@ async function pickLocationOnMap(onPick) {
   try { L = await loadLeaflet(); } catch { toast(t('map_unavailable'), true); return; }
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `<div style="background:#fff;border-radius:10px;max-width:560px;width:100%;overflow:hidden">
+  overlay.innerHTML = `<div style="background:var(--surface);border-radius:10px;max-width:560px;width:100%;overflow:hidden">
     <div id="pickmap" style="height:360px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px">
       <button class="btn small secondary" id="map-cancel">${t('cancel')}</button>
@@ -688,7 +688,7 @@ async function viewPublicResults(id, tab) {
   main.innerHTML = `
     <div class="pubresults">
       <h1 style="text-align:center;margin-bottom:2px">${esc(c.title)}</h1>
-      <p style="text-align:center;margin:0 0 12px;color:#666">${esc(new Date(c.start_at).toLocaleString())} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
+      <p style="text-align:center;margin:0 0 12px;color:var(--muted)">${esc(new Date(c.start_at).toLocaleString())} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
       ${raceInfoPanel(c, data.results)}
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
@@ -756,11 +756,11 @@ function raceInfoPanel(c, results) {
       <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:5px 10px;margin:-12px -12px 8px;border-radius:8px 8px 0 0;font-size:13px">${t('race_info')}</div>
       <table style="width:100%;border-collapse:collapse;font-size:12.5px">
         <tbody>${rows.map(([k, v]) => `<tr>
-          <td style="text-align:right;color:#777;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">${k}:</td>
+          <td style="text-align:right;color:var(--muted);padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">${k}:</td>
           <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
       </table>
-      <div style="border-top:1px solid #ddd;margin-top:auto;padding-top:6px;color:#777;font-size:12.5px">
-        ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer_name || (c.organizer && c.organizer.name) || '')}</strong>
+      <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:6px;color:var(--muted);font-size:12.5px">
+        ${t('organized_by')}: <strong style="color:var(--text)">${esc(c.organizer_name || (c.organizer && c.organizer.name) || '')}</strong>
       </div>
     </div>
   </div>`;
@@ -835,9 +835,9 @@ function liveRaceView(results, id, dist, cat, gender) {
   const genderCrumb = gender === 'Male' ? t('male') + ' ' : gender === 'Female' ? t('female') + ' ' : '';
   const crumb = `${esc(dist || t('overall'))} ${genderCrumb}- ${cat ? esc(cat) : t('overall')}`;
   const nameCell = (r) => `${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}`;
-  const stat = (n, label, bg) => `<div style="flex:1;min-width:88px;text-align:center;padding:10px;border-radius:8px;background:${bg}">
-    <div style="font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums">${n}</div>
-    <div class="muted" style="font-size:.8rem">${label}</div></div>`;
+  const stat = (n, label, cls) => `<div class="stat-tile ${cls}">
+    <div class="stat-num">${n}</div>
+    <div class="muted stat-label">${label}</div></div>`;
   const finishedHtml = finished.map((r, i) => {
     const diff = !leader || r.elapsed_ms === leader.elapsed_ms
       ? (i === 0 ? '–' : '') : '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
@@ -854,10 +854,10 @@ function liveRaceView(results, id, dist, cat, gender) {
     <p style="margin:12px 0 8px"><a href="#/results/${id}/winners" style="color:var(--brand,#2f8a57);font-weight:700">${t('race_winners')}</a>
       <span class="muted"> » ${crumb} — ${t('live_race')}</span></p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      ${stat(scope.length, t('racers'), 'var(--menu-section-bg,#eeeeee)')}
-      ${stat(finished.length, t('status_finished_r'), '#e6f2da')}
-      ${stat(onCourse.length, t('status_on_course'), '#fdf3d0')}
-      ${stat(notStarted.length, t('status_not_started'), '#f0f0f0')}
+      ${stat(scope.length, t('racers'), 'total')}
+      ${stat(finished.length, t('status_finished_r'), 'finished')}
+      ${stat(onCourse.length, t('status_on_course'), 'oncourse')}
+      ${stat(notStarted.length, t('status_not_started'), 'notstarted')}
     </div>
     <div style="overflow-x:auto"><table class="board"><thead><tr>
       <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>
