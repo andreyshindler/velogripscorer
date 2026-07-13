@@ -128,6 +128,7 @@
     <string name="hide_splits">Hide splits</string>
     <string name="race_control">Race control</string>
     <string name="normal_view">Normal view</string>
+    <string name="fast_tap_view">Fast-tap view</string>
     <string name="keypad_view">Keypad view</string>
     <string name="pause_scroll">Pause scroll</string>
     <string name="next_distance">Next\ndistance</string>

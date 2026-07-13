@@ -41,6 +41,7 @@ public class RaceTimingActivity extends Activity {
     private int page;
     private int totalPages = 1, racerTotalCache;
     private String lastPagerSig = "";
+    private boolean fastTap = false; // hide results, grid fills the screen
     private boolean showSplits = true;
     private long lastSplitMs = -1;
     // Pre-entry: a racer tapped first waits here for the next timer press.
@@ -91,7 +92,9 @@ public class RaceTimingActivity extends Activity {
         findViewById(R.id.aControl).setOnClickListener(v -> raceControl());
         findViewById(R.id.aMoreT).setOnClickListener(v -> togglePage(true));
         findViewById(R.id.bMoreT).setOnClickListener(v -> togglePage(false));
-        int[] stubs = {R.id.aNormal, R.id.aKeypad, R.id.bPause, R.id.bDist, R.id.bCat};
+        findViewById(R.id.aNormal).setOnClickListener(v -> { fastTap = !fastTap; applyViewMode(); });
+        findViewById(R.id.aStartList).setOnClickListener(v -> startActivity(new Intent(this, StartListActivity.class)));
+        int[] stubs = {R.id.bPause, R.id.bDist, R.id.bCat};
         for (int id : stubs) findViewById(id).setOnClickListener(v ->
                 Toast.makeText(this, R.string.view_option_unsupported, Toast.LENGTH_SHORT).show());
 
@@ -116,6 +119,30 @@ public class RaceTimingActivity extends Activity {
     private void togglePage(boolean showB) {
         findViewById(R.id.tbarA).setVisibility(showB ? View.GONE : View.VISIBLE);
         findViewById(R.id.tbarB).setVisibility(showB ? View.VISIBLE : View.GONE);
+    }
+
+    /** Fast-tap view hides the finish list so the bib grid fills the screen with
+     *  as many boxes as fit; Normal view shows the finish list below the grid. */
+    private void applyViewMode() {
+        int vis = fastTap ? View.GONE : View.VISIBLE;
+        findViewById(R.id.resultsHeader).setVisibility(vis);
+        findViewById(R.id.resultsScroll).setVisibility(vis);
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) pager.getLayoutParams();
+        lp.height = fastTap ? 0 : LinearLayout.LayoutParams.WRAP_CONTENT;
+        lp.weight = fastTap ? 1 : 0;
+        pager.setLayoutParams(lp);
+        ((TextView) findViewById(R.id.aNormalLabel)).setText(fastTap ? R.string.fast_tap_view : R.string.normal_view);
+        lastPagerSig = "";            // page size changed -> force a rebuild
+        pager.post(this::render);     // after layout, the pager height is known
+    }
+
+    /** Boxes per page: fixed in Normal view; as many rows as fit in Fast-tap. */
+    private int pageSize() {
+        if (!fastTap) return PAGE_SIZE;
+        int h = pager.getHeight();
+        if (h <= 0) return 24;                 // fallback until the pager is measured
+        int rows = Math.max(1, h / dp(72));    // ~72dp per box row
+        return rows * 4;
     }
 
     // ---- race clock ----
@@ -218,7 +245,7 @@ public class RaceTimingActivity extends Activity {
         List<Object> tiles = new ArrayList<>();
         tiles.add(NO_BIB);
         tiles.addAll(allRacers);
-        totalPages = Math.max(1, (int) Math.ceil(tiles.size() / (double) PAGE_SIZE));
+        totalPages = Math.max(1, (int) Math.ceil(tiles.size() / (double) pageSize()));
         if (page >= totalPages) page = totalPages - 1;
         if (page < 0) page = 0;
         renderPager(tiles, doneBibs, pendingBibs);
@@ -301,7 +328,7 @@ public class RaceTimingActivity extends Activity {
         }
         // Only rebuild when the grid actually changed — otherwise a read would
         // reflow the pages and yank the pager while the operator is swiping.
-        StringBuilder sb = new StringBuilder().append(w).append('|');
+        StringBuilder sb = new StringBuilder().append(w).append('|').append(pageSize()).append('|');
         for (Object t : tiles) sb.append(t instanceof String ? "NB" : ((RaceStore.Racer) t).bib).append(',');
         sb.append('|').append(new java.util.TreeSet<>(doneBibs));
         sb.append('|').append(new java.util.TreeSet<>(pendingBibs));
@@ -310,12 +337,13 @@ public class RaceTimingActivity extends Activity {
         lastPagerSig = sig;
 
         pagerInner.removeAllViews();
-        int pages = Math.max(1, (int) Math.ceil(tiles.size() / (double) PAGE_SIZE));
+        int size = pageSize();
+        int pages = Math.max(1, (int) Math.ceil(tiles.size() / (double) size));
         for (int pg = 0; pg < pages; pg++) {
             GridLayout g = new GridLayout(this);
             g.setColumnCount(4);
             g.setLayoutParams(new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT));
-            fillGrid(g, tiles.subList(pg * PAGE_SIZE, Math.min(tiles.size(), (pg + 1) * PAGE_SIZE)),
+            fillGrid(g, tiles.subList(pg * size, Math.min(tiles.size(), (pg + 1) * size)),
                     doneBibs, pendingBibs);
             pagerInner.addView(g);
         }

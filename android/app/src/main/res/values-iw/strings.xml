@@ -128,6 +128,7 @@
     <string name="hide_splits">הסתר פערים</string>
     <string name="race_control">בקרת מרוץ</string>
     <string name="normal_view">תצוגה רגילה</string>
+    <string name="fast_tap_view">תצוגת הקשה מהירה</string>
     <string name="keypad_view">תצוגת מקשים</string>
     <string name="pause_scroll">השהה גלילה</string>
     <string name="next_distance">מרחק\nהבא</string>
