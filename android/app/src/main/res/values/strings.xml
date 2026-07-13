@@ -310,6 +310,13 @@
     <string name="label_wifi_ssid">WiFi network name (SSID)</string>
     <string name="hint_wifi_ssid">RFID-ROUTER</string>
     <string name="label_wifi_pass">WiFi password</string>
+    <string name="wifi_connect">Connect</string>
+    <string name="wifi_connecting">Connecting to %1$s…</string>
+    <string name="wifi_connected_to">Connected to %1$s</string>
+    <string name="wifi_connect_failed">Could not connect</string>
+    <string name="wifi_lost">Connection lost</string>
+    <string name="wifi_needs_ssid">Enter the reader WiFi name first</string>
+    <string name="wifi_join_manually">Join the reader WiFi in system settings</string>
 
     <string name="notif_channel">Bridge status</string>
     <string name="notif_starting">Starting…</string>

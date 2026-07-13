@@ -36,6 +36,9 @@ public final class Prefs {
     public int pollIntervalMs() { return sp.getInt("pollIntervalMs", 1000); }
     public String wifiSsid() { return sp.getString("wifiSsid", ""); }
     public String wifiPass() { return sp.getString("wifiPass", ""); }
+    public void setWifi(String ssid, String pass) {
+        sp.edit().putString("wifiSsid", ssid.trim()).putString("wifiPass", pass).apply();
+    }
     public int dedupeWindowMs() { return sp.getInt("dedupeWindowMs", 2000); }
     public int suppressSecs() { return sp.getInt("suppressSecs", 10); }
     public int lapGapSecs() { return sp.getInt("lapGapSecs", 30); }

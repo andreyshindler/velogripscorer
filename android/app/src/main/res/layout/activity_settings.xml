@@ -9,6 +9,46 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <TextView style="@style/SettingsHeader" android:text="@string/section_wifi" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/wifi_help"
+            android:textSize="12sp" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_wifi_ssid" />
+        <EditText
+            android:id="@+id/wifiSsid"
+            style="@style/SettingsField"
+            android:hint="@string/hint_wifi_ssid"
+            android:inputType="text" />
+
+        <TextView style="@style/SettingsLabel" android:text="@string/label_wifi_pass" />
+        <EditText
+            android:id="@+id/wifiPass"
+            style="@style/SettingsField"
+            android:inputType="textPassword" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/wifiConnect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wifi_connect" />
+            <TextView
+                android:id="@+id/wifiStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="10dp"
+                android:paddingLeft="10dp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <TextView style="@style/SettingsHeader" android:text="@string/section_account" />
         <TextView
             android:layout_width="match_parent"
@@ -142,26 +182,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
-
-        <TextView style="@style/SettingsHeader" android:text="@string/section_wifi" />
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/wifi_help"
-            android:textSize="12sp" />
-
-        <TextView style="@style/SettingsLabel" android:text="@string/label_wifi_ssid" />
-        <EditText
-            android:id="@+id/wifiSsid"
-            style="@style/SettingsField"
-            android:hint="@string/hint_wifi_ssid"
-            android:inputType="text" />
-
-        <TextView style="@style/SettingsLabel" android:text="@string/label_wifi_pass" />
-        <EditText
-            android:id="@+id/wifiPass"
-            style="@style/SettingsField"
-            android:inputType="textPassword" />
 
         <Button
             android:id="@+id/save"

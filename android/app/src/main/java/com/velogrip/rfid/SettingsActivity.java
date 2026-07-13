@@ -1,11 +1,19 @@
 package com.velogrip.rfid;
 
 import android.app.Activity;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.net.wifi.WifiNetworkSpecifier;
+import android.os.Build;
 import android.os.Bundle;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.velogrip.rfid.net.Uploader;
@@ -19,6 +27,7 @@ public class SettingsActivity extends Activity {
     private EditText serverUrl, readerToken, readerHost, readerPort;
     private EditText onConnectHex, pollHex, pollInterval, wifiSsid, wifiPass, dedupeWindow;
     private Spinner protocol;
+    private ConnectivityManager.NetworkCallback wifiCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -135,6 +144,8 @@ public class SettingsActivity extends Activity {
             }).start();
         });
 
+        findViewById(R.id.wifiConnect).setOnClickListener(v -> connectReaderWifi());
+
         Button scanReader = findViewById(R.id.scanReader);
         scanReader.setOnClickListener(v -> {
             scanReader.setEnabled(false);
@@ -173,6 +184,62 @@ public class SettingsActivity extends Activity {
                 });
             }).start();
         });
+    }
+
+    /** Join the reader's WiFi to verify the SSID/password work. The timing
+     *  service makes its own bound request during a race; this is a manual
+     *  check so the organizer can confirm the reader network before starting. */
+    private void connectReaderWifi() {
+        String ssid = text(wifiSsid);
+        TextView status = findViewById(R.id.wifiStatus);
+        if (ssid.isEmpty()) {
+            Toast.makeText(this, R.string.wifi_needs_ssid, Toast.LENGTH_LONG).show();
+            return;
+        }
+        new Prefs(this).setWifi(ssid, wifiPass.getText().toString());
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            // Pre-Android 10 cannot join programmatically; open system WiFi.
+            status.setText(R.string.wifi_join_manually);
+            try {
+                startActivity(new android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS));
+            } catch (Exception ignored) { }
+            return;
+        }
+        WifiNetworkSpecifier.Builder spec = new WifiNetworkSpecifier.Builder().setSsid(ssid);
+        if (!wifiPass.getText().toString().isEmpty()) spec.setWpa2Passphrase(wifiPass.getText().toString());
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .setNetworkSpecifier(spec.build())
+                .build();
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        clearWifiCallback(cm);
+        status.setText(getString(R.string.wifi_connecting, ssid));
+        wifiCallback = new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network network) {
+                runOnUiThread(() -> status.setText(getString(R.string.wifi_connected_to, ssid)));
+            }
+            @Override public void onUnavailable() {
+                runOnUiThread(() -> status.setText(R.string.wifi_connect_failed));
+            }
+            @Override public void onLost(Network network) {
+                runOnUiThread(() -> status.setText(R.string.wifi_lost));
+            }
+        };
+        cm.requestNetwork(request, wifiCallback);
+    }
+
+    private void clearWifiCallback(ConnectivityManager cm) {
+        if (wifiCallback != null) {
+            try { cm.unregisterNetworkCallback(wifiCallback); } catch (IllegalArgumentException ignored) { }
+            wifiCallback = null;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        clearWifiCallback((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE));
     }
 
     /** Store the selected race's per-race reader token + contest, and reflect it in the UI. */

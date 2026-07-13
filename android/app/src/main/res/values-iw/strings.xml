@@ -310,6 +310,13 @@
     <string name="label_wifi_ssid">שם רשת WiFi (SSID)</string>
     <string name="hint_wifi_ssid">RFID-ROUTER</string>
     <string name="label_wifi_pass">סיסמת WiFi</string>
+    <string name="wifi_connect">התחבר</string>
+    <string name="wifi_connecting">מתחבר ל‑%1$s…</string>
+    <string name="wifi_connected_to">מחובר ל‑%1$s</string>
+    <string name="wifi_connect_failed">ההתחברות נכשלה</string>
+    <string name="wifi_lost">החיבור אבד</string>
+    <string name="wifi_needs_ssid">הזן תחילה את שם רשת ה‑WiFi של הקורא</string>
+    <string name="wifi_join_manually">התחבר לרשת הקורא בהגדרות המערכת</string>
 
     <string name="notif_channel">מצב הגשר</string>
     <string name="notif_starting">מתחיל…</string>
