@@ -507,9 +507,10 @@ async function viewContest(id, tab) {
   const generation = ++renderGeneration;
   const c = await api(`/contests/${id}`);
   if (generation !== renderGeneration) return; // a newer render superseded this one
-  const tabs = ['results', 'startlist', 'details'];
+  const tabs = ['details', 'startlist'];
   if (c.is_organizer) tabs.push('manage');
-  if (!tabs.includes(tab)) tab = 'results';
+  tabs.push('results');
+  if (!tabs.includes(tab)) tab = 'details';
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
@@ -547,30 +548,23 @@ async function viewContest(id, tab) {
   else if (tab === 'manage') renderManage(box, c);
 }
 
-function renderDetails(box, c) {
+async function renderDetails(box, c) {
+  const generation = renderGeneration;
+  // The race-info panel needs the roster (racer count + start type), which the
+  // results feed provides; fall back to an empty list if it isn't ready.
+  const data = await api(`/contests/${c.id}/race-results`).catch(() => ({ results: [] }));
+  if (generation !== renderGeneration) return;
   box.innerHTML = `
-    <div class="detail-grid">
-      <div class="card">
-        <p style="white-space:pre-wrap">${esc(c.description) || '<span class="muted">—</span>'}</p>
-        <div>${(c.tags || []).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>
-        ${c.criteria.length ? `<h3>${t('criteria')}</h3>
-        <ul class="stat-list">
-          ${c.criteria.map((cr) => `<li><span>${esc(cr.name)}</span><strong>${cr.weight}% ${t('weight')}</strong></li>`).join('')}
-        </ul>` : ''}
-        ${c.prizes.length ? `<h3>${t('prizes')}</h3><ul class="stat-list">
-          ${c.prizes.map((p) => `<li><span>${MEDALS[p.rank] || '🎖'} ${t('prize_rank')} ${p.rank}</span><strong>${esc(p.name)}</strong></li>`).join('')}</ul>` : ''}
-      </div>
-      <div class="card">
-        <ul class="stat-list">
-          ${c.sport ? `<li><span>${t('sport')}</span><strong>${esc(c.sport)}</strong></li>` : ''}
-          ${c.location ? `<li><span>${t('location')}</span><strong>${esc(c.location)}</strong></li>` : ''}
-          <li><span>${t('starts')}</span><strong>${fmtDate(c.start_at)}</strong></li>
-          <li><span>${t('ends')}</span><strong>${fmtDate(c.end_at)}</strong></li>
-          <li><span>${t('visibility')}</span><strong>${t(c.visibility)}</strong></li>
-          ${c.invite_code ? `<li><span>${t('invite_code')}</span><strong><code>${esc(c.invite_code)}</code></strong></li>` : ''}
-        </ul>
-
-      </div>
+    ${raceInfoPanel(c, data.results)}
+    <div class="card">
+      <ul class="stat-list">
+        <li><span>${t('starts')}</span><strong>${fmtDate(c.start_at)}</strong></li>
+        <li><span>${t('ends')}</span><strong>${fmtDate(c.end_at)}</strong></li>
+        <li><span>${t('status')}</span><strong>${c.status === 'finished' ? t('status_finished') : t('hero_live')}</strong></li>
+        ${c.invite_code ? `<li><span>${t('invite_code')}</span><strong><code>${esc(c.invite_code)}</code></strong></li>` : ''}
+      </ul>
+      ${c.description ? `<p style="white-space:pre-wrap;margin-top:8px">${esc(c.description)}</p>` : ''}
+      ${(c.tags || []).length ? `<div style="margin-top:6px">${(c.tags || []).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>` : ''}
     </div>`;
 }
 
@@ -596,8 +590,8 @@ async function renderRaceResults(box, c) {
             <option value="">${t('all_cats')}</option>
             ${categories.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('')}
           </select>` : ''}
-          <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/race-results?format=csv" download>⬇ ${t('export_csv')}</a>
-          <a class="btn small secondary" href="${BASE}/api/contests/${c.id}/taps" download>⬇ ${t('export_taps')}</a>
+          ${c.is_organizer ? `<button class="btn small secondary" id="rr-dl-csv">⬇ ${t('export_csv')}</button>
+          <button class="btn small secondary" id="rr-dl-taps">⬇ ${t('export_taps')}</button>` : ''}
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -607,6 +601,11 @@ async function renderRaceResults(box, c) {
         </tr></thead><tbody id="race-results-body"></tbody></table>
       </div>
     </div>`;
+
+  const csvBtn = box.querySelector('#rr-dl-csv');
+  if (csvBtn) csvBtn.onclick = () => downloadAuthed(`/contests/${c.id}/race-results?format=csv`, `race-results-${c.id}.csv`);
+  const tapsBtn = box.querySelector('#rr-dl-taps');
+  if (tapsBtn) tapsBtn.onclick = () => downloadAuthed(`/contests/${c.id}/taps`, `taps-${c.id}.csv`);
 
   const draw = (results) => {
     const filter = box.querySelector('#cat-filter');
