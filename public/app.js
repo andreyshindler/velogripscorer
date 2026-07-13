@@ -131,6 +131,7 @@ async function route() {
   try {
     if (!page) return viewHome();
     if (page === 'login') return viewLogin();
+    if (page === 'finished') return viewFinishedRaces();
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
@@ -190,6 +191,33 @@ function contestCard(c) {
         <span>👤 ${esc(c.organizer_name || '')}</span>
       </div>
       <div>${(c.tags || []).slice(0, 4).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>
+    </a>`;
+}
+
+// ---------- finished races (public results directory) ----------
+
+async function viewFinishedRaces() {
+  main.innerHTML = `<h1>🏁 ${t('nav_finished')}</h1><div class="grid" id="finished-list"></div>`;
+  const { contests } = await api('/contests?status=finished');
+  const races = (contests || []).filter((c) => c.kind === 'race');
+  document.getElementById('finished-list').innerHTML = races.length
+    ? races.map(finishedCard).join('')
+    : `<p class="muted">${t('no_finished_races')}</p>`;
+}
+
+function finishedCard(c) {
+  return `
+    <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
+      <div>
+        <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+        <span class="pill finished">${t('status_finished')}</span>
+      </div>
+      <h3>${esc(c.title)}</h3>
+      <div class="meta">
+        ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
+        <span>🗓 ${fmtDate(c.start_at)}</span>
+      </div>
+      <div class="pill tag">${t('view_results_link')} ❯</div>
     </a>`;
 }
 

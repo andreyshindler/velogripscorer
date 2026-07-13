@@ -117,6 +117,7 @@ public class PostResultsActivity extends Activity {
                     store.markUploaded(batch.get(batch.size() - 1).id);
                     sent += batch.size();
                 }
+                uploader.finishRace(); // list it under the web's Finished races
                 result = getString(R.string.posted_ok, sent);
             } catch (Exception e) {
                 result = getString(R.string.post_failed, e.getMessage() == null ? "" : e.getMessage());

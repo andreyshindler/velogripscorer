@@ -66,6 +66,13 @@ public final class Uploader {
         return code >= 200 && code < 300;
     }
 
+    /** Marks the race finished so it appears under the web's "Finished races". */
+    public boolean finishRace() throws IOException {
+        int code = post("/api/ingest/finish", "{}");
+        if (code == 401) throw new IOException("server rejected reader token (401)");
+        return code >= 200 && code < 300;
+    }
+
     /** Downloads the start list JSON (racers, waves, timing settings). */
     public String downloadStartList() throws IOException {
         HttpURLConnection conn = open("/api/ingest/startlist", "GET");

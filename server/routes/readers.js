@@ -168,6 +168,15 @@ function readerFromToken(req) {
   return token ? db.prepare('SELECT * FROM readers WHERE token = ?').get(String(token)) : null;
 }
 
+// Mark the race finished from the timing app (reader-token auth) — used when
+// the organizer posts results, so the race appears under "Finished races".
+router.post('/ingest/finish', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  db.prepare(`UPDATE contests SET status = 'finished' WHERE id = ? AND status = 'active'`).run(reader.contest_id);
+  res.json({ ok: true });
+});
+
 // Lightweight connectivity check for the app's "Test connection" button.
 router.get('/ingest/ping', (req, res) => {
   const token = req.headers['x-reader-token'];
