@@ -87,12 +87,20 @@ function parseXlsx(buf) {
     || zip.names.find((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
   if (!sheetName) throw new Error('xlsx has no worksheet');
   const sheet = zip.read(sheetName).toString('utf8');
+  return parseSheetRows(sheet, shared);
+}
 
+// Split out so the cell-parsing (the tricky part) can be unit-tested directly.
+function parseSheetRows(sheet, shared) {
   const rows = [];
   for (const rowMatch of sheet.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
     const cells = [];
+    // NOTE: attrs must be non-greedy ([^>]*?), otherwise a self-closing empty
+    // cell like <c r="G5" s="15"/> lets the greedy match swallow the trailing
+    // "/" — the /> branch then fails and the next cell is eaten, shifting a
+    // whole column (e.g. an empty Age cell dropping the Distance beside it).
     for (const c of rowMatch[1].matchAll(
-      /<c\s+r="([A-Z]+\d+)"([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      /<c\s+r="([A-Z]+\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const [, ref, attrs, inner] = c;
       if (!inner) continue;
       const idx = colIndex(ref);
@@ -109,4 +117,4 @@ function parseXlsx(buf) {
   return rows;
 }
 
-module.exports = { parseXlsx };
+module.exports = { parseXlsx, parseSheetRows };

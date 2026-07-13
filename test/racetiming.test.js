@@ -249,6 +249,24 @@ test('bulk start-list import creates racers, waves, and synthetic EPCs', async (
   assert.equal(denied.status, 403);
 });
 
+test('xlsx cell parsing: a self-closing empty cell must not eat the next cell', () => {
+  const { parseSheetRows } = require('../server/xlsx');
+  const shared = ['name', '5k'];               // shared-string table
+  // Row: A=name, B is an empty *self-closing* styled cell (like an empty Age),
+  // C carries the distance as shared string #1. The C value must survive.
+  const sheet =
+    '<row r="2">' +
+    '<c r="A2" t="s"><v>0</v></c>' +
+    '<c r="B2" s="15"/>' +
+    '<c r="C2" s="16" t="s"><v>1</v></c>' +
+    '</row>';
+  const rows = parseSheetRows(sheet, shared);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0][0], 'name');
+  assert.equal(rows[0][1], undefined, 'empty self-closing cell stays empty');
+  assert.equal(rows[0][2], '5k', 'distance beside the empty cell is not swallowed');
+});
+
 test('xlsx start-list upload: Webscorer format, two chips per racer, delete race', async () => {
   const xlOrg = await register('xlsx-org@test.co', 'Xlsx Org');
   const race = (await request(app).post('/api/contests').set(auth(xlOrg)).send({
