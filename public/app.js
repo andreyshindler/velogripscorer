@@ -1004,6 +1004,34 @@ async function renderStartlist(box, c) {
 
 // ---------- manage tab (organizer): start list, app pairing, settings ----------
 
+// Inline "edit every column" form for one racer in the Manage start list.
+function racerEditForm(a, waves) {
+  const g = a.gender || '';
+  return `<form class="racer-edit" style="display:flex;flex-wrap:wrap;gap:6px;width:100%;align-items:center">
+    <input name="bib" value="${esc(a.bib || '')}" placeholder="${t('bib')}" style="width:64px">
+    <input name="participant" value="${esc(a.participant || '')}" placeholder="${t('participant')}" style="flex:2;min-width:120px">
+    <input name="category" value="${esc(a.category || '')}" placeholder="${t('category')}" style="flex:1;min-width:76px">
+    <input name="distance" value="${esc(a.distance || '')}" placeholder="${t('distance')}" style="width:72px">
+    <input name="team" value="${esc(a.team || '')}" placeholder="${t('team')}" style="flex:1;min-width:80px">
+    <select name="gender" style="width:88px">
+      <option value="" ${!g ? 'selected' : ''}>${t('gender_col')} —</option>
+      <option value="Male" ${isMaleW(g) ? 'selected' : ''}>${t('male')}</option>
+      <option value="Female" ${isFemaleW(g) ? 'selected' : ''}>${t('female')}</option>
+    </select>
+    <select name="wave_id" style="min-width:88px">
+      <option value="">${t('wave')} —</option>
+      ${waves.map((w) => `<option value="${w.id}" ${a.wave_id === w.id ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}
+    </select>
+    <select name="racer_status" style="width:auto">
+      ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
+    </select>
+    <input name="epc" value="${esc((a.epcs && a.epcs[0]) || a.epc || '')}" placeholder="${t('epc_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="min-width:118px">
+    <input name="epc2" value="${esc((a.epcs && a.epcs[1]) || '')}" placeholder="${t('epc2_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="min-width:118px">
+    <button type="button" class="btn small racer-save">${t('save')}</button>
+    <button type="button" class="btn small secondary racer-cancel">${t('cancel')}</button>
+  </form>`;
+}
+
 async function renderManage(box, c) {
   const generation = renderGeneration;
   const [{ tags }, wavesData] = await Promise.all([
@@ -1047,14 +1075,17 @@ async function renderManage(box, c) {
       </form>
       <div id="tags-list" class="mt" style="max-height:420px;overflow:auto">
         ${tags.map((a, i) => `
-          <div class="comment" style="display:flex;gap:8px;align-items:center">
+          <div class="comment" id="racer-row-${i}" style="display:flex;gap:8px;align-items:center">
             <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
             ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
+            ${a.distance ? `<span class="pill">${esc(a.distance)}</span>` : ''}
+            ${a.team ? `<span class="muted" style="font-size:.8rem">${esc(a.team)}</span>` : ''}
             ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
             <code style="font-size:0.7rem;overflow-wrap:anywhere" class="muted">${esc((a.epcs || [a.epc]).join(' + '))}</code>
             <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
               ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
             </select>
+            <button class="ghost tag-edit" data-idx="${i}" title="${t('edit')}" aria-label="${t('edit')}">✏️</button>
             <button class="ghost tag-del" data-epc="${esc(a.epc)}" aria-label="${t('delete')}">🗑</button>
           </div>`).join('') || `<p class="muted">${t('no_startlist')}</p>`}
       </div>
@@ -1145,10 +1176,45 @@ async function renderManage(box, c) {
       try {
         await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
           epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
+          distance: a.distance, team: a.team, gender: a.gender,
           wave_id: a.wave_id, racer_status: sel.value,
         }});
         toast('✓');
       } catch (err) { toast(err.message, true); }
+    };
+  });
+
+  // Full inline edit of a racer (all columns).
+  box.querySelectorAll('.tag-edit').forEach((btn) => {
+    btn.onclick = () => {
+      const a = tags[Number(btn.dataset.idx)];
+      const row = box.querySelector(`#racer-row-${btn.dataset.idx}`);
+      row.innerHTML = racerEditForm(a, waves);
+      const f = row.querySelector('.racer-edit');
+      row.querySelector('.racer-cancel').onclick = () => viewContest(c.id, 'manage');
+      row.querySelector('.racer-save').onclick = async () => {
+        const participant = f.participant.value.trim();
+        if (!participant) return toast(t('epc_or_bib'), true);
+        const bib = f.bib.value.trim();
+        const newEpc = (f.epc.value.trim() || (/^\d{1,10}$/.test(bib) ? 'AA' + bib.padStart(4, '0') : '')).toUpperCase();
+        const newEpc2 = f.epc2.value.trim().toUpperCase();
+        if (!newEpc) return toast(t('epc_or_bib'), true);
+        const oldSet = new Set((a.epcs || [a.epc]).map((x) => x.toUpperCase()));
+        const newSet = new Set([newEpc, ...(newEpc2 ? [newEpc2] : [])]);
+        const sameChips = oldSet.size === newSet.size && [...oldSet].every((x) => newSet.has(x));
+        try {
+          // Changing the chip(s) means a new identity: drop the old racer first.
+          if (!sameChips) await api(`/contests/${c.id}/tags/${a.epc}`, { method: 'DELETE' });
+          await api(`/contests/${c.id}/tags`, { method: 'POST', body: {
+            epc: newEpc, epc2: newEpc2, bib, participant,
+            category: f.category.value.trim(), distance: f.distance.value.trim(),
+            team: f.team.value.trim(), gender: f.gender.value,
+            wave_id: f.wave_id.value ? Number(f.wave_id.value) : null,
+            racer_status: f.racer_status.value,
+          }});
+          viewContest(c.id, 'manage');
+        } catch (err) { toast(err.message, true); }
+      };
     };
   });
 

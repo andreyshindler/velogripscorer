@@ -258,7 +258,8 @@ router.get('/contests/:id/tags', requireAuth, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
   const rows = db.prepare(
-    `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.wave_id, a.racer_status, w.name AS wave_name
+    `SELECT a.epc, a.bib, a.participant, a.user_id, a.category, a.distance, a.team, a.gender,
+            a.wave_id, a.racer_status, w.name AS wave_name
      FROM tag_assignments a LEFT JOIN waves w ON w.id = a.wave_id
      WHERE a.contest_id = ? ORDER BY CAST(a.bib AS INTEGER), a.bib, a.epc`
   ).all(contest.id);

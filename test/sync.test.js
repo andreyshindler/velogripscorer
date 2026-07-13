@@ -176,3 +176,25 @@ test('results CSV is sectioned with per-lap durations', async () => {
   const line = csv.split('\n').find((l) => l.startsWith('1,1,'));
   assert.ok(line.includes('2:00.0') && line.includes('2:10.0'), 'lap columns are durations, not cumulative');
 });
+
+test('editing a racer updates every column and GET tags returns them', async () => {
+  const o = await register('editcols@test.co', 'Edit Org');
+  const c = (await request(app).post('/api/contests').set(auth(o))
+    .send({ kind: 'race', title: 'Edit race', start_at: past, end_at: future })).body;
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+    .send({ epc: 'AAAA7001', bib: '7', participant: 'Old Name' });
+  // edit every column via upsert on the same chip
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o)).send({
+    epc: 'AAAA7001', bib: '8', participant: 'New Name', category: 'M40',
+    distance: '10k', team: 'Team X', gender: 'Female', racer_status: 'DNF',
+  });
+  const { body } = await request(app).get(`/api/contests/${c.id}/tags`).set(auth(o));
+  const r = body.tags.find((x) => x.epc === 'AAAA7001');
+  assert.equal(r.bib, '8');
+  assert.equal(r.participant, 'New Name');
+  assert.equal(r.category, 'M40');
+  assert.equal(r.distance, '10k');
+  assert.equal(r.team, 'Team X');
+  assert.equal(r.gender, 'Female');
+  assert.equal(r.racer_status, 'DNF');
+});
