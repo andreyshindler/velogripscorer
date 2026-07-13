@@ -56,7 +56,8 @@ Commands: `/races` (pick a race), `/list [text]`, `/add` (guided, or one line
 `/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces`),
 `/edit <bib>` (buttons or `/edit 101 name=… cat=…`), `/del <bib>`, `/csv`.
 The bot uses long polling (outbound to `api.telegram.org`) — no inbound webhook
-or public URL is needed, so it works behind a `BASE_PATH` reverse proxy.
+or public URL is needed, so it works behind a `BASE_PATH` reverse proxy. Under
+Docker, set both vars in `.env`; `docker-compose.yml` passes them through.
 
 ## Architecture
 

@@ -99,6 +99,30 @@ the volume, start again.
   `server/db.js` is the single seam to swap for PostgreSQL.
 - Health probe for uptime monitors: `GET /api/health`.
 
+## Telegram start-list bot (optional)
+
+To manage a race's start list from Telegram (add / edit / delete racers,
+export the CSV), set two vars in `.env` and rebuild:
+
+```
+TELEGRAM_BOT_TOKEN=123456:ABC...        # from @BotFather
+TELEGRAM_ALLOWED_USER_IDS=              # leave empty for the first boot
+```
+
+```bash
+docker compose up -d --build
+docker compose logs app | grep -i telegram   # "bot started (long polling)"
+```
+
+Message your bot to learn your numeric Telegram id (e.g. via
+[@userinfobot](https://t.me/userinfobot)), put it in
+`TELEGRAM_ALLOWED_USER_IDS` (comma-separated for several people), and rebuild
+again. The bot answers only those ids and ignores everyone else — and everyone
+while the list is empty. Then send it `/races` to pick a race and `/help` for
+the commands. It needs only outbound access to `api.telegram.org` (long
+polling), so it works behind the reverse proxy and the `BASE_PATH` prefix with
+no extra ports or webhook URL.
+
 ## Serving under a path prefix
 
 To host the app at `https://your-host/veloscorer` instead of the domain root
