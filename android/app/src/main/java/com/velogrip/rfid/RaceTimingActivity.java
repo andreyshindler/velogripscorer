@@ -101,7 +101,9 @@ public class RaceTimingActivity extends Activity {
                         .putExtra(StartListActivity.EXTRA_NO_FORWARD, true)));
         findViewById(R.id.bPause).setOnClickListener(v ->
                 startActivity(new Intent(this, RaceProgressActivity.class)));
-        int[] stubs = {R.id.bHide, R.id.bDist, R.id.bCat};
+        findViewById(R.id.bHide).setOnClickListener(v ->
+                startActivity(new Intent(this, SettingsActivity.class)));
+        int[] stubs = {R.id.bDist, R.id.bCat};
         for (int id : stubs) findViewById(id).setOnClickListener(v ->
                 Toast.makeText(this, R.string.view_option_unsupported, Toast.LENGTH_SHORT).show());
 
@@ -687,7 +689,7 @@ public class RaceTimingActivity extends Activity {
     private void raceControl() {
         final String[] options = {
                 getString(R.string.rc_restart), getString(R.string.rc_finish), getString(R.string.rc_live),
-                getString(R.string.rc_progress), getString(R.string.rc_settings)};
+                getString(R.string.rc_progress)};
         new android.app.AlertDialog.Builder(this)
                 .setTitle(R.string.choose_race_control)
                 .setItems(options, (d, which) -> {
@@ -701,11 +703,8 @@ public class RaceTimingActivity extends Activity {
                         case 2:   // Live results view / update
                             startActivity(new Intent(this, LiveResultsActivity.class));
                             break;
-                        case 3:   // Race progress (view)
+                        default:  // Race progress (view)
                             showRaceProgress();
-                            break;
-                        default:  // Settings
-                            startActivity(new Intent(this, SettingsActivity.class));
                     }
                 })
                 .setNegativeButton(R.string.close, null)

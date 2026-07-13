@@ -150,6 +150,8 @@
     <string name="refresh">Refresh</string>
     <string name="race_progress_help">Numbers update live from RFID reads and manual taps. Tap Finished or On course on a distance to jump to those racers in the finish list.</string>
     <string name="progress_list_footer">%1$s %2$s racers</string>
+    <string name="category_none">— None —</string>
+    <string name="rc_settings_short">Settings</string>
     <string name="no_finishers_yet">No finishers yet.</string>
     <string name="no_on_course">No racers on course.</string>
     <string name="assign_to_racer">Assign this time to racer</string>

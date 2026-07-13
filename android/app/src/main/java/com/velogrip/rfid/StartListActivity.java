@@ -5,8 +5,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -175,7 +177,7 @@ public class StartListActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20), dp(8), dp(20), dp(8));
         final EditText name = field(form, getString(R.string.racer_name), r.name);
-        final EditText category = field(form, getString(R.string.racer_category), r.category);
+        final Spinner category = categoryField(form, r.category);
         final EditText wave = field(form, getString(R.string.wave), r.wave);
         final String[] statuses = {"", "DNS", "DNF", "DSQ"};
         new android.app.AlertDialog.Builder(this)
@@ -183,7 +185,7 @@ public class StartListActivity extends Activity {
                 .setView(form)
                 .setPositiveButton(android.R.string.ok, (d, w) -> {
                     store.editRacer(r.bib, name.getText().toString().trim(),
-                            category.getText().toString().trim(), wave.getText().toString().trim());
+                            selectedCategory(category), wave.getText().toString().trim());
                     render();
                 })
                 .setNeutralButton(R.string.set_status, (d, w) ->
@@ -205,6 +207,41 @@ public class StartListActivity extends Activity {
         e.setText(value);
         parent.addView(e);
         return e;
+    }
+
+    /** Category picker: a dropdown of every category used in the start list,
+     *  plus a "none" option. The racer's current value is pre-selected (and
+     *  always present, even if it is no longer used by anyone else). */
+    private Spinner categoryField(LinearLayout parent, String current) {
+        TextView t = new TextView(this);
+        t.setText(getString(R.string.racer_category));
+        t.setPadding(0, dp(8), 0, 0);
+        parent.addView(t);
+
+        java.util.TreeSet<String> cats = new java.util.TreeSet<>();
+        for (RaceStore.Racer r : store.startListEntries()) if (!r.category.isEmpty()) cats.add(r.category);
+        if (current != null && !current.isEmpty()) cats.add(current);
+
+        java.util.List<String> values = new java.util.ArrayList<>();
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        values.add(""); labels.add(getString(R.string.category_none));
+        for (String c : cats) { values.add(c); labels.add(c); }
+
+        Spinner sp = new Spinner(this);
+        ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sp.setAdapter(ad);
+        sp.setSelection(Math.max(0, values.indexOf(current == null ? "" : current)));
+        sp.setTag(values);
+        parent.addView(sp);
+        return sp;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String selectedCategory(Spinner sp) {
+        java.util.List<String> values = (java.util.List<String>) sp.getTag();
+        int pos = sp.getSelectedItemPosition();
+        return pos >= 0 && pos < values.size() ? values.get(pos) : "";
     }
 
     private void addRacer() {

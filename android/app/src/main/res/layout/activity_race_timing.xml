@@ -200,8 +200,8 @@
             <TextView style="@style/BottomText" android:text="@string/progress" />
         </LinearLayout>
         <LinearLayout android:id="@+id/bHide" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="±" />
-            <TextView style="@style/BottomText" android:text="@string/hide_splits" />
+            <TextView style="@style/BottomIcon" android:text="⚙" />
+            <TextView style="@style/BottomText" android:text="@string/rc_settings_short" />
         </LinearLayout>
         <LinearLayout android:id="@+id/bDist" style="@style/BottomAction">
             <TextView style="@style/BottomIcon" android:text="⟳" />
