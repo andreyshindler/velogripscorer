@@ -212,6 +212,15 @@ CREATE TABLE IF NOT EXISTS waves (
   UNIQUE (contest_id, name)
 );
 
+-- Per-chat state for the Telegram start-list bot: which race the chat is
+-- working on and any in-progress add/edit wizard (JSON in the state column).
+CREATE TABLE IF NOT EXISTS telegram_sessions (
+  chat_id           TEXT PRIMARY KEY,
+  active_contest_id INTEGER,
+  state             TEXT NOT NULL DEFAULT '',
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);
 CREATE INDEX IF NOT EXISTS idx_entries_contest   ON entries(contest_id);
