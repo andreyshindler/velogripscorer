@@ -613,6 +613,8 @@ router.get('/contests/:id/race-results', (req, res) => {
       last_crossing_at: new Date(lastMs).toISOString(),
       elapsed_ms: lastMs - startMs,
       elapsed: formatElapsed(lastMs - startMs),
+      // elapsed of each counted crossing, for the per-lap view
+      lap_splits: crossings.map((t) => formatElapsed(t - startMs)),
     };
   });
 

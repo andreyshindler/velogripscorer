@@ -533,10 +533,14 @@ async function viewPublicResults(id, tab) {
   if (!c) { main.innerHTML = `<div class="card">${t('no_results_yet')}</div>`; return; }
   const data = await api(`/contests/${id}/race-results`);
 
+  const hasLaps = data.results.some((r) => (r.laps || 0) > 1);
   const tabs = [['winners', 'race_winners'], ['top3', 'top3_finishers'], ['full', 'full_results']];
+  if (hasLaps) tabs.push(['laps', 'lap_times']);
   main.innerHTML = `
     <div class="pubresults">
-      <h1 style="text-align:center">${esc(c.title)}</h1>
+      <h1 style="text-align:center;margin-bottom:2px">${esc(c.title)}</h1>
+      <p style="text-align:center;margin:0 0 12px;color:#666">${esc(new Date(c.start_at).toLocaleString())} — ${t('live_results_label')}</p>
+      ${raceInfoPanel(c, data.results)}
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
       </div>
@@ -551,6 +555,7 @@ async function viewPublicResults(id, tab) {
     const body = document.getElementById('pubbody');
     if (!body) return;
     if (tab === 'full') body.innerHTML = fullResultsTable(results);
+    else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
     else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
     else body.innerHTML = raceWinnersTables(id, results);
   };
@@ -560,6 +565,60 @@ async function viewPublicResults(id, tab) {
   const refetch = async () => { const fresh = await api(`/contests/${id}/race-results`); render(fresh.results); };
   state.sse.addEventListener('tag_reads', refetch);
   state.sse.addEventListener('wave_start', refetch);
+}
+
+// "Race info" box shown above the results tabs (mirrors the reference layout).
+function raceInfoPanel(c, results) {
+  const waves = [...new Set(results.map((r) => r.wave).filter(Boolean))];
+  const startType = waves.length > 1 ? t('waves_start') : t('mass_start');
+  const loc = c.location
+    ? `${esc(c.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(c.location)}" target="_blank" rel="noopener" style="color:var(--brand,#2f8a57);font-weight:600">${t('view_on_map')}</a>`
+    : '–';
+  const rows = [
+    [t('sport'), esc(c.sport) || t('running')],
+    [t('location'), loc],
+    [t('start_type'), startType],
+    [t('racers'), results.length],
+    [t('timed_on'), t('timed_on_value')],
+    [t('timed_with'), 'VeloGripScorer'],
+    [t('chip_timing'), 'RFID - LLRP'],
+    [t('updated_from'), t('app_label')],
+    [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
+  ];
+  return `<div class="card" style="max-width:520px;margin:0 auto 16px">
+    <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:6px 12px;margin:-16px -16px 10px;border-radius:8px 8px 0 0">${t('race_info')}</div>
+    <table style="width:100%;border-collapse:collapse">
+      <tbody>${rows.map(([k, v]) => `<tr>
+        <td style="text-align:right;color:#777;padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">${k}:</td>
+        <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
+    </table>
+    <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;color:#777">
+      ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer && c.organizer.name || '')}</strong>
+    </div>
+  </div>`;
+}
+
+// One table per multi-lap distance: each finisher with a column per lap split.
+function lapTimesTables(results) {
+  const byDist = groupByDistance(results);
+  const dists = [...byDist.keys()].sort();
+  let html = '';
+  for (const d of dists) {
+    const rows = byDist.get(d)
+      .filter((r) => r.status === 'finished' && (r.lap_splits ? r.lap_splits.length : 0) > 0)
+      .sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
+    const maxLaps = rows.reduce((m, r) => Math.max(m, r.lap_splits.length), 0);
+    if (maxLaps < 2) continue; // lap-times view is only meaningful for multi-lap races
+    const lapCols = Array.from({ length: maxLaps }, (_, i) => `<th>${t('lap')} ${i + 1}</th>`).join('');
+    html += `<div style="overflow-x:auto"><table class="board mt"><thead>
+      <tr><th colspan="${3 + maxLaps + 1}">${esc(d || t('overall'))}</th></tr>
+      <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th>${lapCols}<th>${t('elapsed_col')}</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td><strong>${r.rank}</strong></td><td><strong>${esc(r.bib || '')}</strong></td><td>${esc(r.participant)}</td>
+        ${Array.from({ length: maxLaps }, (_, i) => `<td style="font-variant-numeric:tabular-nums">${r.lap_splits[i] ? esc(r.lap_splits[i]) : '–'}</td>`).join('')}
+        <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  return html || `<p class="muted">${t('no_lap_races')}</p>`;
 }
 
 // distance -> ordered category groups (Overall first, then each category)
@@ -584,6 +643,7 @@ function raceWinnersTables(id, results) {
   const dists = [...byDist.keys()].sort();
   return `<p class="muted" style="margin:8px 0">▸ ${t('click_green_category')}</p>` + dists.map((d) => {
     const rows = byDist.get(d);
+    const multiLap = rows.some((r) => (r.laps || 0) > 1);
     const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
     const line = (label, scope, indent, catFilter) => {
       const leader = leaderOf(scope);
@@ -596,6 +656,7 @@ function raceWinnersTables(id, results) {
         <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
         <td><strong>${scope.length}</strong></td>
         <td><a href="${link}" class="live-link" data-dist="${esc(d)}" data-cat="${esc(catFilter || '')}">▸ ${t('live_race')}</a></td>
+        ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
       </tr>`;
     };
     return `
@@ -603,6 +664,7 @@ function raceWinnersTables(id, results) {
         <thead><tr>
           <th>${esc(d || t('overall'))}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
           <th>${t('total_racers')}</th><th>${t('progress_view')}</th>
+          ${multiLap ? `<th>${t('lap_times')}</th>` : ''}
         </tr></thead>
         <tbody>
           ${line(t('overall'), rows, 0, '')}
