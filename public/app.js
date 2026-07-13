@@ -28,6 +28,25 @@ async function api(path, { method = 'GET', body, form } = {}) {
   return data;
 }
 
+// Download a file from an authenticated endpoint (sends the Bearer token, which
+// a plain <a download> link cannot), then save the blob.
+async function downloadAuthed(path, filename) {
+  try {
+    const res = await fetch(`${BASE}/api${path}`, {
+      headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+    });
+    if (!res.ok) { toast(t('error_generic'), true); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch { toast(t('error_generic'), true); }
+}
+
 function toast(msg, isError) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -665,12 +684,17 @@ async function viewPublicResults(id, tab) {
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
       </div>
-      <div style="text-align:center;margin:8px 0">
-        <a class="btn small secondary" href="${BASE}/api/contests/${id}/race-results?format=csv" download>⬇ ${t('export_csv')}</a>
-        <a class="btn small secondary" href="${BASE}/api/contests/${id}/taps" download>⬇ ${t('export_taps')}</a>
-      </div>
+      ${state.user ? `<div style="text-align:center;margin:8px 0">
+        <button class="btn small secondary" id="dl-csv">⬇ ${t('export_csv')}</button>
+        <button class="btn small secondary" id="dl-taps">⬇ ${t('export_taps')}</button>
+      </div>` : ''}
       <div id="pubbody"></div>
     </div>`;
+
+  const csvBtn = document.getElementById('dl-csv');
+  if (csvBtn) csvBtn.onclick = () => downloadAuthed(`/contests/${id}/race-results?format=csv`, `race-results-${id}.csv`);
+  const tapsBtn = document.getElementById('dl-taps');
+  if (tapsBtn) tapsBtn.onclick = () => downloadAuthed(`/contests/${id}/taps`, `taps-${id}.csv`);
 
   const render = (results) => {
     const body = document.getElementById('pubbody');
@@ -712,18 +736,19 @@ function raceInfoPanel(c, results) {
     [t('updated_from'), t('app_label')],
     [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
   ];
+  const S = 290; // fixed, equal square size for the photo and the info box
   const photo = c.photo_url
-    ? `<img src="${c.photo_url}" alt="" style="max-width:340px;width:100%;border-radius:8px;object-fit:cover;align-self:flex-start">` : '';
-  return `<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-bottom:16px">
+    ? `<img src="${c.photo_url}" alt="" style="width:${S}px;height:${S}px;border-radius:8px;object-fit:cover;flex:0 0 auto">` : '';
+  return `<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-bottom:16px">
     ${photo}
-    <div class="card" style="max-width:520px;flex:1;min-width:280px;margin:0">
-      <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:6px 12px;margin:-16px -16px 10px;border-radius:8px 8px 0 0">${t('race_info')}</div>
-      <table style="width:100%;border-collapse:collapse">
+    <div class="card" style="width:${S}px;height:${S}px;flex:0 0 auto;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;overflow:auto">
+      <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:5px 10px;margin:-12px -12px 8px;border-radius:8px 8px 0 0;font-size:13px">${t('race_info')}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
         <tbody>${rows.map(([k, v]) => `<tr>
-          <td style="text-align:right;color:#777;padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">${k}:</td>
+          <td style="text-align:right;color:#777;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">${k}:</td>
           <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
       </table>
-      <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;color:#777">
+      <div style="border-top:1px solid #ddd;margin-top:auto;padding-top:6px;color:#777;font-size:12.5px">
         ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer_name || (c.organizer && c.organizer.name) || '')}</strong>
       </div>
     </div>

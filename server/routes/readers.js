@@ -655,6 +655,8 @@ router.get('/contests/:id/race-results', (req, res) => {
   });
 
   if (req.query.format === 'csv') {
+    // CSV export is organizer-only; the public page still reads the JSON results.
+    if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
     const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
     const header = 'rank,bib,participant,category,category_rank,distance,team,gender,wave,laps,elapsed,behind,status';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -686,7 +688,7 @@ function timeOfDay(iso) {
 // in chronological order, labelled Lap 1…Lap n / Finish per racer's lap target.
 // Mirrors the timing app's own passing log so each race has an auditable trail.
 router.get('/contests/:id/taps', (req, res) => {
-  const contest = viewableContest(req, res);
+  const contest = organizerContest(req, res); // export is organizer-only, not for shared viewers
   if (!contest) return;
 
   const waves = new Map(db.prepare('SELECT * FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));

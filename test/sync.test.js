@@ -142,3 +142,14 @@ test('duplicating a race clones the start list into a new unique id, source unto
   assert.equal(orig.body.contest.id, contest.id);
   assert.equal(orig.body.racers.length, 1);
 });
+
+test('CSV and taps exports are organizer-only; JSON results stay public', async () => {
+  // anonymous viewers (shared link) cannot export
+  assert.equal((await request(app).get(`/api/contests/${contest.id}/race-results?format=csv`)).status, 403);
+  assert.equal((await request(app).get(`/api/contests/${contest.id}/taps`)).status, 403);
+  // but the public results JSON still works for everyone
+  assert.equal((await request(app).get(`/api/contests/${contest.id}/race-results`)).status, 200);
+  // the organizer can export both
+  assert.equal((await request(app).get(`/api/contests/${contest.id}/race-results?format=csv`).set(auth(org))).status, 200);
+  assert.equal((await request(app).get(`/api/contests/${contest.id}/taps`).set(auth(org))).status, 200);
+});
