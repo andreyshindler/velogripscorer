@@ -161,6 +161,8 @@
     <string name="rc_live_sub">צפייה ועדכון של המסיימים בזמן אמת</string>
     <string name="rc_progress_title">התקדמות המרוץ</string>
     <string name="rc_progress_sub">סיימו מול במסלול, לפי מרחק</string>
+    <string name="restart_save_sub">שמירת הזמנים שנרשמו</string>
+    <string name="restart_discard_sub">מחיקת כל הזמנים והתחלה מחדש</string>
     <string name="rc_settings_short">הגדרות</string>
     <string name="no_finishers_yet">אף אחד עוד לא סיים.</string>
     <string name="no_on_course">אין משתתפים במסלול.</string>

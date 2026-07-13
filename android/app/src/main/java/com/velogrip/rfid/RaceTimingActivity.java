@@ -719,26 +719,8 @@ public class RaceTimingActivity extends Activity {
     }
 
     private void raceControl() {
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.VERTICAL);
-        head.setPadding(dp(22), dp(18), dp(22), dp(10));
-        TextView title = new TextView(this);
-        title.setText(R.string.race_control);
-        title.setTextSize(21);
-        title.setTextColor(0xFF17201B);
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        TextView subtitle = new TextView(this);
-        subtitle.setText(R.string.race_control_subtitle);
-        subtitle.setTextSize(13);
-        subtitle.setTextColor(0xFF6A7771);
-        subtitle.setPadding(0, dp(2), 0, 0);
-        head.addView(title);
-        head.addView(subtitle);
-        content.addView(head);
-
+        LinearLayout content = controlSheetHeader(getString(R.string.race_control),
+                getString(R.string.race_control_subtitle));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content);
         final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
@@ -873,22 +855,59 @@ public class RaceTimingActivity extends Activity {
     /** Restart (false start): keep or discard recorded times, un-gun the race
      *  and return to Race Start so the organizer can start it again. */
     private void restartRace() {
-        new android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.restart_results_prompt)
-                .setItems(new String[]{getString(R.string.restart_save), getString(R.string.restart_discard)},
-                        (d, which) -> {
-                            if (which == 1) store.clearPassings(); // Discard recorded times
-                            store.clearPending();
-                            store.clearGunTimes();                 // un-start every wave
-                            prefs.setRaceFinalized(false);
-                            // keep the reader (and its WiFi) connected through the
-                            // restart; clearing the gun re-arms the per-racer beeps
-                            Intent i = new Intent(this, RaceStartActivity.class);
-                            i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                            startActivity(i);
-                        })
+        LinearLayout content = controlSheetHeader(getString(R.string.rc_restart_title),
+                getString(R.string.restart_results_prompt));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
+                .setView(scroll)
                 .setNegativeButton(R.string.cancel_popup, null)
-                .show();
+                .create();
+
+        Runnable restart = () -> {
+            store.clearPending();
+            store.clearGunTimes();                 // un-start every wave
+            prefs.setRaceFinalized(false);
+            // keep the reader (and its WiFi) connected through the restart;
+            // clearing the gun re-arms the per-racer beeps
+            Intent i = new Intent(this, RaceStartActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(i);
+        };
+
+        content.addView(controlRow(R.drawable.ic_ctrl_save, 0xFF4F9E27, 0xFFE6F2DA,
+                R.string.restart_save, R.string.restart_save_sub,
+                () -> { dlg.dismiss(); restart.run(); }));                 // keep times
+        content.addView(controlDivider());
+        content.addView(controlRow(R.drawable.ic_ctrl_trash, 0xFFC0392B, 0xFFF7DDD9,
+                R.string.restart_discard, R.string.restart_discard_sub,
+                () -> { dlg.dismiss(); store.clearPassings(); restart.run(); })); // discard times
+
+        dlg.show();
+    }
+
+    /** Header block (bold title + one-line subtitle) shared by the styled
+     *  Race-control sheets. */
+    private LinearLayout controlSheetHeader(String title, String subtitle) {
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        head.setPadding(dp(22), dp(18), dp(22), dp(10));
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(21);
+        t.setTextColor(0xFF17201B);
+        t.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView s = new TextView(this);
+        s.setText(subtitle);
+        s.setTextSize(13);
+        s.setTextColor(0xFF6A7771);
+        s.setPadding(0, dp(2), 0, 0);
+        head.addView(t);
+        head.addView(s);
+        content.addView(head);
+        return content;
     }
 
     private void showRaceProgress() {

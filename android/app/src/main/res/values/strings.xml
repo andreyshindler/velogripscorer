@@ -161,6 +161,8 @@
     <string name="rc_live_sub">View or update finishers as they cross</string>
     <string name="rc_progress_title">Race progress</string>
     <string name="rc_progress_sub">Finished vs. on course, per distance</string>
+    <string name="restart_save_sub">Keep the recorded times</string>
+    <string name="restart_discard_sub">Clear all recorded times and start over</string>
     <string name="rc_settings_short">Settings</string>
     <string name="no_finishers_yet">No finishers yet.</string>
     <string name="no_on_course">No racers on course.</string>
