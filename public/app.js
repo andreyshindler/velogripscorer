@@ -736,12 +736,14 @@ function raceInfoPanel(c, results) {
     [t('updated_from'), t('app_label')],
     [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
   ];
-  const S = 290; // fixed, equal square size for the photo and the info box
+  const S = 290; // shared width; the photo stretches to the info box's height
   const photo = c.photo_url
-    ? `<img src="${c.photo_url}" alt="" style="width:${S}px;height:${S}px;border-radius:8px;object-fit:cover;flex:0 0 auto">` : '';
-  return `<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-bottom:16px">
+    ? `<div style="width:${S}px;min-height:${S}px;flex:0 0 auto;border-radius:8px;background:#000 center/cover no-repeat url('${c.photo_url}')"></div>` : '';
+  // align-items:stretch makes both columns share the taller height, and the info
+  // box grows to fit its text (no inner scrollbar).
+  return `<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:stretch;margin-bottom:16px">
     ${photo}
-    <div class="card" style="width:${S}px;height:${S}px;flex:0 0 auto;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;overflow:auto">
+    <div class="card" style="width:${S}px;flex:0 0 auto;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column">
       <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:5px 10px;margin:-12px -12px 8px;border-radius:8px 8px 0 0;font-size:13px">${t('race_info')}</div>
       <table style="width:100%;border-collapse:collapse;font-size:12.5px">
         <tbody>${rows.map(([k, v]) => `<tr>
@@ -762,17 +764,19 @@ function lapTimesTables(results) {
   let html = '';
   for (const d of dists) {
     const rows = byDist.get(d)
-      .filter((r) => r.status === 'finished' && (r.lap_splits ? r.lap_splits.length : 0) > 0)
+      .filter((r) => r.status === 'finished' && (r.lap_ms ? r.lap_ms.length : 0) > 0)
       .sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
-    const maxLaps = rows.reduce((m, r) => Math.max(m, r.lap_splits.length), 0);
+    const maxLaps = rows.reduce((m, r) => Math.max(m, r.lap_ms.length), 0);
     if (maxLaps < 2) continue; // lap-times view is only meaningful for multi-lap races
+    // Per-lap DURATION: lap i = crossing i minus crossing i-1 (lap 1 from the gun).
+    const lapDur = (r, i) => (i < r.lap_ms.length ? fmtElapsedMs(r.lap_ms[i] - (i > 0 ? r.lap_ms[i - 1] : 0)) : null);
     const lapCols = Array.from({ length: maxLaps }, (_, i) => `<th>${t('lap')} ${i + 1}</th>`).join('');
     html += `<div style="overflow-x:auto"><table class="board mt"><thead>
       <tr><th colspan="${3 + maxLaps + 1}">${esc(d || t('overall'))}</th></tr>
       <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th>${lapCols}<th>${t('elapsed_col')}</th></tr></thead>
       <tbody>${rows.map((r) => `<tr>
         <td><strong>${r.rank}</strong></td><td><strong>${esc(r.bib || '')}</strong></td><td>${esc(r.participant)}</td>
-        ${Array.from({ length: maxLaps }, (_, i) => `<td style="font-variant-numeric:tabular-nums">${r.lap_splits[i] ? esc(r.lap_splits[i]) : '–'}</td>`).join('')}
+        ${Array.from({ length: maxLaps }, (_, i) => `<td style="font-variant-numeric:tabular-nums">${lapDur(r, i) || '–'}</td>`).join('')}
         <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td></tr>`).join('')}</tbody></table></div>`;
   }
   return html || `<p class="muted">${t('no_lap_races')}</p>`;

@@ -153,3 +153,26 @@ test('CSV and taps exports are organizer-only; JSON results stay public', async 
   assert.equal((await request(app).get(`/api/contests/${contest.id}/race-results?format=csv`).set(auth(org))).status, 200);
   assert.equal((await request(app).get(`/api/contests/${contest.id}/taps`).set(auth(org))).status, 200);
 });
+
+test('results CSV is sectioned with per-lap durations', async () => {
+  const o = await register('csvfmt@test.co', 'CSV Org');
+  const c = (await request(app).post('/api/contests').set(auth(o))
+    .send({ kind: 'race', title: 'CSV fmt', start_at: past, end_at: future })).body;
+  const wv = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'e' })).body;
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+    .send({ epc: 'AAAA9001', bib: '1', participant: 'Alpha Bravo', distance: '10k', gender: 'Male', wave_id: wv.id });
+  const gun = Date.now() - 600000;
+  await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', c.app_token)
+    .send({ name: 'e', started_at: new Date(gun).toISOString(), force: true });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', c.app_token).send({
+    reads: [
+      { epc: 'AAAA9001', read_at: new Date(gun + 120000).toISOString() }, // lap 1: 2:00
+      { epc: 'AAAA9001', read_at: new Date(gun + 250000).toISOString() }, // lap 2: +2:10
+    ],
+  });
+  const csv = (await request(app).get(`/api/contests/${c.id}/race-results?format=csv`).set(auth(o))).text;
+  assert.ok(csv.includes('10k - Overall'), 'has a distance section');
+  assert.ok(csv.includes('Place,Bib,Name,First name,Last name,Team name'), 'has the Webscorer header');
+  const line = csv.split('\n').find((l) => l.startsWith('1,1,'));
+  assert.ok(line.includes('2:00.0') && line.includes('2:10.0'), 'lap columns are durations, not cumulative');
+});

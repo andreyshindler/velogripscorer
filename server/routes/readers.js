@@ -293,19 +293,24 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
     waveId = wave.id;
   }
   const racerStatus = ['', 'DNS', 'DNF', 'DSQ'].includes(req.body?.racer_status) ? req.body.racer_status : '';
+  const category = String(req.body?.category || '').trim();
+  const distance = String(req.body?.distance || '').trim();
+  const team = String(req.body?.team || '').trim();
+  const gender = String(req.body?.gender || '').trim();
   const upsert = db.prepare(
-    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category, racer_status)
-     VALUES (?,?,?,?,?,?,?,?)
+    `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category, distance, team, gender, racer_status)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT (contest_id, epc) DO UPDATE SET bib = excluded.bib, participant = excluded.participant,
        user_id = excluded.user_id, wave_id = excluded.wave_id, category = excluded.category,
+       distance = excluded.distance, team = excluded.team, gender = excluded.gender,
        racer_status = excluded.racer_status`
   );
   db.transaction(() => {
     upsert.run(contest.id, epc, bib, participant, req.body?.user_id ?? null,
-      waveId, String(req.body?.category || '').trim(), racerStatus);
+      waveId, category, distance, team, gender, racerStatus);
     if (epc2 && epc2 !== epc) {
       upsert.run(contest.id, epc2, bib, participant, req.body?.user_id ?? null,
-        waveId, String(req.body?.category || '').trim(), racerStatus);
+        waveId, category, distance, team, gender, racerStatus);
     }
     // status belongs to the racer, not the chip — keep every chip in sync
     if (bib) db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND bib = ?')
@@ -598,7 +603,7 @@ router.get('/contests/:id/race-results', (req, res) => {
   const results = [...groups.values()].map((a) => {
     const wave = a.wave_id ? waves.get(a.wave_id) : null;
     const base = {
-      epc: a.epc, bib: a.bib, participant: a.participant, category: a.category,
+      epc: a.epc, epcs: a.epcs.slice(), bib: a.bib, participant: a.participant, category: a.category,
       distance: a.distance || '', team: a.team || '', gender: a.gender || '',
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
     };
@@ -627,6 +632,7 @@ router.get('/contests/:id/race-results', (req, res) => {
       elapsed: formatElapsed(lastMs - startMs),
       // elapsed of each counted crossing, for the per-lap view
       lap_splits: crossings.map((t) => formatElapsed(t - startMs)),
+      lap_ms: crossings.map((t) => t - startMs),
     };
   });
 
@@ -657,12 +663,9 @@ router.get('/contests/:id/race-results', (req, res) => {
   if (req.query.format === 'csv') {
     // CSV export is organizer-only; the public page still reads the JSON results.
     if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
-    const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
-    const header = 'rank,bib,participant,category,category_rank,distance,team,gender,wave,laps,elapsed,behind,status';
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`);
-    return res.send('﻿' + [header, ...results.map((r) => // BOM so Excel reads Hebrew as UTF-8
-      [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.distance ?? ''), cell(r.team ?? ''), cell(r.gender ?? ''), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
+    return res.type('text/csv; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`)
+      .send('﻿' + resultsCsv(results)); // BOM so Excel reads Hebrew as UTF-8
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
@@ -674,6 +677,105 @@ function formatElapsed(ms) {
   const s = Math.floor((tenths % 600) / 10);
   const t = tenths % 10;
   return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}.${t}`;
+}
+
+const isFemaleG = (g) => ['f', 'female', 'נקבה', 'אישה'].includes(String(g || '').trim().toLowerCase());
+const isMaleG = (g) => ['m', 'male', 'זכר', 'גבר'].includes(String(g || '').trim().toLowerCase());
+const genderLabelG = (g) => (isMaleG(g) ? 'Male' : isFemaleG(g) ? 'Female' : '');
+
+/**
+ * Webscorer-style sectioned results CSV: for each distance an Overall / Female
+ * / Male section, then one section per category+gender. Each section repeats a
+ * full header (Place … % Median) with a Lap column per completed lap.
+ */
+function resultsCsv(results) {
+  const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
+  const finished = results.filter((r) => r.status === 'finished');
+  const byTime = (a, b) => (b.laps - a.laps) || (a.elapsed_ms - b.elapsed_ms);
+
+  // Place within gender / category, computed across each distance.
+  const placeMap = (keyFn) => {
+    const groups = new Map();
+    for (const r of finished) {
+      const k = keyFn(r);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    const rank = new Map();
+    for (const arr of groups.values()) {
+      arr.sort(byTime);
+      arr.forEach((r, i) => rank.set(r, i + 1));
+    }
+    return rank;
+  };
+  const genderRank = placeMap((r) => `${r.distance}|${(r.gender || '').toLowerCase()}`);
+  const catRank = placeMap((r) => `${r.distance}|${r.category}|${(r.gender || '').toLowerCase()}`);
+  const median = (nums) => {
+    if (!nums.length) return 0;
+    const s = [...nums].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const pct = (x) => `${Math.round(x * 100) / 100}%`;
+
+  const lines = [];
+  const section = (title, rowsIn) => {
+    const rows = rowsIn.slice().sort(byTime);
+    if (!rows.length) return;
+    const maxLaps = rows.reduce((mx, r) => Math.max(mx, r.lap_ms ? r.lap_ms.length : 0), 0);
+    const lapCols = Array.from({ length: maxLaps }, (_, i) => `Lap ${i + 1}`);
+    const header = ['Place', 'Bib', 'Name', 'First name', 'Last name', 'Team name', 'Distance',
+      'Category', 'Gender', 'Chip id', 'Chip id2', 'Time', 'Place in gender', 'Place in category',
+      ...lapCols, 'Difference', '% Winning', '% Back', '% Average', '% Median'];
+    lines.push(['', '', title].map(cell).join(','));
+    lines.push(header.map(cell).join(','));
+
+    const leaderMs = rows[0].elapsed_ms;
+    const times = rows.map((r) => r.elapsed_ms);
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    const med = median(times);
+    let prevMs = null, prevPlace = 0;
+    rows.forEach((r, i) => {
+      const place = (prevMs !== null && r.elapsed_ms === prevMs) ? prevPlace : i + 1;
+      prevMs = r.elapsed_ms; prevPlace = place;
+      const parts = String(r.participant || '').trim().split(/\s+/);
+      const first = parts[0] || '';
+      const last = parts.slice(1).join(' ');
+      const laps = [];
+      for (let j = 0; j < maxLaps; j++) {
+        laps.push(r.lap_ms && j < r.lap_ms.length
+          ? formatElapsed(r.lap_ms[j] - (j > 0 ? r.lap_ms[j - 1] : 0)) : '');
+      }
+      const diff = r.elapsed_ms === leaderMs ? '-' : '+' + formatElapsed(r.elapsed_ms - leaderMs);
+      const back = r.elapsed_ms === leaderMs ? '-' : '+' + pct((r.elapsed_ms - leaderMs) / leaderMs * 100);
+      lines.push([place, r.bib, r.participant, first, last, r.team || '', r.distance || '',
+        r.category || '', genderLabelG(r.gender), (r.epcs && r.epcs[0]) || r.epc || '',
+        (r.epcs && r.epcs[1]) || '', r.elapsed, genderRank.get(r) || '', catRank.get(r) || '',
+        ...laps, diff, pct(leaderMs / r.elapsed_ms * 100), back,
+        pct(avg / r.elapsed_ms * 100), pct(med / r.elapsed_ms * 100)].map(cell).join(','));
+    });
+  };
+
+  const distances = [...new Set(finished.map((r) => r.distance))];
+  for (const d of distances) {
+    const inD = finished.filter((r) => r.distance === d);
+    const label = d || 'Overall';
+    section(`${label} - Overall`, inD);
+    section(`${label} - Female`, inD.filter((r) => isFemaleG(r.gender)));
+    section(`${label} - Male`, inD.filter((r) => isMaleG(r.gender)));
+  }
+  for (const d of distances) {
+    const inD = finished.filter((r) => r.distance === d);
+    const label = d || 'Overall';
+    const combos = [...new Set(inD.filter((r) => r.category).map((r) => `${r.category}|${(r.gender || '').toLowerCase()}`))];
+    for (const combo of combos) {
+      const [cat, g] = combo.split('|');
+      const gl = genderLabelG(g);
+      section(`${label} - ${cat}${gl ? ` - ${gl}` : ''}`,
+        inD.filter((r) => r.category === cat && (r.gender || '').toLowerCase() === g));
+    }
+  }
+  return lines.join('\n') + '\n';
 }
 
 // HH:MM:SS.t time-of-day from an ISO timestamp (device clock as stored).
