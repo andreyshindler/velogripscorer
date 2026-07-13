@@ -892,7 +892,7 @@ function filteredResultsTable(results, id, dist, cat, gender) {
       <span class="muted"> » ${crumb}</span></p>
     <div style="overflow-x:auto"><table class="board mt"><thead><tr>
       <th>${t('place')}</th><th>${t('bib')}</th>
-      <th>${t('participant')}<br><span class="muted" style="font-weight:400;font-size:.72rem">${t('affiliation')}</span></th>
+      <th>${t('participant')}</th>
       <th>${t('category')}</th><th>${t('gender_col')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>
     </tr></thead><tbody>${finishedHtml}${othersHtml}</tbody></table></div>`;
 }
