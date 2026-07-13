@@ -399,11 +399,12 @@ public class RaceTimingActivity extends Activity {
     private void fillGrid(GridLayout grid, List<Object> tiles, java.util.Set<String> doneBibs,
                           java.util.Set<String> pendingBibs) {
         int margin = dp(4);
-        // Fast-tap pins every tile to the same height the row count is based on,
-        // so the grid never overflows the pager and clips its last row; Normal
-        // view lets tiles wrap to their content.
-        int tileH = fastTap ? rowHpx() - 2 * margin : GridLayout.LayoutParams.WRAP_CONTENT;
-        int blankH = fastTap ? tileH : dp(showNames ? 86 : 64);
+        // Every tile — No Bib, racer, and the blank slot left by a finished
+        // racer — is pinned to the same height, so rows stay even (no gaps when
+        // a box disappears) and the No Bib box matches the others. This is also
+        // the height fast-tap bases its row count on, so the grid fills exactly.
+        int tileH = rowHpx() - 2 * margin;
+        int blankH = tileH;
         for (Object t : tiles) {
             // Finished / DNS-DNF-DSQ racer: keep the slot but render it blank so
             // the remaining bibs never shift position.
@@ -448,7 +449,7 @@ public class RaceTimingActivity extends Activity {
 
             GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
             lp.width = 0;
-            lp.height = GridLayout.LayoutParams.WRAP_CONTENT;
+            lp.height = tileH;
             lp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
             lp.setMargins(margin, margin, margin, margin);
             tile.setLayoutParams(lp);
