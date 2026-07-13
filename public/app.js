@@ -557,7 +557,9 @@ async function viewPublicResults(id, tab) {
     if (!body) return;
     const qi = location.hash.indexOf('?');
     const qs = qi >= 0 ? new URLSearchParams(location.hash.slice(qi + 1)) : null;
-    if (qs && qs.has('dist')) {
+    if (tab === 'live' && qs && qs.has('dist')) {
+      body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
+    } else if (qs && qs.has('dist')) {
       body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
     } else if (tab === 'full') body.innerHTML = fullResultsTable(results);
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
@@ -656,6 +658,52 @@ function fmtElapsedMs(ms) {
   return `${head}:${String(s).padStart(2, '0')}.${tenths}`;
 }
 
+// Live race / progress view: scope summary (finished / on course / not
+// started) plus the live finish order. Refreshes with the results via SSE.
+function liveRaceView(results, id, dist, cat, gender) {
+  let scope = results.filter((r) => (r.distance || '') === dist);
+  if (gender === 'Male') scope = scope.filter((r) => isMaleW(r.gender));
+  else if (gender === 'Female') scope = scope.filter((r) => isFemaleW(r.gender));
+  if (cat) scope = scope.filter((r) => r.category === cat);
+  const finished = scope.filter((r) => r.status === 'finished').sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
+  const onCourse = scope.filter((r) => r.status === 'on_course');
+  const notStarted = scope.filter((r) => r.status === 'not_started');
+  const leader = finished[0] || null;
+  const genderCrumb = gender === 'Male' ? t('male') + ' ' : gender === 'Female' ? t('female') + ' ' : '';
+  const crumb = `${esc(dist || t('overall'))} ${genderCrumb}- ${cat ? esc(cat) : t('overall')}`;
+  const nameCell = (r) => `${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}`;
+  const stat = (n, label, bg) => `<div style="flex:1;min-width:88px;text-align:center;padding:10px;border-radius:8px;background:${bg}">
+    <div style="font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums">${n}</div>
+    <div class="muted" style="font-size:.8rem">${label}</div></div>`;
+  const finishedHtml = finished.map((r, i) => {
+    const diff = !leader || r.elapsed_ms === leader.elapsed_ms
+      ? (i === 0 ? '–' : '') : '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
+    return `<tr><td><strong>${r.rank}</strong></td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
+      <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
+      <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td></tr>`;
+  }).join('') || `<tr><td colspan="5" class="muted">${t('no_results_yet')}</td></tr>`;
+  const onCourseHtml = onCourse.length
+    ? `<h3 style="margin:16px 0 6px">${t('status_on_course')} <span class="muted">(${onCourse.length})</span></h3>
+       <div style="display:flex;flex-wrap:wrap;gap:6px">${onCourse
+      .sort((a, b) => bibNumW(a.bib) - bibNumW(b.bib))
+      .map((r) => `<span class="pill">${esc(r.bib || '')} · ${esc(r.participant)}</span>`).join('')}</div>` : '';
+  return `
+    <p style="margin:12px 0 8px"><a href="#/results/${id}/winners" style="color:var(--brand,#2f8a57);font-weight:700">${t('race_winners')}</a>
+      <span class="muted"> » ${crumb} — ${t('live_race')}</span></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      ${stat(scope.length, t('racers'), 'var(--menu-section-bg,#eeeeee)')}
+      ${stat(finished.length, t('status_finished_r'), '#e6f2da')}
+      ${stat(onCourse.length, t('status_on_course'), '#fdf3d0')}
+      ${stat(notStarted.length, t('status_not_started'), '#f0f0f0')}
+    </div>
+    <div style="overflow-x:auto"><table class="board"><thead><tr>
+      <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>
+    </tr></thead><tbody>${finishedHtml}</tbody></table></div>
+    ${onCourseHtml}`;
+}
+
+function bibNumW(bib) { const n = parseInt(String(bib || '').replace(/[^0-9]/g, ''), 10); return Number.isNaN(n) ? 1e9 : n; }
+
 // The detailed table behind a Race-winners link: one distance + optional
 // gender + optional category, with each racer's team shown under their name.
 function filteredResultsTable(results, id, dist, cat, gender) {
@@ -702,17 +750,16 @@ function raceWinnersTables(id, results) {
     const rows = byDist.get(d);
     const multiLap = rows.some((r) => (r.laps || 0) > 1);
     const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
-    const seg = (catFilter, gender) => `#/results/${id}/winners?dist=${encodeURIComponent(d)}`
+    const seg = (view, catFilter, gender) => `#/results/${id}/${view}?dist=${encodeURIComponent(d)}`
       + `&cat=${encodeURIComponent(catFilter || '')}&gender=${encodeURIComponent(gender || '')}`;
     const line = (label, scope, indent, catFilter, gender) => {
       const leader = leaderOf(scope);
-      const link = seg(catFilter, gender);
       return `<tr>
-        <td style="padding-left:${indent}px"><a href="${link}" class="cat-link">▸ ${esc(label)}</a></td>
+        <td style="padding-left:${indent}px"><a href="${seg('winners', catFilter, gender)}" class="cat-link">▸ ${esc(label)}</a></td>
         <td>${leader ? esc(leader.participant) : '–'}</td>
         <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
         <td><strong>${scope.length}</strong></td>
-        <td><a href="${link}" class="live-link">▸ ${t('live_race')}</a></td>
+        <td><a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${t('live_race')}</a></td>
         ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
       </tr>`;
     };

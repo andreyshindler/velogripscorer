@@ -211,7 +211,7 @@ router.get('/contests/:id/reads', requireAuth, (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="reads-${contest.id}.csv"`);
     return res.send(
-      [header, ...rows.map((x) => [x.read_at, x.epc, cell(x.bib), cell(x.participant), cell(x.reader_name), cell(x.reader_location), x.rssi ?? ''].join(','))].join('\n') + '\n'
+      '﻿' + [header, ...rows.map((x) => [x.read_at, x.epc, cell(x.bib), cell(x.participant), cell(x.reader_name), cell(x.reader_location), x.rssi ?? ''].join(','))].join('\n') + '\n'
     );
   }
   res.json({ reads: rows });
@@ -647,7 +647,7 @@ router.get('/contests/:id/race-results', (req, res) => {
     const header = 'rank,bib,participant,category,category_rank,distance,team,gender,wave,laps,elapsed,behind,status';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`);
-    return res.send([header, ...results.map((r) =>
+    return res.send('﻿' + [header, ...results.map((r) => // BOM so Excel reads Hebrew as UTF-8
       [r.rank ?? '', cell(r.bib), cell(r.participant), cell(r.category), r.category_rank ?? '', cell(r.distance ?? ''), cell(r.team ?? ''), cell(r.gender ?? ''), cell(r.wave ?? ''), r.laps, r.elapsed ?? '', cell(r.behind ?? ''), r.status].join(','))].join('\n') + '\n');
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
