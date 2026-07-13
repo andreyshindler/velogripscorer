@@ -72,6 +72,8 @@ public class BridgeService extends Service {
     private final AtomicReference<String> wifiState = new AtomicReference<>("default");
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
+    private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
+    private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
 
@@ -312,7 +314,10 @@ public class BridgeService extends Service {
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
             store.addPassing(read);
-            beep(); // audible confirmation the chip was detected
+            // Beep once the first time each racer is detected — not on every read.
+            String racerKey = epcRacer.get(read.epc);
+            if (racerKey == null) racerKey = "e:" + read.epc; // no roster: key by chip
+            if (beepedRacers.add(racerKey)) beep();
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
@@ -344,10 +349,15 @@ public class BridgeService extends Service {
         long now = System.currentTimeMillis();
         if (now - registeredAt > 5000) {
             java.util.HashSet<String> set = new java.util.HashSet<>();
+            java.util.HashMap<String, String> map = new java.util.HashMap<>();
             for (RaceStore.Racer r : store.racers()) {
-                if (r.epc != null && !r.epc.isEmpty()) set.add(r.epc);
+                if (r.epc == null || r.epc.isEmpty()) continue;
+                set.add(r.epc);
+                // two chips share a racer: key by bib so both beep as one racer
+                map.put(r.epc, (r.bib == null || r.bib.isEmpty()) ? "e:" + r.epc : "b:" + r.bib);
             }
             registeredEpcs = set;
+            epcRacer = map;
             registeredAt = now;
         }
         java.util.Set<String> set = registeredEpcs;

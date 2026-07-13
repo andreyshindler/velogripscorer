@@ -73,6 +73,7 @@ public class RaceStartActivity extends Activity {
     }
 
     private void startRace() {
+        playStartSound();              // audible go signal
         prefs.setRaceFinalized(false); // fresh race: no laps-down finalisation
         boolean mass = !RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
         long gun = System.currentTimeMillis() + clockAdjustMs;
@@ -87,6 +88,22 @@ public class RaceStartActivity extends Activity {
             // wave races arm the gun per wave inside the console
             Toast.makeText(this, R.string.race_started_wave, Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, RaceTimingActivity.class));
+        }
+    }
+
+    /** A three-beep "go" signal when the race starts (shares the beep toggle). */
+    private void playStartSound() {
+        if (!prefs.beepOnRead()) return;
+        try {
+            final android.media.ToneGenerator tg =
+                    new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100);
+            android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180);
+            h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180), 350);
+            h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 550), 700);
+            h.postDelayed(tg::release, 1600);
+        } catch (RuntimeException ignored) {
+            // some devices refuse the audio resource; the race still starts
         }
     }
 
