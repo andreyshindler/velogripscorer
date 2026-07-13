@@ -23,6 +23,9 @@ import java.util.Locale;
  */
 public class StartListActivity extends Activity {
 
+    /** Set true to hide the wizard's forward button (e.g. opened mid-race). */
+    public static final String EXTRA_NO_FORWARD = "no_forward";
+
     private RaceStore store;
     private LinearLayout box;
     private TextView countView;
@@ -38,8 +41,12 @@ public class StartListActivity extends Activity {
 
         WizardNav.attach(this, WizardNav.START_LIST);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
-        findViewById(R.id.nextButton).setVisibility(View.VISIBLE);
-        findViewById(R.id.nextButton).setOnClickListener(v ->
+        // Opened from Race Timing the wizard's forward step is off-limits — the
+        // race is already running, so only Back is offered.
+        boolean noForward = getIntent().getBooleanExtra(EXTRA_NO_FORWARD, false);
+        View next = findViewById(R.id.nextButton);
+        next.setVisibility(noForward ? View.GONE : View.VISIBLE);
+        if (!noForward) next.setOnClickListener(v ->
                 startActivity(new Intent(this, RaceStartActivity.class)));
 
         box = findViewById(R.id.racersBox);

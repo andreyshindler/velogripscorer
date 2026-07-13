@@ -96,7 +96,9 @@ public class RaceTimingActivity extends Activity {
         ((SwipeBar) findViewById(R.id.tbarA)).setOnSwipe(() -> togglePage(true));
         ((SwipeBar) findViewById(R.id.tbarB)).setOnSwipe(() -> togglePage(false));
         findViewById(R.id.aNormal).setOnClickListener(v -> { fastTap = !fastTap; applyViewMode(); });
-        findViewById(R.id.aStartList).setOnClickListener(v -> startActivity(new Intent(this, StartListActivity.class)));
+        findViewById(R.id.aStartList).setOnClickListener(v -> startActivity(
+                new Intent(this, StartListActivity.class)
+                        .putExtra(StartListActivity.EXTRA_NO_FORWARD, true)));
         findViewById(R.id.bPause).setOnClickListener(v ->
                 startActivity(new Intent(this, RaceProgressActivity.class)));
         int[] stubs = {R.id.bHide, R.id.bDist, R.id.bCat};
