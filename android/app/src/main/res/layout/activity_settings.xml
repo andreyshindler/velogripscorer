@@ -125,6 +125,24 @@
             style="@style/SettingsField"
             android:inputType="number" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingVertical="8dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/label_beep"
+                android:textSize="16sp" />
+            <Switch
+                android:id="@+id/beepOnRead"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
         <TextView style="@style/SettingsHeader" android:text="@string/section_wifi" />
         <TextView
             android:layout_width="match_parent"

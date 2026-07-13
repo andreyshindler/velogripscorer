@@ -59,10 +59,13 @@ public class SettingsActivity extends Activity {
         wifiSsid.setText(prefs.wifiSsid());
         wifiPass.setText(prefs.wifiPass());
         dedupeWindow.setText(String.valueOf(prefs.dedupeWindowMs()));
+        android.widget.Switch beepSwitch = findViewById(R.id.beepOnRead);
+        beepSwitch.setChecked(prefs.beepOnRead());
 
         Button save = findViewById(R.id.save);
         save.setOnClickListener(v -> {
             save(prefs);
+            prefs.setBeepOnRead(beepSwitch.isChecked());
             Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show();
             finish();
         });

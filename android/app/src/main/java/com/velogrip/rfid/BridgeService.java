@@ -73,6 +73,7 @@ public class BridgeService extends Service {
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private long registeredAt = 0;
+    private android.media.ToneGenerator tone;
 
     private Prefs prefs;
     private RaceStore store;
@@ -131,6 +132,7 @@ public class BridgeService extends Service {
             wifiCallback = null;
         }
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        if (tone != null) { tone.release(); tone = null; }
         readerConnected.set(false);
         broadcastStatus(getString(R.string.log_stopped));
         stopForeground(true);
@@ -310,12 +312,29 @@ public class BridgeService extends Service {
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
             store.addPassing(read);
+            beep(); // audible confirmation the chip was detected
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
             sendBroadcast(status);
         }
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events
+    }
+
+    /** Short confirmation beep for a detected chip; opt-out in Settings. */
+    private void beep() {
+        if (!prefs.beepOnRead()) return;
+        try {
+            android.media.ToneGenerator t = tone;
+            if (t == null) {
+                t = new android.media.ToneGenerator(
+                        android.media.AudioManager.STREAM_NOTIFICATION, 90);
+                tone = t;
+            }
+            t.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120);
+        } catch (RuntimeException e) {
+            tone = null; // some devices throw if the audio resource is busy; skip this beep
+        }
     }
 
     /** True if this chip belongs to a racer on the start list. Refreshed every
