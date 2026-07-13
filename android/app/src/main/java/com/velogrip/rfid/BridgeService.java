@@ -74,7 +74,6 @@ public class BridgeService extends Service {
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
-    private volatile boolean raceStarted = false;
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
 
@@ -112,12 +111,9 @@ public class BridgeService extends Service {
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "velogrip:bridge");
         wakeLock.acquire();
-
-        // Join the reader WiFi through the shared, persistent holder (one request
-        // for the whole app) if it isn't already held from Settings.
-        if (!prefs.wifiSsid().isEmpty() && !ReaderWifi.isActive()) {
-            ReaderWifi.connect(this, prefs.wifiSsid(), prefs.wifiPass());
-        }
+        // Reader WiFi is (re)connected from the foreground console on each race
+        // start (RaceTimingActivity.startReader) — more reliable than from a
+        // background service — and the reader socket binds to it here.
 
         readerThread = new Thread(this::readerLoop, "reader");
         readerThread.start();
@@ -309,23 +305,33 @@ public class BridgeService extends Service {
     private void handleReads(List<TagRead> reads) {
         long now = System.currentTimeMillis();
         int window = prefs.dedupeWindowMs();
+        // Fresh gun check per batch (not the 5 s roster cache) so beeps fire
+        // as soon as the race starts; while there's no gun (setup / after a
+        // restart) the per-racer beeps are re-armed.
+        boolean started = raceHasGun();
+        if (!started) beepedRacers.clear();
         for (TagRead read : reads) {
             if (!registered(read.epc)) continue;               // ignore tags not on the start list
             Long prev = lastSeen.get(read.epc);
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
             store.addPassing(read);
-            // Beep once the first time each racer is detected in a started race —
-            // not on every read, and not during pre-race setup.
+            // Beep once the first time each racer is detected in a started race.
             String racerKey = epcRacer.get(read.epc);
             if (racerKey == null) racerKey = "e:" + read.epc; // no roster: key by chip
-            if (raceStarted && beepedRacers.add(racerKey)) beep();
+            if (started && beepedRacers.add(racerKey)) beep();
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
             sendBroadcast(status);
         }
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events
+    }
+
+    /** True once any wave has a gun time (the race is running). */
+    private boolean raceHasGun() {
+        for (RaceStore.Wave w : store.waves()) if (w.startedAtMs != null) return true;
+        return false;
     }
 
     /** Short confirmation beep for a detected chip; opt-out in Settings. */
@@ -361,14 +367,6 @@ public class BridgeService extends Service {
             registeredEpcs = set;
             epcRacer = map;
             registeredAt = now;
-            // Track whether the race is running; when it isn't (e.g. after a
-            // restart clears the gun) re-arm the per-racer beeps for next time.
-            boolean started = false;
-            for (RaceStore.Wave w : store.waves()) {
-                if (w.startedAtMs != null) { started = true; break; }
-            }
-            raceStarted = started;
-            if (!started) beepedRacers.clear();
         }
         java.util.Set<String> set = registeredEpcs;
         return set.isEmpty() || set.contains(epc);

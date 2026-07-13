@@ -29,6 +29,8 @@ public final class ReaderWifi {
     public static String state() { return state; }
     public static String ssid() { return ssid; }
     public static boolean isActive() { return callback != null; }
+    /** True only when actually joined (a failed/lost attempt is not connected). */
+    public static boolean isConnected() { return CONNECTED.equals(state) && network != null; }
     /** The held reader network, or null if not connected yet. */
     public static Network getNetwork() { return network; }
 

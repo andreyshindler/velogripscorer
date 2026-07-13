@@ -114,6 +114,12 @@ public class RaceTimingActivity extends Activity {
 
     /** Start the foreground bridge that reads the RFID reader into the store. */
     private void startReader() {
+        // (Re)join the reader WiFi from the foreground on every race start —
+        // not just once when the service is first created — retrying if a
+        // previous attempt failed or the connection was dropped.
+        if (!prefs.wifiSsid().isEmpty() && !ReaderWifi.isConnected()) {
+            ReaderWifi.connect(this, prefs.wifiSsid(), prefs.wifiPass());
+        }
         Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_START);
         startForegroundService(i); // minSdk 26: always a foreground service
     }
