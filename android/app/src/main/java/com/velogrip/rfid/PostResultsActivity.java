@@ -1,17 +1,26 @@
 package com.velogrip.rfid;
 
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.velogrip.rfid.db.RaceStore;
 import com.velogrip.rfid.net.Uploader;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -22,9 +31,14 @@ import java.util.List;
  */
 public class PostResultsActivity extends Activity {
 
+    private static final int REQ_GALLERY = 71, REQ_CAMERA = 72;
+
     private Prefs prefs;
     private RaceStore store;
     private TextView sportValue, postStatus;
+    private ImageView photoPreview;
+    private String photoDataUrl;       // data:image/jpeg;base64,… to publish with the results
+    private Uri pendingCameraUri;      // MediaStore target the camera app writes to
     private final Handler ui = new Handler(Looper.getMainLooper());
 
     @Override
@@ -44,6 +58,11 @@ public class PostResultsActivity extends Activity {
         findViewById(R.id.sportBox).setOnClickListener(v -> pickSport());
 
         postStatus = findViewById(R.id.postStatus);
+
+        photoPreview = findViewById(R.id.photoPreview);
+        findViewById(R.id.addPhoto).setOnClickListener(v -> pickFromGallery());
+        findViewById(R.id.takePhoto).setOnClickListener(v -> takePhoto());
+        findViewById(R.id.clearPhoto).setOnClickListener(v -> setPhoto(null, null));
 
         String url = prefs.publicResultsUrl();
         ((TextView) findViewById(R.id.urlValue)).setText(url);
@@ -75,6 +94,101 @@ public class PostResultsActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         if (store != null) store.close();
+    }
+
+    // ---- race photo ----
+
+    private void pickFromGallery() {
+        Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+        pick.setType("image/*");
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(Intent.createChooser(pick, getString(R.string.add_photo)), REQ_GALLERY);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.no_photo_app, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void takePhoto() {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, "velogrip_" + System.currentTimeMillis() + ".jpg");
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        pendingCameraUri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        if (pendingCameraUri == null) { Toast.makeText(this, R.string.no_photo_app, Toast.LENGTH_LONG).show(); return; }
+        Intent cam = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        cam.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraUri);
+        try {
+            startActivityForResult(cam, REQ_CAMERA);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.no_photo_app, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK) return;
+        Uri uri = requestCode == REQ_CAMERA ? pendingCameraUri
+                : (data != null ? data.getData() : null);
+        if (uri == null) return;
+        new Thread(() -> {
+            String encoded = encodePhoto(uri);
+            Bitmap thumb = null;
+            if (encoded != null) {
+                byte[] jpeg = Base64.decode(encoded.substring(encoded.indexOf(',') + 1), Base64.DEFAULT);
+                thumb = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
+            }
+            final String enc = encoded;
+            final Bitmap preview = thumb;
+            ui.post(() -> {
+                if (enc == null) { Toast.makeText(this, R.string.photo_failed, Toast.LENGTH_LONG).show(); return; }
+                setPhoto(enc, preview);
+            });
+        }).start();
+    }
+
+    private void setPhoto(String dataUrl, Bitmap preview) {
+        photoDataUrl = dataUrl;
+        boolean has = dataUrl != null;
+        photoPreview.setVisibility(has ? View.VISIBLE : View.GONE);
+        findViewById(R.id.clearPhoto).setVisibility(has ? View.VISIBLE : View.GONE);
+        if (has && preview != null) photoPreview.setImageBitmap(preview);
+        else photoPreview.setImageDrawable(null);
+    }
+
+    /** Decode, downscale (max 1000px) and JPEG-encode the picked image to a
+     *  data URL small enough to publish with the results. */
+    private String encodePhoto(Uri uri) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            InputStream in = getContentResolver().openInputStream(uri);
+            BitmapFactory.decodeStream(in, null, bounds);
+            if (in != null) in.close();
+
+            int max = 1000, sample = 1;
+            while (bounds.outWidth / sample > max * 2 || bounds.outHeight / sample > max * 2) sample *= 2;
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            InputStream in2 = getContentResolver().openInputStream(uri);
+            Bitmap bmp = BitmapFactory.decodeStream(in2, null, opts);
+            if (in2 != null) in2.close();
+            if (bmp == null) return null;
+
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            if (w > max || h > max) {
+                float scale = w >= h ? (float) max / w : (float) max / h;
+                Bitmap scaled = Bitmap.createScaledBitmap(bmp, Math.round(w * scale), Math.round(h * scale), true);
+                if (scaled != bmp) bmp.recycle();
+                bmp = scaled;
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            bmp.compress(Bitmap.CompressFormat.JPEG, 82, out);
+            bmp.recycle();
+            return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void pickSport() {
@@ -117,6 +231,7 @@ public class PostResultsActivity extends Activity {
                     store.markUploaded(batch.get(batch.size() - 1).id);
                     sent += batch.size();
                 }
+                if (photoDataUrl != null) uploader.uploadPhoto(photoDataUrl); // publish the race photo
                 uploader.finishRace(); // list it under the web's Finished races
                 result = getString(R.string.posted_ok, sent);
             } catch (Exception e) {

@@ -443,6 +443,12 @@
     <string name="keep_private">Keep results private:</string>
     <string name="keep_private_hint">(Turn on when testing)</string>
     <string name="sport_label">Sport:</string>
+    <string name="race_photo_label">Race photo</string>
+    <string name="add_photo">Add photo</string>
+    <string name="take_photo">Take photo</string>
+    <string name="remove">Remove</string>
+    <string name="no_photo_app">No photo app available.</string>
+    <string name="photo_failed">Could not read that photo.</string>
     <string name="sport_running">Running</string>
     <string name="email_on_finish">Send email to participants when they finish the race:</string>
     <string name="email_unsupported">Finisher emails are not supported yet.</string>

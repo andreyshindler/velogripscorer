@@ -177,6 +177,18 @@ router.post('/ingest/finish', (req, res) => {
   res.json({ ok: true });
 });
 
+// Race photo pushed from the app's Post Results screen (reader-token auth).
+router.post('/ingest/photo', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const photo = req.body && req.body.photo_url;
+  if (typeof photo !== 'string' || !photo.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'photo_url must be a data:image/... string' });
+  }
+  db.prepare('UPDATE contests SET photo_url = ? WHERE id = ?').run(photo, reader.contest_id);
+  res.json({ ok: true });
+});
+
 // Lightweight connectivity check for the app's "Test connection" button.
 router.get('/ingest/ping', (req, res) => {
   const token = req.headers['x-reader-token'];

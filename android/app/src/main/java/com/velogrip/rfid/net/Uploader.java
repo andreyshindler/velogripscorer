@@ -66,6 +66,13 @@ public final class Uploader {
         return code >= 200 && code < 300;
     }
 
+    /** Uploads a race photo (a data:image/...;base64 URL) for the public page. */
+    public boolean uploadPhoto(String dataUrl) throws IOException {
+        int code = post("/api/ingest/photo", "{\"photo_url\":" + jsonString(dataUrl) + "}");
+        if (code == 401) throw new IOException("server rejected reader token (401)");
+        return code >= 200 && code < 300;
+    }
+
     /** Marks the race finished so it appears under the web's "Finished races". */
     public boolean finishRace() throws IOException {
         int code = post("/api/ingest/finish", "{}");

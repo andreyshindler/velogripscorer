@@ -29,6 +29,36 @@
             <View android:layout_width="match_parent" android:layout_height="1dp"
                 android:layout_marginVertical="10dp" android:background="@color/menu_divider" />
 
+            <!-- Optional race photo, published with the results -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/race_photo_label" android:textColor="#111111"
+                android:textSize="17sp" android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+                <Button android:id="@+id/addPhoto" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/add_photo" android:textAllCaps="false" />
+                <Button android:id="@+id/takePhoto" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" android:text="@string/take_photo" android:textAllCaps="false" />
+                <Button android:id="@+id/clearPhoto" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" android:text="@string/remove" android:textAllCaps="false"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <ImageView android:id="@+id/photoPreview"
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:layout_marginTop="8dp"
+                android:adjustViewBounds="true"
+                android:scaleType="centerCrop"
+                android:background="@color/menu_section_bg"
+                android:contentDescription="@string/race_photo_label"
+                android:visibility="gone" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:layout_marginVertical="10dp" android:background="@color/menu_divider" />
+
             <!-- The single publish option: post results to the web deployment -->
             <LinearLayout
                 android:id="@+id/postWeb"

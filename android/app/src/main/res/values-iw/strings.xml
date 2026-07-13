@@ -443,6 +443,12 @@
     <string name="keep_private">שמור תוצאות פרטיות:</string>
     <string name="keep_private_hint">(הפעל בעת בדיקה)</string>
     <string name="sport_label">ענף:</string>
+    <string name="race_photo_label">תמונת מרוץ</string>
+    <string name="add_photo">הוסף תמונה</string>
+    <string name="take_photo">צלם תמונה</string>
+    <string name="remove">הסר</string>
+    <string name="no_photo_app">אין אפליקציית תמונות זמינה.</string>
+    <string name="photo_failed">לא ניתן לקרוא את התמונה.</string>
     <string name="sport_running">ריצה</string>
     <string name="email_on_finish">שלח אימייל למשתתפים בסיום המרוץ:</string>
     <string name="email_unsupported">שליחת אימיילים בסיום אינה נתמכת עדיין.</string>
