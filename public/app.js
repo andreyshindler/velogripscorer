@@ -529,6 +529,7 @@ async function renderRaceResults(box, c) {
 
 async function viewPublicResults(id, tab) {
   closeSse();
+  tab = (tab || 'winners').split('?')[0]; // the tab segment may carry a ?filter query
   const c = await api(`/contests/${id}`).catch(() => null);
   if (!c) { main.innerHTML = `<div class="card">${t('no_results_yet')}</div>`; return; }
   const data = await api(`/contests/${id}/race-results`);
@@ -554,7 +555,11 @@ async function viewPublicResults(id, tab) {
   const render = (results) => {
     const body = document.getElementById('pubbody');
     if (!body) return;
-    if (tab === 'full') body.innerHTML = fullResultsTable(results);
+    const qi = location.hash.indexOf('?');
+    const qs = qi >= 0 ? new URLSearchParams(location.hash.slice(qi + 1)) : null;
+    if (qs && qs.has('dist')) {
+      body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
+    } else if (tab === 'full') body.innerHTML = fullResultsTable(results);
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
     else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
     else body.innerHTML = raceWinnersTables(id, results);
@@ -638,6 +643,58 @@ function leaderOf(rows) {
   return finished[0] || null;
 }
 
+function isFemaleW(g) { g = String(g || '').trim().toLowerCase(); return ['f', 'female', 'נקבה', 'אישה'].includes(g); }
+function isMaleW(g) { g = String(g || '').trim().toLowerCase(); return ['m', 'male', 'זכר', 'גבר'].includes(g); }
+function genderShort(g) { return isMaleW(g) ? 'M' : isFemaleW(g) ? 'F' : ''; }
+
+// mm:ss.t / h:mm:ss.t from milliseconds (matches the server's formatElapsed)
+function fmtElapsedMs(ms) {
+  const units = Math.round(Math.max(0, ms) / 100); // tenths of a second
+  const tenths = units % 10, totalS = Math.floor(units / 10);
+  const s = totalS % 60, m = Math.floor(totalS / 60) % 60, h = Math.floor(totalS / 3600);
+  const head = h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${m}`;
+  return `${head}:${String(s).padStart(2, '0')}.${tenths}`;
+}
+
+// The detailed table behind a Race-winners link: one distance + optional
+// gender + optional category, with each racer's team shown under their name.
+function filteredResultsTable(results, id, dist, cat, gender) {
+  let scope = results.filter((r) => (r.distance || '') === dist);
+  if (gender === 'Male') scope = scope.filter((r) => isMaleW(r.gender));
+  else if (gender === 'Female') scope = scope.filter((r) => isFemaleW(r.gender));
+  if (cat) scope = scope.filter((r) => r.category === cat);
+  const finished = scope.filter((r) => r.status === 'finished').sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
+  const others = scope.filter((r) => r.status !== 'finished');
+  const leader = finished[0] || null;
+  const genderCrumb = gender === 'Male' ? t('male') + ' ' : gender === 'Female' ? t('female') + ' ' : '';
+  const crumb = `${esc(dist || t('overall'))} ${genderCrumb}- ${cat ? esc(cat) : t('overall')}`;
+  const nameCell = (r) => `${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}`;
+  let prevMs = null, prevPlace = 0;
+  const finishedHtml = finished.map((r, i) => {
+    const place = (prevMs !== null && r.elapsed_ms === prevMs) ? prevPlace : i + 1;
+    prevMs = r.elapsed_ms; prevPlace = place;
+    const diff = !leader || r.elapsed_ms === leader.elapsed_ms
+      ? (i === 0 ? '–' : '') : '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
+    return `<tr>
+      <td><strong>${place}</strong></td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
+      <td>${esc(r.category || '')}</td><td>${genderShort(r.gender)}</td>
+      <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
+      <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td></tr>`;
+  }).join('');
+  const othersHtml = others.map((r) => `<tr>
+      <td class="muted">–</td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
+      <td>${esc(r.category || '')}</td><td>${genderShort(r.gender)}</td>
+      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td></tr>`).join('');
+  return `
+    <p style="margin:12px 0 6px"><a href="#/results/${id}/winners" style="color:var(--brand,#2f8a57);font-weight:700">${t('race_winners')}</a>
+      <span class="muted"> » ${crumb}</span></p>
+    <div style="overflow-x:auto"><table class="board mt"><thead><tr>
+      <th>${t('place')}</th><th>${t('bib')}</th>
+      <th>${t('participant')}<br><span class="muted" style="font-weight:400;font-size:.72rem">${t('affiliation')}</span></th>
+      <th>${t('category')}</th><th>${t('gender_col')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>
+    </tr></thead><tbody>${finishedHtml}${othersHtml}</tbody></table></div>`;
+}
+
 function raceWinnersTables(id, results) {
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
@@ -645,17 +702,17 @@ function raceWinnersTables(id, results) {
     const rows = byDist.get(d);
     const multiLap = rows.some((r) => (r.laps || 0) > 1);
     const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
-    const line = (label, scope, indent, catFilter) => {
+    const seg = (catFilter, gender) => `#/results/${id}/winners?dist=${encodeURIComponent(d)}`
+      + `&cat=${encodeURIComponent(catFilter || '')}&gender=${encodeURIComponent(gender || '')}`;
+    const line = (label, scope, indent, catFilter, gender) => {
       const leader = leaderOf(scope);
-      const link = `#/results/${id}/full`;
+      const link = seg(catFilter, gender);
       return `<tr>
-        <td style="padding-left:${indent}px">${catFilter
-          ? `<a href="${link}" class="cat-link" data-dist="${esc(d)}" data-cat="${esc(catFilter)}">▸ ${esc(label)}</a>`
-          : `<a href="${link}" class="cat-link" data-dist="${esc(d)}" data-cat="">▸ ${esc(label)}</a>`}</td>
+        <td style="padding-left:${indent}px"><a href="${link}" class="cat-link">▸ ${esc(label)}</a></td>
         <td>${leader ? esc(leader.participant) : '–'}</td>
         <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
         <td><strong>${scope.length}</strong></td>
-        <td><a href="${link}" class="live-link" data-dist="${esc(d)}" data-cat="${esc(catFilter || '')}">▸ ${t('live_race')}</a></td>
+        <td><a href="${link}" class="live-link">▸ ${t('live_race')}</a></td>
         ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
       </tr>`;
     };
@@ -667,10 +724,10 @@ function raceWinnersTables(id, results) {
           ${multiLap ? `<th>${t('lap_times')}</th>` : ''}
         </tr></thead>
         <tbody>
-          ${line(t('overall'), rows, 0, '')}
-          ${rows.some((r) => r.gender === 'Female') ? line(t('female'), rows.filter((r) => r.gender === 'Female'), 20, '') : ''}
-          ${rows.some((r) => r.gender === 'Male') ? line(t('male'), rows.filter((r) => r.gender === 'Male'), 20, '') : ''}
-          ${cats.map((cat) => line(cat, rows.filter((r) => r.category === cat), 20, cat)).join('')}
+          ${line(t('overall'), rows, 0, '', '')}
+          ${rows.some((r) => isFemaleW(r.gender)) ? line(t('female'), rows.filter((r) => isFemaleW(r.gender)), 20, '', 'Female') : ''}
+          ${rows.some((r) => isMaleW(r.gender)) ? line(t('male'), rows.filter((r) => isMaleW(r.gender)), 20, '', 'Male') : ''}
+          ${cats.map((cat) => line(cat, rows.filter((r) => r.category === cat), 20, cat, '')).join('')}
         </tbody>
       </table>`;
   }).join('');
@@ -707,13 +764,13 @@ function fullResultsTable(results) {
   const rows = [
     ...finished.map((r) => `<tr class="${r.rank <= 3 ? 'top' + r.rank : ''}">
       <td><strong>${MEDALS[r.rank] || r.rank}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
-      <td>${esc(r.participant)}</td><td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td>
+      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td><td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td>
       <td>${esc(r.distance || '')}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
       <td class="muted" style="font-variant-numeric:tabular-nums">${esc(r.behind || '')}</td></tr>`),
     ...others.map((r) => `<tr>
       <td class="muted">–</td><td><strong>${esc(r.bib || '')}</strong></td>
-      <td>${esc(r.participant)}</td><td>${esc(r.category || '')}</td><td></td>
+      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td><td>${esc(r.category || '')}</td><td></td>
       <td>${esc(r.distance || '')}</td><td>${r.laps || ''}</td>
       <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td></tr>`),
   ].join('') || `<tr><td colspan="9" class="muted">${t('no_results_yet')}</td></tr>`;
