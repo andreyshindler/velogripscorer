@@ -1007,28 +1007,34 @@ async function renderStartlist(box, c) {
 // Inline "edit every column" form for one racer in the Manage start list.
 function racerEditForm(a, waves) {
   const g = a.gender || '';
-  return `<form class="racer-edit" style="display:flex;flex-wrap:wrap;gap:6px;width:100%;align-items:center">
-    <input name="bib" value="${esc(a.bib || '')}" placeholder="${t('bib')}" style="width:64px">
-    <input name="participant" value="${esc(a.participant || '')}" placeholder="${t('participant')}" style="flex:2;min-width:120px">
-    <input name="category" value="${esc(a.category || '')}" placeholder="${t('category')}" style="flex:1;min-width:76px">
-    <input name="distance" value="${esc(a.distance || '')}" placeholder="${t('distance')}" style="width:72px">
-    <input name="team" value="${esc(a.team || '')}" placeholder="${t('team')}" style="flex:1;min-width:80px">
-    <select name="gender" style="width:88px">
-      <option value="" ${!g ? 'selected' : ''}>${t('gender_col')} —</option>
-      <option value="Male" ${isMaleW(g) ? 'selected' : ''}>${t('male')}</option>
-      <option value="Female" ${isFemaleW(g) ? 'selected' : ''}>${t('female')}</option>
-    </select>
-    <select name="wave_id" style="min-width:88px">
-      <option value="">${t('wave')} —</option>
-      ${waves.map((w) => `<option value="${w.id}" ${a.wave_id === w.id ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}
-    </select>
-    <select name="racer_status" style="width:auto">
-      ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
-    </select>
-    <input name="epc" value="${esc((a.epcs && a.epcs[0]) || a.epc || '')}" placeholder="${t('epc_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="min-width:118px">
-    <input name="epc2" value="${esc((a.epcs && a.epcs[1]) || '')}" placeholder="${t('epc2_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="min-width:118px">
-    <button type="button" class="btn small racer-save">${t('save')}</button>
-    <button type="button" class="btn small secondary racer-cancel">${t('cancel')}</button>
+  return `<form class="racer-edit" style="display:flex;flex-direction:column;gap:6px;width:100%">
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <input name="bib" value="${esc(a.bib || '')}" placeholder="${t('bib')}" style="width:64px">
+      <input name="participant" value="${esc(a.participant || '')}" placeholder="${t('participant')}" style="flex:2;min-width:120px">
+      <input name="category" value="${esc(a.category || '')}" placeholder="${t('category')}" style="flex:1;min-width:76px">
+      <input name="distance" value="${esc(a.distance || '')}" placeholder="${t('distance')}" style="width:74px">
+      <input name="team" value="${esc(a.team || '')}" placeholder="${t('team')}" style="flex:1;min-width:80px">
+      <select name="gender" style="width:96px">
+        <option value="" ${!g ? 'selected' : ''}>${t('gender_col')} —</option>
+        <option value="Male" ${isMaleW(g) ? 'selected' : ''}>${t('male')}</option>
+        <option value="Female" ${isFemaleW(g) ? 'selected' : ''}>${t('female')}</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <select name="wave_id" style="flex:1;min-width:110px">
+        <option value="">${t('wave')} —</option>
+        ${waves.map((w) => `<option value="${w.id}" ${a.wave_id === w.id ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}
+      </select>
+      <select name="racer_status" style="flex:0 0 auto;width:auto">
+        ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
+      </select>
+      <input name="epc" value="${esc((a.epcs && a.epcs[0]) || a.epc || '')}" placeholder="${t('epc_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="flex:1;min-width:130px">
+      <input name="epc2" value="${esc((a.epcs && a.epcs[1]) || '')}" placeholder="${t('epc2_optional')}" pattern="[0-9A-Fa-f]{4,64}" style="flex:1;min-width:130px">
+    </div>
+    <div style="display:flex;gap:6px">
+      <button type="button" class="btn small racer-save">${t('save')}</button>
+      <button type="button" class="btn small secondary racer-cancel">${t('cancel')}</button>
+    </div>
   </form>`;
 }
 
