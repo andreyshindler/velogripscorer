@@ -176,10 +176,37 @@ async function viewHome() {
       <button class="btn" type="submit">🔍</button>
     </form>
     <h2>${t('races')}</h2>
-    <div class="grid" id="contest-list"></div>`;
+    <div class="grid" id="contest-list"></div>
+    <div id="finished-home"></div>`;
 
   document.getElementById('search-form').onsubmit = (e) => { e.preventDefault(); loadContests(); };
   loadContests();
+  loadRecentFinished();
+}
+
+// The three most recently finished races, linking straight to their results.
+async function loadRecentFinished() {
+  const box = document.getElementById('finished-home');
+  if (!box) return;
+  try {
+    const { contests } = await api('/contests?status=finished');
+    const recent = contests.slice()
+      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at))
+      .slice(0, 3);
+    box.innerHTML = recent.length
+      ? `<h2 style="margin-top:28px">${t('recently_finished')}</h2>
+         <div class="grid">${recent.map((c) => `
+           <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
+             <div><span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+               <span class="pill finished">${t('status_finished')}</span></div>
+             <h3>${esc(c.title)}</h3>
+             <div class="meta">
+               ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
+               <span>🗓 ${fmtDate(c.start_at)}</span>
+             </div>
+           </a>`).join('')}</div>`
+      : '';
+  } catch { /* not fatal */ }
 }
 
 async function loadContests() {
