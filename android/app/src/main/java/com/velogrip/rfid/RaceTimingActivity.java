@@ -158,6 +158,14 @@ public class RaceTimingActivity extends Activity {
      *  every tile exactly this height so the rows it counts actually fit. */
     private int rowHpx() { return dp(showNames ? 92 : 76); }
 
+    // Tile colour per lap: lap 1 green, then blue, orange, purple, teal (cycling).
+    private static final int[] LAP_COLORS =
+            {0xFF8DC63F, 0xFF5BB8E8, 0xFFF2A93B, 0xFFB57BD6, 0xFF54C9C0};
+
+    private int lapColor(int lap) {
+        return LAP_COLORS[(Math.max(1, lap) - 1) % LAP_COLORS.length];
+    }
+
     /** Boxes per page: fixed rows in Normal view; as many rows as fit in Fast-tap. */
     private int pageSize() {
         int c = cols();
@@ -251,7 +259,14 @@ public class RaceTimingActivity extends Activity {
                 prefs.raceFinalized());
 
         java.util.Set<String> finishedBibs = new java.util.HashSet<>();
-        for (RaceEngine.Result r : results) if ("finished".equals(r.status)) finishedBibs.add(bibKey(r.bib, ""));
+        // Laps completed so far per bib, for the "On lap X/Y" tiles.
+        java.util.Map<String, Integer> lapsByBib = new java.util.HashMap<>();
+        for (RaceEngine.Result r : results) {
+            if ("finished".equals(r.status)) finishedBibs.add(bibKey(r.bib, ""));
+            else if ("on_course".equals(r.status) && r.laps > 0 && !r.bib.isEmpty()) {
+                lapsByBib.put(r.bib, r.laps);
+            }
+        }
 
         List<RaceStore.Pending> pendingEntries = store.pendingEntries();
         java.util.Set<String> pendingBibs = new java.util.HashSet<>();
@@ -272,7 +287,7 @@ public class RaceTimingActivity extends Activity {
         totalPages = Math.max(1, (int) Math.ceil(tiles.size() / (double) pageSize()));
         if (page >= totalPages) page = totalPages - 1;
         if (page < 0) page = 0;
-        renderPager(tiles, doneBibs, pendingBibs);
+        renderPager(tiles, doneBibs, pendingBibs, lapsByBib);
 
         renderResults(results, pendingEntries);
 
@@ -368,10 +383,10 @@ public class RaceTimingActivity extends Activity {
     /** Build one full-width GridLayout page per PAGE_SIZE tiles and lay them in
      *  a row inside the snapping pager. Deferred until the pager is measured. */
     private void renderPager(List<Object> tiles, java.util.Set<String> doneBibs,
-                             java.util.Set<String> pendingBibs) {
+                             java.util.Set<String> pendingBibs, java.util.Map<String, Integer> lapsByBib) {
         int w = pager.getWidth();
         if (w == 0) { // not laid out yet — retry once measured
-            pager.post(() -> renderPager(tiles, doneBibs, pendingBibs));
+            pager.post(() -> renderPager(tiles, doneBibs, pendingBibs, lapsByBib));
             return;
         }
         // Only rebuild when the grid actually changed — otherwise a read would
@@ -380,6 +395,7 @@ public class RaceTimingActivity extends Activity {
         for (Object t : tiles) sb.append(t instanceof String ? "NB" : ((RaceStore.Racer) t).bib).append(',');
         sb.append('|').append(new java.util.TreeSet<>(doneBibs));
         sb.append('|').append(new java.util.TreeSet<>(pendingBibs));
+        sb.append('|').append(new java.util.TreeMap<>(lapsByBib)); // lap progress -> rebuild on each new lap
         String sig = sb.toString();
         if (sig.equals(lastPagerSig) && pagerInner.getChildCount() > 0) return;
         lastPagerSig = sig;
@@ -392,7 +408,7 @@ public class RaceTimingActivity extends Activity {
             g.setColumnCount(cols());
             g.setLayoutParams(new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT));
             fillGrid(g, tiles.subList(pg * size, Math.min(tiles.size(), (pg + 1) * size)),
-                    doneBibs, pendingBibs);
+                    doneBibs, pendingBibs, lapsByBib);
             pagerInner.addView(g);
         }
         if (page >= pages) page = pages - 1;
@@ -401,8 +417,10 @@ public class RaceTimingActivity extends Activity {
     }
 
     private void fillGrid(GridLayout grid, List<Object> tiles, java.util.Set<String> doneBibs,
-                          java.util.Set<String> pendingBibs) {
+                          java.util.Set<String> pendingBibs, java.util.Map<String, Integer> lapsByBib) {
         int margin = dp(4);
+        boolean recordLaps = prefs.recordLaps();
+        java.util.Map<String, Integer> lapTargets = store.lapTargets();
         // Every tile — No Bib, racer, and the blank slot left by a finished
         // racer — is pinned to the same height, so rows stay even (no gaps when
         // a box disappears) and the No Bib box matches the others. This is also
@@ -437,16 +455,26 @@ public class RaceTimingActivity extends Activity {
             } else {
                 final RaceStore.Racer r = (RaceStore.Racer) t;
                 boolean waiting = pendingBibs.contains(r.bib);
-                tile.setBackground(roundedTile(waiting ? 0xFFEDE023 : 0xFF8DC63F)); // yellow when time pending
+                // Multi-lap racers: show "On lap X/Y" and recolour each lap.
+                int target = recordLaps && lapTargets != null
+                        ? Math.max(1, lapTargets.getOrDefault(r.distance, 1)) : 1;
+                Integer done = lapsByBib.get(r.bib);
+                int currentLap = Math.min(target, (done == null ? 0 : done) + 1);
+                boolean multiLap = target > 1;
+                int bg = waiting ? 0xFFEDE023 : (multiLap ? lapColor(currentLap) : 0xFF8DC63F);
+                tile.setBackground(roundedTile(bg));
+                String status = waiting ? getString(R.string.time_pending)
+                        : multiLap ? getString(R.string.on_lap, currentLap, target)
+                        : getString(R.string.tap_to_finish);
                 if (showNames) {
                     tile.addView(line(r.bib + " - " + r.name, 17, true, 0xFF1A1A1A));
                     String sub = r.distance
                             + (r.category.isEmpty() ? "" : (r.distance.isEmpty() ? "" : " - ") + r.category);
                     if (!sub.isEmpty()) tile.addView(line(sub, 13, false, 0xFF294715));
-                    tile.addView(line(getString(waiting ? R.string.time_pending : R.string.tap_to_finish), 12, false, 0xFF1A3A0A));
+                    tile.addView(line(status, 12, false, 0xFF1A3A0A));
                 } else {
                     tile.addView(line(r.bib, 20, true, 0xFF1A1A1A));
-                    tile.addView(line(getString(waiting ? R.string.time_pending : R.string.tap_to_finish), 13, false, 0xFF1A3A0A));
+                    tile.addView(line(status, 13, false, 0xFF1A3A0A));
                 }
                 tile.setOnClickListener(v -> onRacerTap(r));
             }
