@@ -61,8 +61,8 @@ public class RacerInfoActivity extends Activity {
                 store.editRacer(bib, val, r.category, r.wave)));
         box.addView(editableRow(getString(R.string.distance), r.distance, val ->
                 store.setRacerDistance(bib, val)));
-        box.addView(categoryRow(r.category, val ->
-                store.editRacer(bib, r.name, val, r.wave)));
+        box.addView(dropdownRow(getString(R.string.category), r.category,
+                distinctValues(false), val -> store.editRacer(bib, r.name, val, r.wave)));
         box.addView(editableRow(getString(R.string.wave), r.wave, val ->
                 store.editRacer(bib, r.name, r.category, val)));
 
@@ -73,8 +73,8 @@ public class RacerInfoActivity extends Activity {
         box.addView(readonlyRow(getString(R.string.chip_id2), chips.size() > 1 ? chips.get(1) : "—"));
 
         // team comes from the start list (XLSX/CSV column or web sync)
-        box.addView(editableRow(getString(R.string.team_name), r.team, val ->
-                store.setRacerTeam(bib, val)));
+        box.addView(dropdownRow(getString(R.string.team_name), r.team,
+                distinctValues(true), val -> store.setRacerTeam(bib, val)));
 
         // reference fields not stored by the start list
         box.addView(readonlyRow(getString(R.string.racer_age), getString(R.string.not_stored)));
@@ -97,19 +97,30 @@ public class RacerInfoActivity extends Activity {
         return row;
     }
 
-    /** Category as a dropdown of every category in the start list (plus a
-     *  "none" option); saves the moment you pick a new one. */
-    private LinearLayout categoryRow(String current, java.util.function.Consumer<String> onSave) {
-        LinearLayout row = baseRow(getString(R.string.category));
+    /** Distinct non-empty categories (or teams) across the start list, sorted. */
+    private java.util.TreeSet<String> distinctValues(boolean team) {
+        java.util.TreeSet<String> out = new java.util.TreeSet<>();
+        for (RaceStore.Racer x : store.startListEntries()) {
+            String v = team ? x.team : x.category;
+            if (v != null && !v.isEmpty()) out.add(v);
+        }
+        return out;
+    }
 
-        java.util.TreeSet<String> cats = new java.util.TreeSet<>();
-        for (RaceStore.Racer x : store.startListEntries()) if (!x.category.isEmpty()) cats.add(x.category);
-        if (current != null && !current.isEmpty()) cats.add(current);
+    /** A labelled dropdown of the given options (plus a "none" option) with the
+     *  current value pre-selected; saves the moment you pick a new one. */
+    private LinearLayout dropdownRow(String label, String current,
+                                     java.util.Set<String> options,
+                                     java.util.function.Consumer<String> onSave) {
+        LinearLayout row = baseRow(label);
+
+        java.util.TreeSet<String> opts = new java.util.TreeSet<>(options);
+        if (current != null && !current.isEmpty()) opts.add(current);
 
         final java.util.List<String> values = new java.util.ArrayList<>();
         java.util.List<String> labels = new java.util.ArrayList<>();
         values.add(""); labels.add(getString(R.string.category_none));
-        for (String c : cats) { values.add(c); labels.add(c); }
+        for (String c : opts) { values.add(c); labels.add(c); }
 
         Spinner sp = new Spinner(this);
         ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
