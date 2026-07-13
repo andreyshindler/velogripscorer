@@ -113,6 +113,13 @@
     <string name="or_swipe">או החלק</string>
     <string name="tap_to_record">הקש כדי לרשום זמן</string>
     <string name="no_bib">ללא\nמספר</string>
+    <string name="swap_bib">החלף מספר</string>
+    <string name="tap_correct_racer">הקש על המשתתף הנכון</string>
+    <string name="tap_info">רצף #: %1$d\nזמן: %2$s</string>
+    <string name="cancel_entry_title">לבטל רישום #%1$d?</string>
+    <string name="cancel_entry_body">זמן: %3$s\nמספר: %1$s\nשם: %2$s\nהקפה: %4$d</string>
+    <string name="yes">כן</string>
+    <string name="no">לא</string>
     <string name="no_bib_short">ללא מספר</string>
     <string name="tap_to_finish">הקש לסיום</string>
     <string name="col_pl">מק׳</string>

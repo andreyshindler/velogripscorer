@@ -113,6 +113,13 @@
     <string name="or_swipe">or swipe</string>
     <string name="tap_to_record">Tap to record a time</string>
     <string name="no_bib">No Bib</string>
+    <string name="swap_bib">Swap Bib</string>
+    <string name="tap_correct_racer">Tap the correct racer</string>
+    <string name="tap_info">Seq #: %1$d\nTime: %2$s</string>
+    <string name="cancel_entry_title">Cancel entry #%1$d?</string>
+    <string name="cancel_entry_body">Time: %3$s\nBib: %1$s\nName: %2$s\nLap: %4$d</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
     <string name="no_bib_short">No Bib</string>
     <string name="tap_to_finish">Tap to finish</string>
     <string name="col_pl">Pl</string>

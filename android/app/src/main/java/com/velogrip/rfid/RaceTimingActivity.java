@@ -42,6 +42,9 @@ public class RaceTimingActivity extends Activity {
     private long lastSplitMs = -1;
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
+    // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
+    private String swapBib;
+    private long swapTimeMs;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable ticker = new Runnable() {
@@ -185,6 +188,15 @@ public class RaceTimingActivity extends Activity {
     /** Racer tile: claim the oldest banked time, else pre-enter this bib. A
      *  second tap on an already pre-entered bib cancels it. */
     private void onRacerTap(RaceStore.Racer r) {
+        // Swap mode: this tile is the correct racer — move the finish to them.
+        if (swapBib != null) {
+            clearRacerPassings(swapBib);
+            store.recordPassing(r.epc, swapTimeMs);
+            Toast.makeText(this, "⇄ #" + r.bib + "  " + r.name, Toast.LENGTH_SHORT).show();
+            swapBib = null;
+            render();
+            return;
+        }
         for (RaceStore.Pending p : store.pendingEntries()) {
             if (!p.hasTime() && p.epc.equals(r.epc)) { store.deletePending(p.id); render(); return; }
         }
@@ -239,11 +251,57 @@ public class RaceTimingActivity extends Activity {
                 : banked > 0 ? getString(R.string.times_waiting, banked)
                 : getString(R.string.tap_to_record));
 
-        if (showSplits && lastSplitMs >= 0) {
+        if (swapBib != null) {
+            hint.setText(R.string.tap_correct_racer);
+        } else if (showSplits && lastSplitMs >= 0) {
             hint.setText(getString(R.string.finish_split, RaceEngine.formatElapsed(lastSplitMs, 1)));
         } else {
             hint.setText(getString(R.string.timing_hint, racerTotal, page + 1, pages));
         }
+    }
+
+    /** Tap the seq number: confirm cancelling this recorded entry. */
+    private void cancelEntry(int seq, RaceEngine.Result r) {
+        String body = getString(R.string.cancel_entry_body, r.bib, r.name,
+                RaceEngine.formatElapsed(r.elapsedMs, prefs.timingDecimals()), Math.max(1, r.laps));
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.cancel_entry_title, seq))
+                .setMessage(body)
+                .setPositiveButton(R.string.yes, (d, w) -> { clearRacerPassings(r.bib); render(); })
+                .setNegativeButton(R.string.no, null)
+                .show();
+    }
+
+    /** Tap the bib: swap the finish to the correct racer, or drop it to No Bib. */
+    private void bibActions(int seq, RaceEngine.Result r) {
+        String info = getString(R.string.tap_info, seq,
+                RaceEngine.formatElapsed(r.elapsedMs, prefs.timingDecimals()));
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(r.bib + " - " + r.name)
+                .setMessage(info)
+                .setPositiveButton(R.string.swap_bib, (d, w) -> {   // wrong racer -> tap the right one
+                    swapBib = r.bib;
+                    swapTimeMs = lastPassingMs(r.bib);
+                    Toast.makeText(this, R.string.tap_correct_racer, Toast.LENGTH_SHORT).show();
+                    render();
+                })
+                .setNeutralButton(R.string.no_bib, (d, w) -> {      // unknown bib -> unassigned time
+                    long when = lastPassingMs(r.bib);
+                    clearRacerPassings(r.bib);
+                    if (when > 0) store.addPendingTime(when);
+                    render();
+                })
+                .setNegativeButton(R.string.close, null)
+                .show();
+    }
+
+    /** Latest recorded crossing time (ms) for a bib, across both chips. */
+    private long lastPassingMs(String bib) {
+        long last = 0;
+        for (String epc : epcsForBib(bib)) {
+            for (RaceStore.Passing p : store.passingsForEpc(epc)) last = Math.max(last, p.readAtMs);
+        }
+        return last;
     }
 
     private void renderGrid(List<Object> tiles, java.util.Set<String> pendingBibs) {
@@ -265,7 +323,7 @@ public class RaceTimingActivity extends Activity {
             bottom.setGravity(Gravity.CENTER);
 
             if (t instanceof String) { // No Bib
-                tile.setBackgroundColor(0xFF8A8F98);
+                tile.setBackground(roundedTile(0xFF8A8F98));
                 top.setText(R.string.no_bib);
                 top.setTextColor(0xFFFFFFFF);
                 bottom.setText("");
@@ -273,7 +331,7 @@ public class RaceTimingActivity extends Activity {
             } else {
                 final RaceStore.Racer r = (RaceStore.Racer) t;
                 boolean waiting = pendingBibs.contains(r.bib);
-                tile.setBackgroundColor(waiting ? 0xFFEDE023 : 0xFF8DC63F); // yellow when time pending
+                tile.setBackground(roundedTile(waiting ? 0xFFEDE023 : 0xFF8DC63F)); // yellow when time pending
                 top.setText(r.bib);
                 top.setTextColor(0xFF1A1A1A);
                 bottom.setText(waiting ? R.string.time_pending : R.string.tap_to_finish);
@@ -301,8 +359,10 @@ public class RaceTimingActivity extends Activity {
         for (final RaceEngine.Result r : results) {
             if (!"finished".equals(r.status)) continue;
             String time = RaceEngine.formatElapsed(r.elapsedMs, decimals);
-            resultsBox.addView(resultRow(String.valueOf(place++), r.bib, r.name, time, false,
-                    () -> editTime(r), () -> openRacerInfo(r.bib)));
+            final int seq = place++;
+            resultsBox.addView(resultRow(String.valueOf(seq), r.bib, r.name, time, false,
+                    () -> editTime(r), () -> openRacerInfo(r.bib),
+                    () -> cancelEntry(seq, r), () -> bibActions(seq, r)));
             if (prevElapsed >= 0) lastSplitMs = r.elapsedMs - prevElapsed;
             prevElapsed = r.elapsedMs;
         }
@@ -332,13 +392,20 @@ public class RaceTimingActivity extends Activity {
 
     private View resultRow(String place, String bib, String name, String time, boolean unassigned,
                            Runnable onTimeTap, Runnable onArrowTap) {
+        return resultRow(place, bib, name, time, unassigned, onTimeTap, onArrowTap, null, null);
+    }
+
+    private View resultRow(String place, String bib, String name, String time, boolean unassigned,
+                           Runnable onTimeTap, Runnable onArrowTap, Runnable onSeqTap, Runnable onBibTap) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(10), dp(12), dp(10), dp(12));
 
         TextView pl = chip(place, dp(34), unassigned ? 0xFFEED202 : 0xFFF2E400);
+        if (onSeqTap != null) pl.setOnClickListener(v -> onSeqTap.run());   // tap seq -> cancel entry
         TextView bibv = chip(bib, dp(48), 0xFFF2E400);
+        if (onBibTap != null) bibv.setOnClickListener(v -> onBibTap.run()); // tap bib -> swap / no bib
         TextView nm = new TextView(this);
         nm.setText(name);
         nm.setTextSize(17);
@@ -365,6 +432,14 @@ public class RaceTimingActivity extends Activity {
             row.setOnClickListener(v -> onTimeTap.run()); // pending rows: whole row acts
         }
         return row;
+    }
+
+    /** Rounded tile background (smooth edges, matching the clock button). */
+    private android.graphics.drawable.GradientDrawable roundedTile(int color) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(10));
+        return d;
     }
 
     private TextView chip(String text, int width, int bg) {
