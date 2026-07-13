@@ -35,9 +35,12 @@ public class RaceTimingActivity extends Activity {
     private RaceStore store;
     private Prefs prefs;
     private TextView clockText, clockSub, hint;
-    private GridLayout grid;
+    private SnapScrollView pager;
+    private LinearLayout pagerInner;
     private LinearLayout resultsBox;
     private int page;
+    private int totalPages = 1, racerTotalCache;
+    private String lastPagerSig = "";
     private boolean showSplits = true;
     private long lastSplitMs = -1;
     // Pre-entry: a racer tapped first waits here for the next timer press.
@@ -50,7 +53,6 @@ public class RaceTimingActivity extends Activity {
     private final Runnable ticker = new Runnable() {
         @Override public void run() { tickClock(); handler.postDelayed(this, 100); }
     };
-    private GestureDetector swipe;
 
     /** Reader reads arrive as passings written by BridgeService; refresh on each. */
     private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
@@ -58,13 +60,6 @@ public class RaceTimingActivity extends Activity {
             render(); // a new crossing (or status change) landed in the store
         }
     };
-
-    /** Horizontal swipe anywhere pages the bib grid, mirroring the ‹ › buttons. */
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (swipe != null) swipe.onTouchEvent(ev);
-        return super.dispatchTouchEvent(ev);
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,7 +70,9 @@ public class RaceTimingActivity extends Activity {
 
         clockText = findViewById(R.id.clockText);
         clockSub = findViewById(R.id.clockSub);
-        grid = findViewById(R.id.bibGrid);
+        pager = findViewById(R.id.bibPager);
+        pagerInner = findViewById(R.id.bibPagerInner);
+        pager.setOnPage(p -> { page = p; updateHint(); });
         resultsBox = findViewById(R.id.resultsBox);
         hint = findViewById(R.id.timingHint);
 
@@ -86,22 +83,8 @@ public class RaceTimingActivity extends Activity {
         });
         findViewById(R.id.finishButton).setOnClickListener(v -> finishRace());
         findViewById(R.id.clockButton).setOnClickListener(v -> onTimer());
-        findViewById(R.id.prevPage).setOnClickListener(v -> { if (page > 0) { page--; render(); } });
-        findViewById(R.id.nextPage).setOnClickListener(v -> { page++; render(); });
-
-        swipe = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
-                if (e1 == null || e2 == null) return false;
-                float dx = e2.getX() - e1.getX(), dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) > Math.abs(dy) * 2 && Math.abs(dx) > dp(60) && Math.abs(vx) > 300) {
-                    if (dx < 0) page++; else if (page > 0) page--;   // swipe left = next page
-                    render();
-                    return true;
-                }
-                return false;
-            }
-        });
+        findViewById(R.id.prevPage).setOnClickListener(v -> pager.goToPage(pager.currentPage() - 1, true));
+        findViewById(R.id.nextPage).setOnClickListener(v -> pager.goToPage(pager.currentPage() + 1, true));
 
         findViewById(R.id.aSplits).setOnClickListener(v -> { showSplits = true; render(); });
         findViewById(R.id.bHide).setOnClickListener(v -> { showSplits = false; render(); });
@@ -233,14 +216,14 @@ public class RaceTimingActivity extends Activity {
         List<Object> tiles = new ArrayList<>();
         tiles.add(NO_BIB);
         tiles.addAll(stillOut);
-        int pages = Math.max(1, (int) Math.ceil(tiles.size() / (double) PAGE_SIZE));
-        if (page >= pages) page = pages - 1;
+        totalPages = Math.max(1, (int) Math.ceil(tiles.size() / (double) PAGE_SIZE));
+        if (page >= totalPages) page = totalPages - 1;
         if (page < 0) page = 0;
-        renderGrid(tiles.subList(page * PAGE_SIZE, Math.min(tiles.size(), (page + 1) * PAGE_SIZE)), pendingBibs);
+        renderPager(tiles, pendingBibs);
 
         renderResults(results, pendingEntries);
 
-        int racerTotal = store.racerCount();
+        racerTotalCache = store.racerCount();
         boolean waitingBib = oldestRacerPending() != null;
         int banked = 0;
         for (RaceStore.Pending p : pendingEntries) if (p.hasTime() && !p.hasRacer()) banked++;
@@ -248,12 +231,16 @@ public class RaceTimingActivity extends Activity {
                 : banked > 0 ? getString(R.string.times_waiting, banked)
                 : getString(R.string.tap_to_record));
 
+        updateHint();
+    }
+
+    private void updateHint() {
         if (swapBib != null) {
             hint.setText(R.string.tap_correct_racer);
         } else if (showSplits && lastSplitMs >= 0) {
             hint.setText(getString(R.string.finish_split, RaceEngine.formatElapsed(lastSplitMs, 1)));
         } else {
-            hint.setText(getString(R.string.timing_hint, racerTotal, page + 1, pages));
+            hint.setText(getString(R.string.timing_hint, racerTotalCache, page + 1, totalPages));
         }
     }
 
@@ -301,9 +288,38 @@ public class RaceTimingActivity extends Activity {
         return last;
     }
 
-    private void renderGrid(List<Object> tiles, java.util.Set<String> pendingBibs) {
-        grid.removeAllViews();
-        grid.setColumnCount(4);
+    /** Build one full-width GridLayout page per PAGE_SIZE tiles and lay them in
+     *  a row inside the snapping pager. Deferred until the pager is measured. */
+    private void renderPager(List<Object> tiles, java.util.Set<String> pendingBibs) {
+        int w = pager.getWidth();
+        if (w == 0) { // not laid out yet — retry once measured
+            pager.post(() -> renderPager(tiles, pendingBibs));
+            return;
+        }
+        // Only rebuild when the grid actually changed — otherwise a read would
+        // reflow the pages and yank the pager while the operator is swiping.
+        StringBuilder sb = new StringBuilder().append(w).append('|');
+        for (Object t : tiles) sb.append(t instanceof String ? "NB" : ((RaceStore.Racer) t).bib).append(',');
+        sb.append('|').append(new java.util.TreeSet<>(pendingBibs));
+        String sig = sb.toString();
+        if (sig.equals(lastPagerSig) && pagerInner.getChildCount() > 0) return;
+        lastPagerSig = sig;
+
+        pagerInner.removeAllViews();
+        int pages = Math.max(1, (int) Math.ceil(tiles.size() / (double) PAGE_SIZE));
+        for (int pg = 0; pg < pages; pg++) {
+            GridLayout g = new GridLayout(this);
+            g.setColumnCount(4);
+            g.setLayoutParams(new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT));
+            fillGrid(g, tiles.subList(pg * PAGE_SIZE, Math.min(tiles.size(), (pg + 1) * PAGE_SIZE)), pendingBibs);
+            pagerInner.addView(g);
+        }
+        if (page >= pages) page = pages - 1;
+        if (page < 0) page = 0;
+        pager.goToPage(page, false); // keep position steady across re-renders
+    }
+
+    private void fillGrid(GridLayout grid, List<Object> tiles, java.util.Set<String> pendingBibs) {
         int margin = dp(4);
         for (Object t : tiles) {
             LinearLayout tile = new LinearLayout(this);

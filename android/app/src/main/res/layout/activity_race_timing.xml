@@ -100,13 +100,20 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Bib grid -->
-    <GridLayout
-        android:id="@+id/bibGrid"
+    <!-- Bib grid: a snapping horizontal pager (drag follows the finger) -->
+    <com.velogrip.rfid.SnapScrollView
+        android:id="@+id/bibPager"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:columnCount="4"
-        android:padding="4dp" />
+        android:fillViewport="true"
+        android:paddingVertical="4dp">
+
+        <LinearLayout
+            android:id="@+id/bibPagerInner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </com.velogrip.rfid.SnapScrollView>
 
     <!-- Results header -->
     <LinearLayout
