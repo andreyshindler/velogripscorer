@@ -83,6 +83,7 @@ function renderChrome() {
   const authArea = document.getElementById('auth-area');
   document.getElementById('nav-startlists').hidden = !state.user;
   document.getElementById('nav-admin').hidden = !(state.user && state.user.role === 'admin');
+  document.getElementById('footer-api').hidden = !(state.user && state.user.role === 'admin');
   document.getElementById('bell').hidden = !state.user;
   if (state.user) {
     authArea.innerHTML = `
