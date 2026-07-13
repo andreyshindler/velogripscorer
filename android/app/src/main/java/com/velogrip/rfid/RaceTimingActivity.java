@@ -206,20 +206,22 @@ public class RaceTimingActivity extends Activity {
         java.util.Set<String> pendingBibs = new java.util.HashSet<>();
         for (RaceStore.Pending p : pendingEntries) if (p.hasRacer() && !p.hasTime()) pendingBibs.add(p.bib);
 
-        // grid tiles: No Bib + racers not yet finished
-        List<RaceStore.Racer> stillOut = new ArrayList<>();
-        for (RaceStore.Racer r : store.startListEntries()) {
-            if (!finishedBibs.contains(bibKey(r.bib, r.epc)) && r.status.isEmpty()) stillOut.add(r);
+        // grid tiles: No Bib + every racer in a FIXED slot; finished/DNS/DNF/DSQ
+        // racers keep their spot but render blank, so bib positions never move.
+        java.util.Set<String> doneBibs = new java.util.HashSet<>(finishedBibs);
+        List<RaceStore.Racer> allRacers = store.startListEntries();
+        for (RaceStore.Racer r : allRacers) {
+            if (!r.status.isEmpty()) doneBibs.add(bibKey(r.bib, r.epc));
         }
-        java.util.Collections.sort(stillOut, (a, b) -> Long.compare(bibNum(a.bib), bibNum(b.bib)));
+        java.util.Collections.sort(allRacers, (a, b) -> Long.compare(bibNum(a.bib), bibNum(b.bib)));
 
         List<Object> tiles = new ArrayList<>();
         tiles.add(NO_BIB);
-        tiles.addAll(stillOut);
+        tiles.addAll(allRacers);
         totalPages = Math.max(1, (int) Math.ceil(tiles.size() / (double) PAGE_SIZE));
         if (page >= totalPages) page = totalPages - 1;
         if (page < 0) page = 0;
-        renderPager(tiles, pendingBibs);
+        renderPager(tiles, doneBibs, pendingBibs);
 
         renderResults(results, pendingEntries);
 
@@ -290,16 +292,18 @@ public class RaceTimingActivity extends Activity {
 
     /** Build one full-width GridLayout page per PAGE_SIZE tiles and lay them in
      *  a row inside the snapping pager. Deferred until the pager is measured. */
-    private void renderPager(List<Object> tiles, java.util.Set<String> pendingBibs) {
+    private void renderPager(List<Object> tiles, java.util.Set<String> doneBibs,
+                             java.util.Set<String> pendingBibs) {
         int w = pager.getWidth();
         if (w == 0) { // not laid out yet — retry once measured
-            pager.post(() -> renderPager(tiles, pendingBibs));
+            pager.post(() -> renderPager(tiles, doneBibs, pendingBibs));
             return;
         }
         // Only rebuild when the grid actually changed — otherwise a read would
         // reflow the pages and yank the pager while the operator is swiping.
         StringBuilder sb = new StringBuilder().append(w).append('|');
         for (Object t : tiles) sb.append(t instanceof String ? "NB" : ((RaceStore.Racer) t).bib).append(',');
+        sb.append('|').append(new java.util.TreeSet<>(doneBibs));
         sb.append('|').append(new java.util.TreeSet<>(pendingBibs));
         String sig = sb.toString();
         if (sig.equals(lastPagerSig) && pagerInner.getChildCount() > 0) return;
@@ -311,7 +315,8 @@ public class RaceTimingActivity extends Activity {
             GridLayout g = new GridLayout(this);
             g.setColumnCount(4);
             g.setLayoutParams(new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT));
-            fillGrid(g, tiles.subList(pg * PAGE_SIZE, Math.min(tiles.size(), (pg + 1) * PAGE_SIZE)), pendingBibs);
+            fillGrid(g, tiles.subList(pg * PAGE_SIZE, Math.min(tiles.size(), (pg + 1) * PAGE_SIZE)),
+                    doneBibs, pendingBibs);
             pagerInner.addView(g);
         }
         if (page >= pages) page = pages - 1;
@@ -319,9 +324,24 @@ public class RaceTimingActivity extends Activity {
         pager.goToPage(page, false); // keep position steady across re-renders
     }
 
-    private void fillGrid(GridLayout grid, List<Object> tiles, java.util.Set<String> pendingBibs) {
+    private void fillGrid(GridLayout grid, List<Object> tiles, java.util.Set<String> doneBibs,
+                          java.util.Set<String> pendingBibs) {
         int margin = dp(4);
         for (Object t : tiles) {
+            // Finished / DNS-DNF-DSQ racer: keep the slot but render it blank so
+            // the remaining bibs never shift position.
+            if (t instanceof RaceStore.Racer && doneBibs.contains(bibKey(((RaceStore.Racer) t).bib,
+                    ((RaceStore.Racer) t).epc))) {
+                View blank = new View(this);
+                GridLayout.LayoutParams blp = new GridLayout.LayoutParams();
+                blp.width = 0;
+                blp.height = dp(64);
+                blp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                blp.setMargins(margin, margin, margin, margin);
+                blank.setLayoutParams(blp);
+                grid.addView(blank);
+                continue;
+            }
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER);
