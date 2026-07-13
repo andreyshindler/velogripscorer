@@ -47,7 +47,8 @@ public final class StartListSync {
                     r.getString("epc"), bib, r.optString("participant", ""),
                     r.optString("category", ""), r.isNull("wave") ? "" : r.optString("wave", ""),
                     r.isNull("distance") ? "" : r.optString("distance", ""), "",
-                    r.isNull("gender") ? "" : r.optString("gender", "")));
+                    r.isNull("gender") ? "" : r.optString("gender", ""),
+                    r.isNull("team") ? "" : r.optString("team", "")));
         }
         return new Result(distinct.size(), waves.length());
     }

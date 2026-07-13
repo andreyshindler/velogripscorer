@@ -72,10 +72,13 @@ public class RacerInfoActivity extends Activity {
         box.addView(readonlyRow(getString(R.string.chip_id), chips.size() > 0 ? chips.get(0) : "—"));
         box.addView(readonlyRow(getString(R.string.chip_id2), chips.size() > 1 ? chips.get(1) : "—"));
 
+        // team comes from the start list (XLSX/CSV column or web sync)
+        box.addView(editableRow(getString(R.string.team_name), r.team, val ->
+                store.setRacerTeam(bib, val)));
+
         // reference fields not stored by the start list
         box.addView(readonlyRow(getString(R.string.racer_age), getString(R.string.not_stored)));
         box.addView(readonlyRow(getString(R.string.racer_gender), getString(R.string.not_stored)));
-        box.addView(readonlyRow(getString(R.string.team_name), getString(R.string.not_stored)));
     }
 
     private LinearLayout editableRow(String label, String value, java.util.function.Consumer<String> onSave) {
