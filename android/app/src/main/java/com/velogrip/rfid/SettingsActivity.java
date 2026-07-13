@@ -106,6 +106,11 @@ public class SettingsActivity extends Activity {
                             Toast.makeText(this, R.string.no_races_on_account, Toast.LENGTH_LONG).show();
                             return;
                         }
+                        // One race on the account -> pair straight to it, no picker.
+                        if (races.length() == 1) {
+                            pairRace(prefs, races.optJSONObject(0), email, readerToken, selectedRace);
+                            return;
+                        }
                         String[] titles = new String[races.length()];
                         for (int i = 0; i < races.length(); i++) {
                             JSONObject race = races.optJSONObject(i);
@@ -115,15 +120,8 @@ public class SettingsActivity extends Activity {
                         }
                         new android.app.AlertDialog.Builder(this)
                                 .setTitle(R.string.choose_race)
-                                .setItems(titles, (dialog, which) -> {
-                                    JSONObject race = races.optJSONObject(which);
-                                    prefs.savePairing(race.optString("app_token"), race.optString("title"), email, race.optInt("id"));
-                                    readerToken.setText(race.optString("app_token"));
-                                    selectedRace.setText(race.optString("title"));
-                                    Toast.makeText(this,
-                                            getString(R.string.race_paired, race.optString("title")),
-                                            Toast.LENGTH_LONG).show();
-                                })
+                                .setItems(titles, (dialog, which) ->
+                                        pairRace(prefs, races.optJSONObject(which), email, readerToken, selectedRace))
                                 .setNegativeButton(android.R.string.cancel, null)
                                 .show();
                     });
@@ -175,6 +173,15 @@ public class SettingsActivity extends Activity {
                 });
             }).start();
         });
+    }
+
+    /** Store the selected race's per-race reader token + contest, and reflect it in the UI. */
+    private void pairRace(Prefs prefs, JSONObject race, String email,
+                          EditText readerToken, android.widget.TextView selectedRace) {
+        prefs.savePairing(race.optString("app_token"), race.optString("title"), email, race.optInt("id"));
+        readerToken.setText(race.optString("app_token"));
+        selectedRace.setText(race.optString("title"));
+        Toast.makeText(this, getString(R.string.race_paired, race.optString("title")), Toast.LENGTH_LONG).show();
     }
 
     private void save(Prefs prefs) {
