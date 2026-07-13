@@ -76,6 +76,22 @@ router.patch('/users/me', requireAuth, (req, res) => {
   res.json(publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id), user));
 });
 
+// Change the signed-in user's own password (requires the current one).
+router.post('/users/me/password', requireAuth, rateLimit({ max: 20 }), (req, res) => {
+  const { current_password, new_password } = req.body || {};
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user || !bcrypt.compareSync(String(current_password || ''), user.password_hash)) {
+    return res.status(401).json({ error: 'current password is incorrect' });
+  }
+  if (!new_password || String(new_password).length < 8) {
+    return res.status(400).json({ error: 'new password must be at least 8 characters' });
+  }
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .run(bcrypt.hashSync(String(new_password), 10), user.id);
+  auditLog(user.id, 'user.change_password', 'user', user.id);
+  res.json({ ok: true });
+});
+
 router.get('/users/:id', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'user not found' });

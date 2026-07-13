@@ -57,6 +57,11 @@ Open `https://scores.yourdomain.com` (or `http://YOUR-VPS-IP`). Log in as
 `admin@velogripscorer.local` with your `ADMIN_PASSWORD`, or register a
 normal account for organizing races.
 
+> `ADMIN_PASSWORD` only **seeds** the admin account the first time the server
+> boots against an empty database — it is hashed and stored in the DB, not read
+> on every start. Editing `.env` afterward has no effect. To change the password
+> later, log in and use **My profile → Change password** in the web app.
+
 **Android app**: in Settings set *Server URL* to `https://scores.yourdomain.com`
 (or `http://YOUR-VPS-IP`), paste a reader token from your contest's Timing
 tab, then *Test server connection*.

@@ -888,6 +888,7 @@ async function viewProfile(id) {
         ${u.reputation !== undefined ? `<span class="pill">⭐ ${u.reputation} rep</span>` : ''}
       </div>
       ${isMe ? `<button class="btn small secondary" id="edit-profile" style="margin-inline-start:auto">✏️</button>
+        <button class="btn small secondary" id="change-password">${t('change_password')}</button>
         <button class="btn small secondary" id="export-data">${t('export_my_data')}</button>` : ''}
     </div>
     <div id="edit-box"></div>
@@ -912,6 +913,33 @@ async function viewProfile(id) {
     a.href = URL.createObjectURL(await res.blob());
     a.download = 'my-data.json';
     a.click();
+  };
+  const pwBtn = document.getElementById('change-password');
+  if (pwBtn) pwBtn.onclick = () => {
+    document.getElementById('edit-box').innerHTML = `
+      <form class="card mt form-narrow" id="password-form">
+        <label for="pw-current">${t('current_password')}</label>
+        <input id="pw-current" type="password" autocomplete="current-password">
+        <label for="pw-new">${t('new_password')}</label>
+        <input id="pw-new" type="password" autocomplete="new-password">
+        <label for="pw-confirm">${t('confirm_password')}</label>
+        <input id="pw-confirm" type="password" autocomplete="new-password">
+        <button class="btn mt">${t('save')}</button>
+      </form>`;
+    document.getElementById('password-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const current = document.getElementById('pw-current').value;
+      const next = document.getElementById('pw-new').value;
+      const confirm = document.getElementById('pw-confirm').value;
+      if (next !== confirm) return toast(t('passwords_dont_match'), true);
+      try {
+        await api('/users/me/password', { method: 'POST', body: {
+          current_password: current, new_password: next,
+        }});
+        document.getElementById('edit-box').innerHTML = '';
+        toast(t('password_changed'));
+      } catch (err) { toast(err.message, true); }
+    };
   };
   const editBtn = document.getElementById('edit-profile');
   if (editBtn) editBtn.onclick = () => {

@@ -81,6 +81,27 @@ test('duplicate registration is rejected', async () => {
   assert.equal(res.status, 409);
 });
 
+test('change password: wrong current rejected, valid change lets you log in', async () => {
+  const session = await register('pw@test.co', 'PW User');
+  // wrong current password
+  const bad = await request(app).post('/api/users/me/password').set(auth(session))
+    .send({ current_password: 'nope', new_password: 'newpassword123' });
+  assert.equal(bad.status, 401);
+  // too-short new password
+  const short = await request(app).post('/api/users/me/password').set(auth(session))
+    .send({ current_password: 'password123', new_password: 'short' });
+  assert.equal(short.status, 400);
+  // valid change
+  const ok = await request(app).post('/api/users/me/password').set(auth(session))
+    .send({ current_password: 'password123', new_password: 'newpassword123' });
+  assert.equal(ok.status, 200);
+  // old password no longer works, new one does
+  assert.equal((await request(app).post('/api/auth/login').send({ email: 'pw@test.co', password: 'password123' })).status, 401);
+  const relogin = await request(app).post('/api/auth/login').send({ email: 'pw@test.co', password: 'newpassword123' });
+  assert.equal(relogin.status, 200);
+  assert.ok(relogin.body.token);
+});
+
 test('contest creation requires criteria weights summing to 100', async () => {
   const org = await register('org1@test.co', 'Organizer One');
   const bad = await createContest(org, { criteria: [{ name: 'A', weight: 50 }, { name: 'B', weight: 30 }] });
