@@ -175,27 +175,27 @@ async function viewHome() {
       <input type="search" id="q" placeholder="${t('search_placeholder')}" aria-label="${t('search_placeholder')}">
       <button class="btn" type="submit">🔍</button>
     </form>
-    <h2>${t('races')}</h2>
-    <div class="grid" id="contest-list"></div>
     <div id="finished-home"></div>`;
 
-  document.getElementById('search-form').onsubmit = (e) => { e.preventDefault(); loadContests(); };
-  loadContests();
+  document.getElementById('search-form').onsubmit = (e) => { e.preventDefault(); loadRecentFinished(); };
   loadRecentFinished();
 }
 
-// The three most recently finished races, linking straight to their results.
+// The most recently finished races (last 3, or all matches when searching),
+// each linking straight to its public results.
 async function loadRecentFinished() {
   const box = document.getElementById('finished-home');
   if (!box) return;
+  const q = (document.getElementById('q')?.value || '').trim();
   try {
-    const { contests } = await api('/contests?status=finished');
-    const recent = contests.slice()
-      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at))
-      .slice(0, 3);
-    box.innerHTML = recent.length
-      ? `<h2 style="margin-top:28px">${t('recently_finished')}</h2>
-         <div class="grid">${recent.map((c) => `
+    const params = new URLSearchParams({ status: 'finished' });
+    if (q) params.set('q', q);
+    const { contests } = await api(`/contests?${params}`);
+    const sorted = contests.slice().sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+    const list = q ? sorted : sorted.slice(0, 3);
+    box.innerHTML = list.length
+      ? `<h2>${t('recently_finished')}</h2>
+         <div class="grid">${list.map((c) => `
            <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
              <div><span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
                <span class="pill finished">${t('status_finished')}</span></div>
@@ -205,39 +205,8 @@ async function loadRecentFinished() {
                <span>🗓 ${fmtDate(c.start_at)}</span>
              </div>
            </a>`).join('')}</div>`
-      : '';
+      : `<p class="muted">${t('no_finished_races')}</p>`;
   } catch { /* not fatal */ }
-}
-
-async function loadContests() {
-  const q = document.getElementById('q').value;
-  const params = new URLSearchParams();
-  if (q) params.set('q', q);
-  const { contests } = await api(`/contests?${params}`);
-  document.getElementById('contest-list').innerHTML = contests.length
-    ? contests.map(contestCard).join('')
-    : `<p class="muted">${t('no_contests')}</p>`;
-}
-
-function contestCard(c) {
-  const started = new Date(c.start_at) <= new Date();
-  const statusPill = c.status === 'finished'
-    ? `<span class="pill finished">${t('status_finished')}</span>`
-    : started ? `<span class="pill live">● ${t('hero_live')}</span>` : `<span class="pill">${t('live_upcoming')}</span>`;
-  return `
-    <a class="card contest-card" href="#/contest/${c.id}" style="color:inherit;text-decoration:none">
-      <div>
-        <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
-        ${statusPill}
-      </div>
-      <h3>${esc(c.title)}</h3>
-      <div class="meta">
-        ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
-        <span>🗓 ${fmtDate(c.start_at)}</span>
-        <span>👤 ${esc(c.organizer_name || '')}</span>
-      </div>
-      <div>${(c.tags || []).slice(0, 4).map((tag) => `<span class="pill tag">#${esc(tag)}</span>`).join(' ')}</div>
-    </a>`;
 }
 
 // ---------- finished races (public results directory) ----------
