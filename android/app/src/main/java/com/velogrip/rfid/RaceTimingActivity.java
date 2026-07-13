@@ -494,45 +494,65 @@ public class RaceTimingActivity extends Activity {
         int decimals = prefs.timingDecimals();
         final Long gun = gunTime();
 
-        // Merge real finishers and banked No-Bib times into one time-ranked list,
-        // so a No-Bib tap earns a place number just like a bib finisher does.
-        List<Object> ranked = new ArrayList<>();
-        for (RaceEngine.Result r : results) if ("finished".equals(r.status)) ranked.add(r);
-        for (RaceStore.Pending p : pendingEntries) if (p.hasTime() && !p.hasRacer()) ranked.add(p);
-        java.util.Collections.sort(ranked,
-                (a, b) -> Long.compare(rowElapsed(a, gun), rowElapsed(b, gun)));
+        boolean recordLaps = prefs.recordLaps();
+        java.util.Map<String, Integer> lapTargets = store.lapTargets();
+
+        // One row per lap crossing for multi-lap racers, one row per finish for
+        // single-lap racers, plus banked No-Bib times — all ranked by time.
+        List<ResRow> rows = new ArrayList<>();
+        for (RaceEngine.Result r : results) {
+            int target = recordLaps && lapTargets != null
+                    ? Math.max(1, lapTargets.getOrDefault(r.distance, 1)) : 1;
+            if (target > 1) {
+                for (int i = 0; i < r.lapElapsed.length; i++) rows.add(new ResRow(r.lapElapsed[i], r, i + 1));
+            } else if ("finished".equals(r.status)) {
+                rows.add(new ResRow(r.elapsedMs, r, 0));
+            }
+        }
+        for (RaceStore.Pending p : pendingEntries) {
+            if (p.hasTime() && !p.hasRacer()) rows.add(new ResRow(gun == null ? 0 : p.readAtMs - gun, p));
+        }
+        java.util.Collections.sort(rows, (a, b) -> Long.compare(a.elapsed, b.elapsed));
 
         int place = 1;
         long prevElapsed = -1;
         long leaderElapsed = -1;
         lastTapText = null;
         View scrollTarget = null;
-        for (Object item : ranked) {
+        for (ResRow row : rows) {
             final int seq = place++;
-            long elapsed = rowElapsed(item, gun);
+            long elapsed = row.elapsed;
             String time = RaceEngine.formatElapsed(Math.max(0, elapsed), decimals);
             if (prevElapsed >= 0) lastSplitMs = elapsed - prevElapsed;
             prevElapsed = elapsed;
             if (leaderElapsed < 0) leaderElapsed = elapsed;
             String gap = RaceEngine.formatElapsed(Math.max(0, elapsed - leaderElapsed), 1);
 
-            if (item instanceof RaceEngine.Result) {
-                final RaceEngine.Result r = (RaceEngine.Result) item;
-                View rv = resultRow(String.valueOf(seq), r.bib, r.name, time, false,
-                        () -> editTime(r), () -> openRacerInfo(r.bib),
-                        () -> cancelEntry(seq, r), () -> bibActions(seq, r));
-                resultsBox.addView(rv);
-                if (scrollToBib != null && scrollToBib.equals(r.bib)) scrollTarget = rv;
-                lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
-                        r.name == null || r.name.isEmpty() ? r.bib : r.name);
-            } else {
-                final RaceStore.Pending p = (RaceStore.Pending) item;
+            if (row.pending != null) {
+                final RaceStore.Pending p = row.pending;
                 // No-Bib finisher: place number deletes it, the row/arrow assigns
                 // it a bib later.
                 resultsBox.addView(resultRow(String.valueOf(seq), "-", getString(R.string.select_a_bib),
                         time, true, () -> assignTimePending(p), () -> assignTimePending(p),
                         () -> cancelNoBib(seq, p), () -> assignTimePending(p)));
                 lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap, getString(R.string.no_bib));
+            } else {
+                final RaceEngine.Result r = row.result;
+                String label = row.lap > 0 ? r.name + " (" + row.lap + ")" : r.name;
+                View rv;
+                if (row.lap > 0) {
+                    // multi-lap split row: view-only, arrow opens racer info
+                    rv = resultRow(String.valueOf(seq), r.bib, label, time, false,
+                            null, () -> openRacerInfo(r.bib));
+                } else {
+                    rv = resultRow(String.valueOf(seq), r.bib, label, time, false,
+                            () -> editTime(r), () -> openRacerInfo(r.bib),
+                            () -> cancelEntry(seq, r), () -> bibActions(seq, r));
+                }
+                resultsBox.addView(rv);
+                if (scrollToBib != null && scrollToBib.equals(r.bib)) scrollTarget = rv;
+                lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
+                        r.name == null || r.name.isEmpty() ? r.bib : r.name);
             }
         }
         // bib pre-entered, still waiting for a time
@@ -554,12 +574,19 @@ public class RaceTimingActivity extends Activity {
         scrollToBib = null;
     }
 
-    /** Elapsed time (ms) of a results row — a finisher's elapsed, or a banked
-     *  No-Bib time measured from the gun. */
-    private long rowElapsed(Object item, Long gun) {
-        if (item instanceof RaceEngine.Result) return ((RaceEngine.Result) item).elapsedMs;
-        long readAt = ((RaceStore.Pending) item).readAtMs;
-        return gun == null ? 0 : readAt - gun;
+    /** A single finish-list row: a lap crossing / finish for a racer, or a
+     *  banked No-Bib time. lap 0 = single-lap finish (no "(n)" label). */
+    private static final class ResRow {
+        final long elapsed;
+        final RaceEngine.Result result;   // null for a No-Bib row
+        final RaceStore.Pending pending;  // null for a racer row
+        final int lap;
+        ResRow(long elapsed, RaceEngine.Result result, int lap) {
+            this.elapsed = elapsed; this.result = result; this.pending = null; this.lap = lap;
+        }
+        ResRow(long elapsed, RaceStore.Pending pending) {
+            this.elapsed = elapsed; this.result = null; this.pending = pending; this.lap = 0;
+        }
     }
 
     /** Tap a No-Bib finisher's place number: confirm removing the banked time. */

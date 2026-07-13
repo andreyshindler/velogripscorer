@@ -127,6 +127,7 @@ public class StartListActivity extends Activity {
             name.setText(r.name + (flagged ? "  (" + r.status + ")" : ""));
             name.setTextColor(flagged ? 0xFF999999 : 0xFF111111);
             name.setTextSize(18);
+            name.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START); // left-align, even Hebrew names
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView chevron = new TextView(this);

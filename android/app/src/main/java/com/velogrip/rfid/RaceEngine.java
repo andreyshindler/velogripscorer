@@ -25,6 +25,7 @@ public final class RaceEngine {
         public final String status;     // finished | on_course | not_started
         public final int laps;
         public final long elapsedMs;    // 0 unless finished
+        public long[] lapElapsed = new long[0];   // elapsed of each counted crossing
 
         Result(String bib, String name, String category, String wave, String distance, String gender,
                String status, int laps, long elapsedMs) {
@@ -150,18 +151,24 @@ public final class RaceEngine {
                 }
             }
             boolean unlimited = target == Integer.MAX_VALUE;
+            // elapsed of each counted crossing, for per-lap split rows
+            long[] splits = new long[crossings.size()];
+            for (int i = 0; i < crossings.size(); i++) splits[i] = crossings.get(i) - gun;
+            Result res;
             if (crossings.isEmpty()) {
-                results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, racer.gender,"on_course", 0, 0));
+                res = new Result(racer.bib, racer.name, racer.category, racer.wave,
+                        racer.distance, racer.gender,"on_course", 0, 0);
             } else if (!unlimited && crossings.size() < target && !finalizeLapsDown) {
                 // laps completed so far, still on course to the lap target
-                results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, racer.gender,"on_course", crossings.size(), 0));
+                res = new Result(racer.bib, racer.name, racer.category, racer.wave,
+                        racer.distance, racer.gender,"on_course", crossings.size(), 0);
             } else {
                 long last = crossings.get(crossings.size() - 1);
-                results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, racer.gender,"finished", crossings.size(), last - gun));
+                res = new Result(racer.bib, racer.name, racer.category, racer.wave,
+                        racer.distance, racer.gender,"finished", crossings.size(), last - gun);
             }
+            res.lapElapsed = splits;
+            results.add(res);
         }
 
         Collections.sort(results, new Comparator<Result>() {
