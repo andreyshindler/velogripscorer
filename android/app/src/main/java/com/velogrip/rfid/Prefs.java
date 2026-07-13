@@ -34,7 +34,7 @@ public final class Prefs {
     public String onConnectHex() { return sp.getString("onConnectHex", ""); }
     public String pollHex() { return sp.getString("pollHex", ""); }
     public int pollIntervalMs() { return sp.getInt("pollIntervalMs", 1000); }
-    public String wifiSsid() { return sp.getString("wifiSsid", ""); }
+    public String wifiSsid() { return sp.getString("wifiSsid", "Tenda_raceit"); }
     public String wifiPass() { return sp.getString("wifiPass", ""); }
     public void setWifi(String ssid, String pass) {
         sp.edit().putString("wifiSsid", ssid.trim()).putString("wifiPass", pass).apply();

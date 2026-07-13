@@ -185,7 +185,15 @@ router.get('/my/races', requireAuth, (req, res) => {
         .run(race.id, 'Timing app', race.app_token, '');
     }
   }
-  res.json({ races });
+  // Reader WiFi credentials for the timing app (env-configured, shared across
+  // races). Only returned to the authenticated organizer.
+  res.json({
+    races,
+    reader_wifi: {
+      ssid: process.env.READER_WIFI_SSID || 'Tenda_raceit',
+      password: process.env.READER_WIFI_PASSWORD || '',
+    },
+  });
 });
 
 // ---- Creation & management (req 3.2) ----

@@ -107,10 +107,23 @@ public class SettingsActivity extends Activity {
                 try {
                     JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), email, password));
                     String jwt = session.getString("token");
-                    JSONArray races = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt))
-                            .getJSONArray("races");
+                    JSONObject my = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt));
+                    JSONArray races = my.getJSONArray("races");
+                    // Reader WiFi credentials come from the server env; store and prefill.
+                    JSONObject wifi = my.optJSONObject("reader_wifi");
+                    if (wifi != null) {
+                        String ws = wifi.optString("ssid", "");
+                        String wp = wifi.optString("password", "");
+                        // keep any existing value the server didn't provide
+                        prefs.setWifi(ws.isEmpty() ? prefs.wifiSsid() : ws,
+                                wp.isEmpty() ? prefs.wifiPass() : wp);
+                    }
                     runOnUiThread(() -> {
                         loginPick.setEnabled(true);
+                        if (wifi != null) {
+                            wifiSsid.setText(prefs.wifiSsid());
+                            wifiPass.setText(prefs.wifiPass());
+                        }
                         if (races.length() == 0) {
                             Toast.makeText(this, R.string.no_races_on_account, Toast.LENGTH_LONG).show();
                             return;
@@ -214,16 +227,26 @@ public class SettingsActivity extends Activity {
                 .build();
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         clearWifiCallback(cm);
+        status.setTextColor(0xFF555555);
         status.setText(getString(R.string.wifi_connecting, ssid));
         wifiCallback = new ConnectivityManager.NetworkCallback() {
             @Override public void onAvailable(Network network) {
-                runOnUiThread(() -> status.setText(getString(R.string.wifi_connected_to, ssid)));
+                runOnUiThread(() -> {
+                    status.setTextColor(0xFF2E7D32); // green: connected
+                    status.setText(getString(R.string.wifi_connected_to, ssid));
+                });
             }
             @Override public void onUnavailable() {
-                runOnUiThread(() -> status.setText(R.string.wifi_connect_failed));
+                runOnUiThread(() -> {
+                    status.setTextColor(0xFFC62828); // red: failed
+                    status.setText(R.string.wifi_connect_failed);
+                });
             }
             @Override public void onLost(Network network) {
-                runOnUiThread(() -> status.setText(R.string.wifi_lost));
+                runOnUiThread(() -> {
+                    status.setTextColor(0xFFC62828);
+                    status.setText(R.string.wifi_lost);
+                });
             }
         };
         cm.requestNetwork(request, wifiCallback);
