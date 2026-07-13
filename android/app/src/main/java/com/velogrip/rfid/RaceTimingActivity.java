@@ -618,7 +618,7 @@ public class RaceTimingActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(10), dp(12), dp(10), dp(12));
 
-        TextView pl = chip(place, dp(34), unassigned ? 0xFFEED202 : 0xFFF2E400);
+        TextView pl = chip(place, dp(54), unassigned ? 0xFFEED202 : 0xFFF2E400); // fits 4 digits
         if (onSeqTap != null) pl.setOnClickListener(v -> onSeqTap.run());   // tap seq -> cancel entry
         TextView bibv = chip(bib, dp(48), 0xFFF2E400);
         if (onBibTap != null) bibv.setOnClickListener(v -> onBibTap.run()); // tap bib -> swap / no bib
@@ -627,7 +627,7 @@ public class RaceTimingActivity extends Activity {
         nm.setTextSize(17);
         nm.setTextColor(0xFF111111);
         nm.setPadding(dp(8), 0, dp(8), 0);
-        nm.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START); // left-align, even Hebrew names
+        nm.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
         nm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         TextView tv = chip(time, LinearLayout.LayoutParams.WRAP_CONTENT, 0xFFF2E400);
         if (onTimeTap != null) tv.setOnClickListener(v -> onTimeTap.run()); // tap the time to edit it

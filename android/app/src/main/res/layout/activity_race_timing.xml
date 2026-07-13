@@ -124,8 +124,8 @@
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp">
-        <TextView android:layout_width="36dp" android:layout_height="wrap_content"
-            android:text="@string/col_pl" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="54dp" android:layout_height="wrap_content"
+            android:text="@string/col_seq" android:textColor="#222222" android:textSize="16sp" />
         <TextView android:layout_width="52dp" android:layout_height="wrap_content"
             android:text="@string/bib_col" android:textColor="#222222" android:textSize="16sp" />
         <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"

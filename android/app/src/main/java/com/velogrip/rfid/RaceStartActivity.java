@@ -149,6 +149,7 @@ public class RaceStartActivity extends Activity {
             name.setText(r.name + (r.status.isEmpty() ? "" : "  (" + r.status + ")"));
             name.setTextColor(r.status.isEmpty() ? 0xFF111111 : 0xFF999999);
             name.setTextSize(18);
+            name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
             row.addView(bib);

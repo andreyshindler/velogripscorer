@@ -184,7 +184,7 @@ public class SegmentResultsActivity extends Activity {
         nm.setText(row.name);
         nm.setTextSize(17);
         nm.setTextColor(0xFF111111);
-        nm.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START); // left-align, even Hebrew names
+        nm.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
         // Keep a gap on both sides so a right-aligned Hebrew name never touches
         // the bib on one side or the time on the other.
         nm.setPadding(dp(10), 0, dp(12), 0);
