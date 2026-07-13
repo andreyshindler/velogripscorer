@@ -74,6 +74,7 @@ public class BridgeService extends Service {
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
+    private volatile boolean raceStarted = false;
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
 
@@ -314,10 +315,11 @@ public class BridgeService extends Service {
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
             store.addPassing(read);
-            // Beep once the first time each racer is detected — not on every read.
+            // Beep once the first time each racer is detected in a started race —
+            // not on every read, and not during pre-race setup.
             String racerKey = epcRacer.get(read.epc);
             if (racerKey == null) racerKey = "e:" + read.epc; // no roster: key by chip
-            if (beepedRacers.add(racerKey)) beep();
+            if (raceStarted && beepedRacers.add(racerKey)) beep();
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
@@ -359,6 +361,14 @@ public class BridgeService extends Service {
             registeredEpcs = set;
             epcRacer = map;
             registeredAt = now;
+            // Track whether the race is running; when it isn't (e.g. after a
+            // restart clears the gun) re-arm the per-racer beeps for next time.
+            boolean started = false;
+            for (RaceStore.Wave w : store.waves()) {
+                if (w.startedAtMs != null) { started = true; break; }
+            }
+            raceStarted = started;
+            if (!started) beepedRacers.clear();
         }
         java.util.Set<String> set = registeredEpcs;
         return set.isEmpty() || set.contains(epc);

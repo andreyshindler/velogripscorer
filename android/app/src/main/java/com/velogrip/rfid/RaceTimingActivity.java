@@ -539,7 +539,8 @@ public class RaceTimingActivity extends Activity {
                             store.clearPending();
                             store.clearGunTimes();                 // un-start every wave
                             prefs.setRaceFinalized(false);
-                            stopReader();                          // reset: stop capturing until re-started
+                            // keep the reader (and its WiFi) connected through the
+                            // restart; clearing the gun re-arms the per-racer beeps
                             Intent i = new Intent(this, RaceStartActivity.class);
                             i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                             startActivity(i);
