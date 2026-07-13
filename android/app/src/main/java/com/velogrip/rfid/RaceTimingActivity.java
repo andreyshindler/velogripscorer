@@ -115,14 +115,11 @@ public class RaceTimingActivity extends Activity {
         startReader(); // connect to the RFID reader and capture crossings for this race
     }
 
-    /** Start the foreground bridge that reads the RFID reader into the store. */
+    /** Start the foreground bridge that reads the RFID reader into the store.
+     *  The reader is reached over the tablet's current network (default); the
+     *  reader-WiFi specifier is only used when the organizer explicitly taps
+     *  Connect in Settings, so no system WiFi-picker dialog appears here. */
     private void startReader() {
-        // (Re)join the reader WiFi from the foreground on every race start —
-        // not just once when the service is first created — retrying if a
-        // previous attempt failed or the connection was dropped.
-        if (!prefs.wifiSsid().isEmpty() && !ReaderWifi.isConnected()) {
-            ReaderWifi.connect(this, prefs.wifiSsid(), prefs.wifiPass());
-        }
         Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_START);
         startForegroundService(i); // minSdk 26: always a foreground service
     }
