@@ -58,11 +58,30 @@ public class RaceTimingActivity extends Activity {
     private final Runnable ticker = new Runnable() {
         @Override public void run() { tickClock(); handler.postDelayed(this, 100); }
     };
+    private final Runnable renderTask = this::render;
+
+    private android.widget.Toast tapToast;
+
+    /** A single, self-replacing toast so a burst of taps doesn't queue a backlog. */
+    private void tapToast(String msg) {
+        if (tapToast != null) tapToast.cancel();
+        tapToast = Toast.makeText(this, msg, Toast.LENGTH_SHORT);
+        tapToast.show();
+    }
+
+    /** Coalesce rapid taps: the passing is written to the store immediately, but
+     *  the heavy recompute + redraw is debounced so a burst of fast taps runs a
+     *  single render once it settles, instead of blocking the UI thread between
+     *  each tap. */
+    private void scheduleRender() {
+        handler.removeCallbacks(renderTask);
+        handler.postDelayed(renderTask, 55);
+    }
 
     /** Reader reads arrive as passings written by BridgeService; refresh on each. */
     private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent i) {
-            render(); // a new crossing (or status change) landed in the store
+            scheduleRender(); // a new crossing (or status change) landed in the store
         }
     };
 
@@ -213,13 +232,13 @@ public class RaceTimingActivity extends Activity {
         } else {
             store.addPendingTime(now);
         }
-        render();
+        scheduleRender();
     }
 
     /** No Bib tile: always banks an unassigned time ("Select a bib"). */
     private void recordNoBib() {
         store.addPendingTime(System.currentTimeMillis());
-        render();
+        scheduleRender();
     }
 
     /** Racer tile: claim the oldest banked time, else pre-enter this bib. A
@@ -229,25 +248,25 @@ public class RaceTimingActivity extends Activity {
         if (swapBib != null) {
             clearRacerPassings(swapBib);
             store.recordPassing(r.epc, swapTimeMs);
-            Toast.makeText(this, "⇄ #" + r.bib + "  " + r.name, Toast.LENGTH_SHORT).show();
+            tapToast("⇄ #" + r.bib + "  " + r.name);
             swapBib = null;
             scrollToBib = r.bib;
-            render();
+            scheduleRender();
             return;
         }
         for (RaceStore.Pending p : store.pendingEntries()) {
-            if (!p.hasTime() && p.epc.equals(r.epc)) { store.deletePending(p.id); render(); return; }
+            if (!p.hasTime() && p.epc.equals(r.epc)) { store.deletePending(p.id); scheduleRender(); return; }
         }
         RaceStore.Pending time = oldestTimePending();
         if (time != null) {
             store.recordPassing(r.epc, time.readAtMs);
             store.deletePending(time.id);
-            Toast.makeText(this, "⏱ #" + r.bib + "  " + r.name, Toast.LENGTH_SHORT).show();
+            tapToast("⏱ #" + r.bib + "  " + r.name);
             scrollToBib = r.bib;
         } else {
             store.addPendingRacer(r.epc, r.bib, r.name);
         }
-        render();
+        scheduleRender();
     }
 
     // ---- rendering ----
@@ -1033,6 +1052,7 @@ public class RaceTimingActivity extends Activity {
     protected void onPause() {
         super.onPause();
         handler.removeCallbacks(ticker);
+        handler.removeCallbacks(renderTask); // onResume re-renders fresh anyway
         unregisterReceiver(bridgeReceiver);
     }
 
