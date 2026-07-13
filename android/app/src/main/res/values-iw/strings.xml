@@ -311,6 +311,7 @@
     <string name="hint_wifi_ssid">RFID-ROUTER</string>
     <string name="label_wifi_pass">סיסמת WiFi</string>
     <string name="wifi_connect">התחבר</string>
+    <string name="wifi_disconnect">התנתק</string>
     <string name="wifi_connecting">מתחבר ל‑%1$s…</string>
     <string name="wifi_connected_to">מחובר ל‑%1$s</string>
     <string name="wifi_connect_failed">ההתחברות נכשלה</string>
