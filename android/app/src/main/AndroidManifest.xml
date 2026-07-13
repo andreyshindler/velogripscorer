@@ -178,6 +178,12 @@
             android:theme="@android:style/Theme.Material.Light.NoActionBar"
             android:exported="false" />
 
+        <activity
+            android:name=".ProgressListActivity"
+            android:parentActivityName=".RaceProgressActivity"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:exported="false" />
+
         <service
             android:name=".BridgeService"
             android:foregroundServiceType="dataSync"

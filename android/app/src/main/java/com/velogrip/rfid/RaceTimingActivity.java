@@ -92,6 +92,9 @@ public class RaceTimingActivity extends Activity {
         findViewById(R.id.aControl).setOnClickListener(v -> raceControl());
         findViewById(R.id.aMoreT).setOnClickListener(v -> togglePage(true));
         findViewById(R.id.bMoreT).setOnClickListener(v -> togglePage(false));
+        // Swipe the bottom bar sideways to flip between its two pages.
+        ((SwipeBar) findViewById(R.id.tbarA)).setOnSwipe(() -> togglePage(true));
+        ((SwipeBar) findViewById(R.id.tbarB)).setOnSwipe(() -> togglePage(false));
         findViewById(R.id.aNormal).setOnClickListener(v -> { fastTap = !fastTap; applyViewMode(); });
         findViewById(R.id.aStartList).setOnClickListener(v -> startActivity(new Intent(this, StartListActivity.class)));
         findViewById(R.id.bPause).setOnClickListener(v ->
@@ -147,14 +150,17 @@ public class RaceTimingActivity extends Activity {
         pager.post(this::render);
     }
 
+    /** One grid row's height (tile + its top/bottom margins). Fast-tap gives
+     *  every tile exactly this height so the rows it counts actually fit. */
+    private int rowHpx() { return dp(showNames ? 92 : 76); }
+
     /** Boxes per page: fixed rows in Normal view; as many rows as fit in Fast-tap. */
     private int pageSize() {
         int c = cols();
-        int rowH = dp(showNames ? 88 : 72);
         if (!fastTap) return 5 * c;            // ~5 rows
         int h = pager.getHeight();
         if (h <= 0) return 6 * c;              // fallback until the pager is measured
-        return Math.max(1, h / rowH) * c;
+        return Math.max(1, h / rowHpx()) * c;
     }
 
     // ---- race clock ----
@@ -391,6 +397,11 @@ public class RaceTimingActivity extends Activity {
     private void fillGrid(GridLayout grid, List<Object> tiles, java.util.Set<String> doneBibs,
                           java.util.Set<String> pendingBibs) {
         int margin = dp(4);
+        // Fast-tap pins every tile to the same height the row count is based on,
+        // so the grid never overflows the pager and clips its last row; Normal
+        // view lets tiles wrap to their content.
+        int tileH = fastTap ? rowHpx() - 2 * margin : GridLayout.LayoutParams.WRAP_CONTENT;
+        int blankH = fastTap ? tileH : dp(showNames ? 86 : 64);
         for (Object t : tiles) {
             // Finished / DNS-DNF-DSQ racer: keep the slot but render it blank so
             // the remaining bibs never shift position.
@@ -399,7 +410,7 @@ public class RaceTimingActivity extends Activity {
                 View blank = new View(this);
                 GridLayout.LayoutParams blp = new GridLayout.LayoutParams();
                 blp.width = 0;
-                blp.height = dp(showNames ? 86 : 64);
+                blp.height = blankH;
                 blp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
                 blp.setMargins(margin, margin, margin, margin);
                 blank.setLayoutParams(blp);
@@ -409,7 +420,7 @@ public class RaceTimingActivity extends Activity {
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER);
-            tile.setPadding(dp(8), dp(12), dp(8), dp(12));
+            tile.setPadding(dp(8), dp(6), dp(8), dp(6));
 
             if (t instanceof String) { // No Bib / Unknown Racer
                 tile.setBackground(roundedTile(0xFF8A8F98));

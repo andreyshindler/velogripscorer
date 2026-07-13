@@ -156,8 +156,8 @@
         android:textColor="#333333"
         android:textSize="15sp" />
 
-    <!-- Bottom bar page A -->
-    <LinearLayout
+    <!-- Bottom bar page A (swipe sideways to flip to page B) -->
+    <com.velogrip.rfid.SwipeBar
         android:id="@+id/tbarA"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -184,10 +184,10 @@
             <TextView style="@style/BottomIcon" android:text="•••" />
             <TextView style="@style/BottomText" android:text="@string/more" />
         </LinearLayout>
-    </LinearLayout>
+    </com.velogrip.rfid.SwipeBar>
 
-    <!-- Bottom bar page B -->
-    <LinearLayout
+    <!-- Bottom bar page B (swipe sideways to flip back to page A) -->
+    <com.velogrip.rfid.SwipeBar
         android:id="@+id/tbarB"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -215,5 +215,5 @@
             <TextView style="@style/BottomIcon" android:text="•••" />
             <TextView style="@style/BottomText" android:text="@string/more" />
         </LinearLayout>
-    </LinearLayout>
+    </com.velogrip.rfid.SwipeBar>
 </LinearLayout>

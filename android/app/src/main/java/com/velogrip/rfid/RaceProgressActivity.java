@@ -1,6 +1,7 @@
 package com.velogrip.rfid;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -85,15 +86,25 @@ public class RaceProgressActivity extends Activity {
             return;
         }
 
+        String noDistance = getString(R.string.no_distance);
         for (String d : dists) {
             Tally t = byDist.get(d);
+            // The tally key is the display label; the underlying racer distance
+            // is "" when it was blank, so map it back for filtering.
+            String rawDist = d.equals(noDistance) ? "" : d;
             box.addView(sectionHeader(d));
-            box.addView(statRow(getString(R.string.total_racers), t.total, false));
+            box.addView(statRow(getString(R.string.total_racers), t.total, null, null));
             box.addView(divider());
-            box.addView(statRow(getString(R.string.finished_label), t.finished, true));
+            box.addView(statRow(getString(R.string.finished_label), t.finished, rawDist, "finished"));
             box.addView(divider());
-            box.addView(statRow(getString(R.string.on_course_label), t.onCourse, true));
+            box.addView(statRow(getString(R.string.on_course_label), t.onCourse, rawDist, "on_course"));
         }
+    }
+
+    private void openList(String distance, String status) {
+        startActivity(new Intent(this, ProgressListActivity.class)
+                .putExtra(ProgressListActivity.EXTRA_DISTANCE, distance)
+                .putExtra(ProgressListActivity.EXTRA_STATUS, status));
     }
 
     private View sectionHeader(String distance) {
@@ -107,7 +118,8 @@ public class RaceProgressActivity extends Activity {
         return h;
     }
 
-    private View statRow(String label, int count, boolean chevron) {
+    private View statRow(String label, int count, String distance, String status) {
+        boolean chevron = status != null;
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -141,7 +153,7 @@ public class RaceProgressActivity extends Activity {
             android.util.TypedValue tv = new android.util.TypedValue();
             getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
             row.setBackgroundResource(tv.resourceId);
-            row.setOnClickListener(v -> finish()); // back to the timing finish list
+            row.setOnClickListener(v -> openList(distance, status));
         }
         return row;
     }
