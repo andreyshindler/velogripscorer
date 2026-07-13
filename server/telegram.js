@@ -78,6 +78,24 @@ function esc(s) {
 function kb(rows) { return { inline_keyboard: rows }; }
 function btn(text, data) { return { text, callback_data: data }; }
 
+// A persistent reply keyboard so the argument-less commands are one tap away.
+// The labels map back to their slash commands in handleText.
+const COMMAND_LABELS = {
+  '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add',
+  '📄 CSV': '/csv', '❓ Help': '/help',
+};
+function mainKeyboard() {
+  return {
+    keyboard: [
+      [{ text: '🏁 Races' }, { text: '📋 List' }],
+      [{ text: '➕ Add' }, { text: '📄 CSV' }],
+      [{ text: '❓ Help' }],
+    ],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
 function normGender(raw) {
   const s = String(raw || '').trim().toLowerCase();
   if (['m', 'male', 'man', 'boy', 'זכר', 'גבר'].includes(s)) return 'Male';
@@ -88,8 +106,17 @@ function normStatus(raw) {
   const s = String(raw || '').trim().toUpperCase();
   return ['DNS', 'DNF', 'DSQ'].includes(s) ? s : '';
 }
+// The readers emit full 96-bit (24 hex char) EPCs, so every chip id the bot
+// stores is left-padded with zeros to that width — a racer added by bib gets
+// the bib as a zero-padded EPC (e.g. 101 -> 000000000000000000000101), which is
+// exactly what a tag encoded with that number reads back as.
+const EPC_LEN = 24;
+function padEpc(raw) {
+  const s = String(raw || '').trim().toUpperCase();
+  return s.length >= EPC_LEN ? s : s.padStart(EPC_LEN, '0');
+}
 function syntheticEpc(bib) {
-  return ('AA' + String(bib).padStart(4, '0')).toUpperCase();
+  return padEpc(String(bib).trim());
 }
 
 // Parse "bib=101 name=Jane Doe cat=M40 dist=10k team=Aces gender=F" — values may
@@ -194,7 +221,7 @@ function createBotCore({ api, send }) {
     if (!c || !isOrganizer(c, actingUser())) { await send.message(chatId, 'Race not found.'); return; }
     setActive(chatId, c.id);
     const racers = await listRacers(c.id);
-    await send.message(chatId, `✅ Managing <b>${esc(c.title)}</b> — ${racers.length} racer(s).\nUse /list, /add, /edit, /del, /csv.`);
+    await send.message(chatId, `✅ Managing <b>${esc(c.title)}</b> — ${racers.length} racer(s).\nUse the buttons below, or /edit &lt;bib&gt; · /del &lt;bib&gt;.`, { reply_markup: mainKeyboard() });
   }
 
   async function cmdList(chatId, query) {
@@ -235,10 +262,12 @@ function createBotCore({ api, send }) {
     const bib = String(f.bib || '').trim();
     const participant = String(f.participant || '').trim();
     if (!participant) { await send.message(chatId, '⚠️ A name is required.'); return; }
-    let epc = String(f.epc || '').trim().toUpperCase();
+    let epc = String(f.epc || '').trim();
     if (!epc) {
       if (!bib) { await send.message(chatId, '⚠️ Provide a bib or a chip EPC.'); return; }
       epc = syntheticEpc(bib);
+    } else {
+      epc = padEpc(epc);
     }
     if (!EPC_RE.test(epc)) { await send.message(chatId, '⚠️ Chip EPC must be 4–64 hex chars (or omit it and give a numeric bib).'); return; }
     const waveName = String(f.wave || '').trim();
@@ -292,7 +321,7 @@ function createBotCore({ api, send }) {
       if (k === 'gender') merged.gender = normGender(v);
       else if (k === 'racer_status') merged.racer_status = normStatus(v);
       else if (k === 'wave') { merged.wave_id = await resolveWaveId(contestId, v); merged.wave_name = v; }
-      else if (k === 'epc') newEpc = String(v).trim().toUpperCase();
+      else if (k === 'epc') newEpc = padEpc(v);
       else merged[k] = v;
     }
     const oldBib = String(racer.bib || '');
@@ -400,11 +429,12 @@ function createBotCore({ api, send }) {
   // ---- routing ----
 
   async function handleText(chatId, text) {
+    text = COMMAND_LABELS[text] || text; // a reply-keyboard tap arrives as its label
     const st = getState(chatId);
     if (text === '/cancel') { setState(chatId, null); await send.message(chatId, 'Cancelled.'); return; }
+    if (st && st.flow === 'add' && text === '/skip') { await wizardStep(chatId, st, ''); return; }
     // In a wizard and the user typed a value (not a new command)
     if (st && st.flow === 'add' && !text.startsWith('/')) { await wizardStep(chatId, st, text); return; }
-    if (st && st.flow === 'add' && text === '/skip') { await wizardStep(chatId, st, ''); return; }
     if (st && st.flow === 'editval' && !text.startsWith('/')) {
       const c = await activeContest(chatId);
       setState(chatId, null);
@@ -414,13 +444,14 @@ function createBotCore({ api, send }) {
       await applyEdit(chatId, c.id, r, { [st.field]: text });
       return;
     }
+    if (st) setState(chatId, null); // a fresh command interrupts a half-finished wizard
 
     const [cmdRaw, ...restParts] = text.split(/\s+/);
     const cmd = cmdRaw.toLowerCase().replace(/@.*$/, ''); // strip @botname
     const rest = text.slice(cmdRaw.length).trim();
     switch (cmd) {
       case '/start':
-      case '/help': return send.message(chatId, HELP);
+      case '/help': return send.message(chatId, HELP, { reply_markup: mainKeyboard() });
       case '/whoami': return; // handled earlier with sender id; see handleUpdate
       case '/races': return cmdRaces(chatId, rest);
       case '/use': return useRace(chatId, restParts[0]);
@@ -574,6 +605,18 @@ function startBot({ port, basePath } = {}) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   (async function poll() {
     await send.call('deleteWebhook', { drop_pending_updates: false }).catch(() => {});
+    await send.call('setMyCommands', {
+      commands: [
+        { command: 'races', description: 'Pick a race to manage' },
+        { command: 'list', description: 'Show racers' },
+        { command: 'add', description: 'Add a racer' },
+        { command: 'edit', description: 'Edit a racer: /edit <bib>' },
+        { command: 'del', description: 'Delete a racer: /del <bib>' },
+        { command: 'csv', description: 'Download the results CSV' },
+        { command: 'whoami', description: 'Show your Telegram id' },
+        { command: 'help', description: 'Show help' },
+      ],
+    }).catch(() => {});
     console.log('Telegram start-list bot started (long polling).');
     let offset = 0;
     for (;;) {

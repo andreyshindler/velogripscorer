@@ -52,12 +52,16 @@ id(s) in `TELEGRAM_ALLOWED_USER_IDS` (comma-separated). Everyone else — and
 everyone if the list is empty — is silently ignored. To find your id, start the
 bot, message it `/whoami`, add the id, and restart.
 
-Commands: `/races` (pick a race), `/list [text]`, `/add` (guided, or one line
-`/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces`),
-`/edit <bib>` (buttons or `/edit 101 name=… cat=…`), `/del <bib>`, `/csv`.
-The bot uses long polling (outbound to `api.telegram.org`) — no inbound webhook
-or public URL is needed, so it works behind a `BASE_PATH` reverse proxy. Under
-Docker, set both vars in `.env`; `docker-compose.yml` passes them through.
+Commands (also available as tap buttons — a persistent keyboard for the common
+ones and the Telegram “Menu” list): `/races` (pick a race), `/list [text]`,
+`/add` (guided, or one line
+`/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=…`),
+`/edit <bib>` (field buttons incl. wave & chip, or `/edit 101 name=… wave=…`),
+`/del <bib>`, `/csv`. A racer added without a chip gets its bib as a full
+24-char EPC (`000…000101`), matching what the readers emit. The bot uses long
+polling (outbound to `api.telegram.org`) — no inbound webhook or public URL is
+needed, so it works behind a `BASE_PATH` reverse proxy. Under Docker, set both
+vars in `.env`; `docker-compose.yml` passes them through.
 
 ## Architecture
 

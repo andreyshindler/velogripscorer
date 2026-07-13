@@ -47,6 +47,7 @@ let uid = 0;
 const ALLOWED = 42;
 const text = (userId, t) => handleUpdate({ update_id: ++uid, message: { from: { id: userId }, chat: { id: userId }, text: t } });
 const tap = (userId, data) => handleUpdate({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: userId }, message: { chat: { id: userId } }, data } });
+const pad = (s) => String(s).padStart(24, '0'); // EPCs are stored as full 24-char ids
 
 let organizer, contestId;
 
@@ -83,6 +84,20 @@ test('/races then /use selects the race', async () => {
   assert.match(send.last('message').text, /Managing/);
 });
 
+test('command buttons: /start shows the keyboard and label taps map to commands', async () => {
+  send.reset();
+  await text(ALLOWED, '/start');
+  const kb = send.last('message').extra.reply_markup;
+  assert.ok(kb && kb.keyboard, 'a persistent reply keyboard is attached');
+  const labels = kb.keyboard.flat().map((b) => b.text);
+  assert.ok(labels.includes('🏁 Races') && labels.includes('➕ Add') && labels.includes('📄 CSV'));
+
+  // tapping the "🏁 Races" button sends its label text — it must act like /races
+  send.reset();
+  await text(ALLOWED, '🏁 Races');
+  assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
+});
+
 test('/add (one line) creates a racer with a synthetic chip id', async () => {
   send.reset();
   await text(ALLOWED, '/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces');
@@ -96,7 +111,7 @@ test('/add (one line) creates a racer with a synthetic chip id', async () => {
   assert.equal(r.distance, '10k');
   assert.equal(r.gender, 'Female');
   assert.equal(r.team, 'Aces');
-  assert.equal(r.epcs[0], 'AA0101'); // derived from the bib
+  assert.equal(r.epcs[0], pad('101')); // derived from the bib, padded to 24 chars
 });
 
 test('/add guided wizard walks through the steps incl. wave + chip', async () => {
@@ -119,7 +134,7 @@ test('/add guided wizard walks through the steps incl. wave + chip', async () =>
   assert.equal(r.gender, 'Male');
   assert.equal(r.distance, '5k');
   assert.equal(r.wave_name, 'Sprint');
-  assert.equal(r.epcs[0], 'AA0202');
+  assert.equal(r.epcs[0], pad('202'));
 });
 
 test('/add (one line) accepts an explicit chip id and wave', async () => {
@@ -129,7 +144,7 @@ test('/add (one line) accepts an explicit chip id and wave', async () => {
   const { body } = await request(app).get(`/api/contests/${contestId}/tags`).set({ Authorization: `Bearer ${organizer.token}` });
   const r = body.tags.find((x) => x.bib === '303');
   assert.ok(r);
-  assert.equal(r.epcs[0], 'E2801234'); // explicit chip, not synthetic
+  assert.equal(r.epcs[0], pad('E2801234')); // explicit chip, padded to 24 chars
   assert.equal(r.wave_name, 'Elite');
 });
 
@@ -139,8 +154,8 @@ test('/edit can change the wave and re-key the chip id', async () => {
   const { body } = await request(app).get(`/api/contests/${contestId}/tags`).set({ Authorization: `Bearer ${organizer.token}` });
   const r = body.tags.find((x) => x.bib === '303');
   assert.equal(r.wave_name, 'Sport');
-  assert.equal(r.epcs[0], 'E2809999');           // chip changed
-  assert.equal(body.tags.some((x) => x.epcs.includes('E2801234')), false); // old chip removed
+  assert.equal(r.epcs[0], pad('E2809999'));                                    // chip changed
+  assert.equal(body.tags.some((x) => x.epcs.includes(pad('E2801234'))), false); // old chip removed
 });
 
 test('/edit changes a field (one line) and via button value', async () => {
