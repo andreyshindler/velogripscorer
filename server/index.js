@@ -15,7 +15,7 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', true);
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '6mb' })); // room for a base64 race photo
 app.use((_req, res, next) => {
   // Basic hardening headers (OWASP baseline); TLS termination is the proxy's job.
   res.setHeader('X-Content-Type-Options', 'nosniff');

@@ -224,8 +224,8 @@ router.post('/contests', requireAuth, (req, res) => {
         `INSERT INTO contests
           (organizer_id, title, description, category, tags, visibility, invite_code,
            voting_mode, blind_voting, scale_max, participant_cap,
-           start_at, end_at, voting_start_at, voting_end_at, kind, sport, location)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           start_at, end_at, voting_start_at, voting_end_at, kind, sport, location, photo_url)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         req.user.id,
@@ -245,7 +245,8 @@ router.post('/contests', requireAuth, (req, res) => {
         b.voting_end_at || null,
         kind,
         String(b.sport || '').trim(),
-        String(b.location || '').trim()
+        String(b.location || '').trim(),
+        typeof b.photo_url === 'string' && b.photo_url.startsWith('data:image/') ? b.photo_url : ''
       );
     const contestId = info.lastInsertRowid;
     if (kind === 'race') {
@@ -313,13 +314,16 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
     voting_end_at: b.voting_end_at !== undefined ? b.voting_end_at : contest.voting_end_at,
     blind_voting: b.blind_voting !== undefined ? (b.blind_voting ? 1 : 0) : contest.blind_voting,
     participant_cap: b.participant_cap !== undefined ? b.participant_cap : contest.participant_cap,
+    photo_url: b.photo_url !== undefined
+      ? (typeof b.photo_url === 'string' && (b.photo_url === '' || b.photo_url.startsWith('data:image/')) ? b.photo_url : contest.photo_url)
+      : contest.photo_url,
   };
   db.prepare(
     `UPDATE contests SET title=?, description=?, tags=?, end_at=?, voting_start_at=?, voting_end_at=?,
-     blind_voting=?, participant_cap=? WHERE id = ?`
+     blind_voting=?, participant_cap=?, photo_url=? WHERE id = ?`
   ).run(
     fields.title, fields.description, fields.tags, fields.end_at, fields.voting_start_at,
-    fields.voting_end_at, fields.blind_voting, fields.participant_cap, contest.id
+    fields.voting_end_at, fields.blind_voting, fields.participant_cap, fields.photo_url, contest.id
   );
   auditLog(req.user.id, 'contest.update', 'contest', contest.id);
   res.json(serializeContest(getContest(contest.id), req.user));

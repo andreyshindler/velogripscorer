@@ -269,6 +269,30 @@ function viewLogin() {
 
 // ---------- my start lists ----------
 
+// Resize an image file down to a JPEG data URL so it fits comfortably in the
+// contest record (and the JSON body limit) without a separate upload endpoint.
+function fileToResizedDataURL(file, maxDim = 1000, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) return resolve('');
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read image')); };
+    img.src = url;
+  });
+}
+
 async function viewStartLists() {
   if (!state.user) { location.hash = '#/login'; return; }
   main.innerHTML = `
@@ -290,6 +314,8 @@ async function viewStartLists() {
         <input id="l-location" placeholder="${t('location_hint')}">
         <label for="l-file">${t('startlist_file_label')}</label>
         <input id="l-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        <label for="l-photo">${t('race_photo')}</label>
+        <input id="l-photo" type="file" accept="image/*">
         <div class="mt"><button class="btn" type="submit">${t('create')}</button></div>
       </form>
     </div>
@@ -322,6 +348,8 @@ async function viewStartLists() {
       end_at: new Date(day + 'T23:59').toISOString(),
     };
     try {
+      const photoFile = document.getElementById('l-photo').files[0];
+      if (photoFile) body.photo_url = await fileToResizedDataURL(photoFile);
       const contest = await api('/contests', { method: 'POST', body });
       const file = document.getElementById('l-file').files[0];
       if (file) {
@@ -592,15 +620,20 @@ function raceInfoPanel(c, results) {
     [t('updated_from'), t('app_label')],
     [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
   ];
-  return `<div class="card" style="max-width:520px;margin:0 auto 16px">
-    <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:6px 12px;margin:-16px -16px 10px;border-radius:8px 8px 0 0">${t('race_info')}</div>
-    <table style="width:100%;border-collapse:collapse">
-      <tbody>${rows.map(([k, v]) => `<tr>
-        <td style="text-align:right;color:#777;padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">${k}:</td>
-        <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
-    </table>
-    <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;color:#777">
-      ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer && c.organizer.name || '')}</strong>
+  const photo = c.photo_url
+    ? `<img src="${c.photo_url}" alt="" style="max-width:340px;width:100%;border-radius:8px;object-fit:cover;align-self:flex-start">` : '';
+  return `<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-bottom:16px">
+    ${photo}
+    <div class="card" style="max-width:520px;flex:1;min-width:280px;margin:0">
+      <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:6px 12px;margin:-16px -16px 10px;border-radius:8px 8px 0 0">${t('race_info')}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>${rows.map(([k, v]) => `<tr>
+          <td style="text-align:right;color:#777;padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top">${k}:</td>
+          <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
+      </table>
+      <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;color:#777">
+        ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer && c.organizer.name || '')}</strong>
+      </div>
     </div>
   </div>`;
 }
