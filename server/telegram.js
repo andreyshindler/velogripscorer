@@ -21,7 +21,7 @@ const { getContest, isOrganizer } = require('./routes/contests');
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
 const FIELD_LABELS = {
   participant: 'Name', bib: 'Bib', category: 'Category', distance: 'Distance',
-  team: 'Team', gender: 'Gender', racer_status: 'Status',
+  team: 'Team', gender: 'Gender', racer_status: 'Status', wave: 'Wave', epc: 'Chip EPC',
 };
 
 // ---------- access gate ----------
@@ -115,7 +115,8 @@ function parseFields(str) {
 
 function racerLine(r) {
   const bits = [`#${esc(r.bib || '?')}`, esc(r.participant)];
-  const tail = [r.category, r.distance, r.gender].filter(Boolean).map(esc).join(' · ');
+  const tail = [r.category, r.distance, r.gender, r.wave_name && `🚩${r.wave_name}`]
+    .filter(Boolean).map(esc).join(' · ');
   if (tail) bits.push(`<i>${tail}</i>`);
   if (r.racer_status) bits.push(`[${esc(r.racer_status)}]`);
   return bits.join(' — ');
@@ -127,9 +128,9 @@ const HELP = [
   '/races [text] — pick a race to manage',
   '/list [text] — show racers (optionally filtered)',
   '/add — add a racer (guided), or one line:',
-  '   <code>/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces</code>',
-  '/edit &lt;bib&gt; — edit a racer (buttons), or:',
-  '   <code>/edit 101 name=New Name cat=M45</code>',
+  '   <code>/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=E28011</code>',
+  '/edit &lt;bib&gt; — edit a racer (buttons: name, bib, category, distance, team, gender, wave, chip, status), or:',
+  '   <code>/edit 101 name=New Name cat=M45 wave=Sport epc=E280A1</code>',
   '/del &lt;bib&gt; — remove a racer',
   '/csv — download the results CSV',
   '/whoami — show your Telegram id',
@@ -217,6 +218,19 @@ function createBotCore({ api, send }) {
     await send.message(chatId, `<b>${racers.length} racers</b>\n${lines.join('\n')}${more}`);
   }
 
+  // Resolve a wave name to its id for this race, creating it if new (mirrors the
+  // start-list import). Empty / "none" clears the wave (returns null).
+  const CLEAR_WORDS = ['', 'none', 'clear', '-'];
+  async function resolveWaveId(contestId, name) {
+    const clean = String(name || '').trim();
+    if (CLEAR_WORDS.includes(clean.toLowerCase())) return null;
+    const waves = ((await A('GET', `/contests/${contestId}/waves`)).json || {}).waves || [];
+    const found = waves.find((w) => String(w.name).toLowerCase() === clean.toLowerCase());
+    if (found) return found.id;
+    const created = await A('POST', `/contests/${contestId}/waves`, { name: clean });
+    return (created.json && created.json.id) || null;
+  }
+
   async function createRacer(chatId, contestId, f) {
     const bib = String(f.bib || '').trim();
     const participant = String(f.participant || '').trim();
@@ -227,13 +241,16 @@ function createBotCore({ api, send }) {
       epc = syntheticEpc(bib);
     }
     if (!EPC_RE.test(epc)) { await send.message(chatId, '⚠️ Chip EPC must be 4–64 hex chars (or omit it and give a numeric bib).'); return; }
+    const waveName = String(f.wave || '').trim();
+    const waveId = waveName ? await resolveWaveId(contestId, waveName) : null;
     const res = await upsertRacer(contestId, {
       epc, bib, participant,
       category: f.category || '', distance: f.distance || '', team: f.team || '',
-      gender: normGender(f.gender), racer_status: normStatus(f.racer_status),
+      gender: normGender(f.gender), racer_status: normStatus(f.racer_status), wave_id: waveId,
     });
     if (res.status >= 400) { await send.message(chatId, `⚠️ ${esc((res.json && res.json.error) || 'could not add racer')}`); return; }
-    await send.message(chatId, `✅ Added #${esc(bib)} ${esc(participant)}.`);
+    const extra = [waveId ? `🚩${esc(waveName)}` : '', `chip ${esc(epc)}`].filter(Boolean).join(', ');
+    await send.message(chatId, `✅ Added #${esc(bib)} ${esc(participant)}${extra ? ` (${extra})` : ''}.`);
   }
 
   async function cmdAdd(chatId, rest) {
@@ -260,6 +277,7 @@ function createBotCore({ api, send }) {
         [btn('Name', `ef:${bib}:participant`), btn('Bib', `ef:${bib}:bib`)],
         [btn('Category', `ef:${bib}:category`), btn('Distance', `ef:${bib}:distance`)],
         [btn('Team', `ef:${bib}:team`), btn('Gender', `ef:${bib}:gender`)],
+        [btn('Wave', `ef:${bib}:wave`), btn('Chip', `ef:${bib}:epc`)],
         [btn('Status', `ef:${bib}:racer_status`), btn('🗑 Delete', `del:${bib}`)],
       ]),
     });
@@ -269,17 +287,33 @@ function createBotCore({ api, send }) {
   // bib rename (the chip id is derived from the bib) the way Manage does.
   async function applyEdit(chatId, contestId, racer, fields) {
     const merged = { ...racer };
+    let newEpc = null; // an explicit chip-id change
     for (const [k, v] of Object.entries(fields)) {
       if (k === 'gender') merged.gender = normGender(v);
       else if (k === 'racer_status') merged.racer_status = normStatus(v);
+      else if (k === 'wave') { merged.wave_id = await resolveWaveId(contestId, v); merged.wave_name = v; }
+      else if (k === 'epc') newEpc = String(v).trim().toUpperCase();
       else merged[k] = v;
     }
     const oldBib = String(racer.bib || '');
     const newBib = String(merged.bib || '');
     const primaryEpc = (racer.epcs && racer.epcs[0]) || racer.epc;
+    const twoChip = !!(racer.epcs && racer.epcs[1]);
+
+    // Explicit chip-id change: re-key the row (single-chip racers only). The bib
+    // is unchanged, so the old chip must go first — deleting by epc removes every
+    // row sharing the bib, which would otherwise take the new row with it.
+    if (newEpc && newEpc !== primaryEpc) {
+      if (!EPC_RE.test(newEpc)) { await send.message(chatId, '⚠️ Chip EPC must be 4–64 hex chars.'); return; }
+      if (twoChip) { await send.message(chatId, '⚠️ This racer has two chips — edit chips from the web Manage tab.'); return; }
+      await A('DELETE', `/contests/${contestId}/tags/${primaryEpc}`);
+      const res = await upsertRacer(contestId, { ...merged, epcs: undefined, epc: newEpc });
+      await report(chatId, res, merged);
+      return;
+    }
+    // Synthetic-EPC bib rename regenerates the derived chip id, then drops the old row.
     const wasSynthetic = primaryEpc === syntheticEpc(oldBib);
-    if (newBib !== oldBib && wasSynthetic && !(racer.epcs && racer.epcs[1])) {
-      // rebuild the derived chip id, then drop the old row
+    if (newBib !== oldBib && wasSynthetic && !twoChip) {
       const res = await upsertRacer(contestId, { ...merged, epcs: undefined, epc: syntheticEpc(newBib) });
       if (res.status < 400) await A('DELETE', `/contests/${contestId}/tags/${primaryEpc}`);
       await report(chatId, res, merged);
@@ -325,25 +359,36 @@ function createBotCore({ api, send }) {
 
   // ---- wizard (guided /add) ----
 
-  const ADD_STEPS = ['bib', 'participant', 'category', 'distance', 'gender', 'team'];
+  const ADD_STEPS = ['bib', 'participant', 'category', 'distance', 'gender', 'team', 'wave', 'epc'];
   const ADD_PROMPT = {
     participant: 'Name?', category: 'Category? (or /skip)', distance: 'Distance? (or /skip)',
-    team: 'Team? (or /skip)',
+    team: 'Team? (or /skip)', epc: 'Chip EPC? (or /skip to derive it from the bib)',
   };
+  const BUTTON_STEPS = new Set(['gender']); // gender is chosen from a button, never typed
+  async function promptStep(chatId, st, step) {
+    if (step === 'gender') {
+      return send.message(chatId, 'Gender?', {
+        reply_markup: kb([[btn('Male', 'addg:Male'), btn('Female', 'addg:Female'), btn('Skip', 'addg:')]]),
+      });
+    }
+    if (step === 'wave') {
+      const c = await activeContest(chatId);
+      const waves = c ? (((await A('GET', `/contests/${c.id}/waves`)).json || {}).waves || []) : [];
+      const rows = [];
+      for (let i = 0; i < waves.length; i += 2) rows.push(waves.slice(i, i + 2).map((w) => btn(w.name.slice(0, 40), `addw:${w.name}`)));
+      rows.push([btn('Skip', 'addw:')]);
+      return send.message(chatId, 'Wave? Tap one, type a new name, or /skip.', { reply_markup: kb(rows) });
+    }
+    return send.message(chatId, ADD_PROMPT[step]);
+  }
   async function wizardStep(chatId, st, value) {
     const step = st.step;
-    if (step !== 'gender') st.data[step] = value; // gender comes from a button
+    if (!BUTTON_STEPS.has(step)) st.data[step] = value; // button steps store via the callback
     const next = ADD_STEPS[ADD_STEPS.indexOf(step) + 1];
     if (!next) return finishAdd(chatId, st);
     st.step = next;
     setState(chatId, st);
-    if (next === 'gender') {
-      await send.message(chatId, 'Gender?', {
-        reply_markup: kb([[btn('Male', 'addg:Male'), btn('Female', 'addg:Female'), btn('Skip', 'addg:')]]),
-      });
-      return undefined;
-    }
-    return send.message(chatId, ADD_PROMPT[next]);
+    return promptStep(chatId, st, next);
   }
   async function finishAdd(chatId, st) {
     setState(chatId, null);
@@ -410,6 +455,17 @@ function createBotCore({ api, send }) {
           btn('OK', `ev:${bib}:racer_status:`), btn('DNS', `ev:${bib}:racer_status:DNS`),
           btn('DNF', `ev:${bib}:racer_status:DNF`), btn('DSQ', `ev:${bib}:racer_status:DSQ`)]]) });
       }
+      if (field === 'wave') {
+        const c = await activeContest(chatId);
+        const waves = c ? (((await A('GET', `/contests/${c.id}/waves`)).json || {}).waves || []) : [];
+        const rows = [];
+        for (let i = 0; i < waves.length; i += 2) rows.push(waves.slice(i, i + 2).map((w) => btn(w.name.slice(0, 40), `ev:${bib}:wave:${w.name}`)));
+        rows.push([btn('Clear', `ev:${bib}:wave:`)]);
+        return send.message(chatId, waves.length
+          ? `Pick a wave (or type a new one: <code>/edit ${esc(bib)} wave=NAME</code>):`
+          : `No waves yet — create one with <code>/edit ${esc(bib)} wave=NAME</code>.`,
+        waves.length ? { reply_markup: kb(rows) } : undefined);
+      }
       setState(chatId, { flow: 'editval', bib, field });
       return send.message(chatId, `Send the new ${FIELD_LABELS[field] || field} for #${esc(bib)}:`);
     }
@@ -424,6 +480,11 @@ function createBotCore({ api, send }) {
     if (tag === 'addg') { // gender chosen during the add wizard
       const st = getState(chatId);
       if (st && st.flow === 'add' && st.step === 'gender') { st.data.gender = a || ''; return wizardStep(chatId, st, a || ''); }
+      return undefined;
+    }
+    if (tag === 'addw') { // wave chosen during the add wizard
+      const st = getState(chatId);
+      if (st && st.flow === 'add' && st.step === 'wave') return wizardStep(chatId, st, data.split(':').slice(1).join(':'));
       return undefined;
     }
     return undefined;

@@ -99,7 +99,7 @@ test('/add (one line) creates a racer with a synthetic chip id', async () => {
   assert.equal(r.epcs[0], 'AA0101'); // derived from the bib
 });
 
-test('/add guided wizard walks through the steps', async () => {
+test('/add guided wizard walks through the steps incl. wave + chip', async () => {
   send.reset();
   await text(ALLOWED, '/add');
   assert.match(send.last('message').text, /bib/i);
@@ -108,7 +108,9 @@ test('/add guided wizard walks through the steps', async () => {
   await text(ALLOWED, 'M30');          // category
   await text(ALLOWED, '5k');           // distance
   await tap(ALLOWED, 'addg:Male');     // gender button
-  await text(ALLOWED, 'Solo');         // team -> creates
+  await text(ALLOWED, 'Solo');         // team
+  await tap(ALLOWED, 'addw:Sprint');   // wave button (creates the wave)
+  await text(ALLOWED, '/skip');        // chip -> derived from bib -> creates
 
   const { body } = await request(app).get(`/api/contests/${contestId}/tags`).set({ Authorization: `Bearer ${organizer.token}` });
   const r = body.tags.find((x) => x.bib === '202');
@@ -116,6 +118,29 @@ test('/add guided wizard walks through the steps', async () => {
   assert.equal(r.participant, 'Sam Runner');
   assert.equal(r.gender, 'Male');
   assert.equal(r.distance, '5k');
+  assert.equal(r.wave_name, 'Sprint');
+  assert.equal(r.epcs[0], 'AA0202');
+});
+
+test('/add (one line) accepts an explicit chip id and wave', async () => {
+  send.reset();
+  await text(ALLOWED, '/add bib=303 name=Wave Rider dist=10k wave=Elite epc=E2801234');
+  assert.match(send.last('message').text, /Added/);
+  const { body } = await request(app).get(`/api/contests/${contestId}/tags`).set({ Authorization: `Bearer ${organizer.token}` });
+  const r = body.tags.find((x) => x.bib === '303');
+  assert.ok(r);
+  assert.equal(r.epcs[0], 'E2801234'); // explicit chip, not synthetic
+  assert.equal(r.wave_name, 'Elite');
+});
+
+test('/edit can change the wave and re-key the chip id', async () => {
+  send.reset();
+  await text(ALLOWED, '/edit 303 wave=Sport epc=E2809999');
+  const { body } = await request(app).get(`/api/contests/${contestId}/tags`).set({ Authorization: `Bearer ${organizer.token}` });
+  const r = body.tags.find((x) => x.bib === '303');
+  assert.equal(r.wave_name, 'Sport');
+  assert.equal(r.epcs[0], 'E2809999');           // chip changed
+  assert.equal(body.tags.some((x) => x.epcs.includes('E2801234')), false); // old chip removed
 });
 
 test('/edit changes a field (one line) and via button value', async () => {
