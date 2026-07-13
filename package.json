@@ -1,0 +1,26 @@
+{
+  "name": "velogripscorer",
+  "version": "0.1.0",
+  "description": "Online scoring & competition platform: create contests, submit entries, vote on weighted criteria, and watch live leaderboards.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  },
+  "license": "MIT"
+}

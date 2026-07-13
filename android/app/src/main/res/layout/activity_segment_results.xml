@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <!-- Dark header: back · Results -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/backButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_green"
+            android:gravity="center"
+            android:text="❮"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/results_header"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <View android:layout_width="44dp" android:layout_height="1dp" />
+    </LinearLayout>
+
+    <!-- Contest title + date -->
+    <TextView android:id="@+id/contestTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:paddingTop="10dp" android:textColor="#111111"
+        android:textSize="19sp" android:textStyle="bold" />
+    <TextView android:id="@+id/contestDate" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:paddingBottom="8dp" android:textColor="@color/velogrip_green"
+        android:textSize="15sp" android:textStyle="bold" />
+
+    <!-- Column header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#BFBFBF"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp">
+        <TextView android:layout_width="36dp" android:layout_height="wrap_content"
+            android:text="@string/col_pl" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="52dp" android:layout_height="wrap_content"
+            android:text="@string/bib_col" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="@string/name_col" android:textColor="#222222" android:textSize="16sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/col_time" android:textColor="#222222" android:textSize="16sp" />
+        <View android:layout_width="34dp" android:layout_height="1dp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <LinearLayout
+            android:id="@+id/rows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <!-- Segment summary footer -->
+    <TextView
+        android:id="@+id/segFooter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <!-- Bottom bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp">
+        <LinearLayout android:id="@+id/aSort" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇅" />
+            <TextView style="@style/BottomText" android:text="@string/sort_list" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aSearch" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⌕" />
+            <TextView style="@style/BottomText" android:text="@string/search_racer" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aShare" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇪" />
+            <TextView style="@style/BottomText" android:text="@string/share_print" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

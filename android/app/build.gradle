@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.velogrip.rfid'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.velogrip.rfid'
+        minSdk 26
+        targetSdk 33
+        versionCode 2
+        versionName '0.2.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+// Deliberately zero dependencies: plain android.app + java.net keeps the APK
+// tiny and the build independent of androidx artifact resolution.
+dependencies {
+}

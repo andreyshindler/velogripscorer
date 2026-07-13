@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout style="@style/ChipRow">
+            <TextView style="@style/ChipLabel" android:text="@string/race_clock_adjust" />
+            <LinearLayout android:id="@+id/clockBox" style="@style/RaceStartValue">
+                <TextView android:id="@+id/clockValue" style="@style/RaceStartValueText" />
+                <TextView style="@style/RaceStartChevron" android:text="❯" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout style="@style/ChipRow">
+            <TextView style="@style/ChipLabel" android:text="@string/timing_mode" />
+            <LinearLayout android:id="@+id/modeBox" style="@style/RaceStartValue">
+                <TextView android:id="@+id/modeValue" style="@style/RaceStartValueText" />
+                <TextView style="@style/RaceStartChevron" android:text="❯" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout style="@style/ChipRow">
+            <TextView style="@style/ChipLabel" android:text="@string/live_results" />
+            <LinearLayout android:id="@+id/liveBox" style="@style/RaceStartValue">
+                <TextView android:id="@+id/liveValue" style="@style/RaceStartValueText" />
+                <TextView style="@style/RaceStartChevron" android:text="❯" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/startRace"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:backgroundTint="@color/velogrip_green"
+            android:paddingVertical="18dp"
+            android:text="@string/start_race"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#BFBFBF"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+        <TextView android:layout_width="64dp" android:layout_height="wrap_content"
+            android:text="@string/bib_col" android:textColor="#222222" android:textSize="18sp" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="@string/name_col" android:textColor="#222222" android:textSize="18sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <LinearLayout
+            android:id="@+id/racersBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/startHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bar_bg"
+        android:orientation="horizontal"
+        android:paddingVertical="6dp">
+        <LinearLayout android:id="@+id/navSettings" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⚙️" />
+            <TextView style="@style/BottomText" android:text="@string/settings_title" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/navDns" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="DNS" android:textSize="15sp" android:textStyle="bold" />
+            <TextView style="@style/BottomText" android:text="@string/did_not_start" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/navPost" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="⇪" />
+            <TextView style="@style/BottomText" android:text="@string/post_start_list" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/navTest" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="📶" />
+            <TextView style="@style/BottomText" android:text="@string/test_connection" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@velogripscorer.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      BASE_PATH: ${BASE_PATH:-}
+    volumes:
+      - vgs_data:/data
+    # Published on localhost only: your reverse proxy (nginx/Caddy/Apache)
+    # forwards to it; the app is never directly exposed to the internet.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # OPTIONAL bundled reverse proxy with automatic HTTPS, for a VPS with no
+  # web server of its own. Start it with:  docker compose --profile caddy up -d
+  # Set DOMAIN in .env for a Let's Encrypt certificate; leave unset for HTTP.
+  # Skip this entirely if nginx/Apache already runs on the machine.
+  caddy:
+    profiles: ["caddy"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  vgs_data:
+  caddy_data:
+  caddy_config:

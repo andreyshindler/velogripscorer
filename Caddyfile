@@ -1,0 +1,8 @@
+# If DOMAIN is set (e.g. scores.example.com), Caddy obtains and renews a
+# Let's Encrypt certificate automatically. If unset, it serves plain HTTP
+# on port 80.
+{$DOMAIN::80}
+
+encode gzip
+
+reverse_proxy app:3000

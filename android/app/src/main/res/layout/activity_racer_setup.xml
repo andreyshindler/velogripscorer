@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <include layout="@layout/header_flow" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingVertical="18dp"
+        android:text="@string/for_each_racer"
+        android:textColor="#111111"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/menu_divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_name" />
+                <Switch android:id="@+id/swName" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_bib" />
+                <Switch android:id="@+id/swBib" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_bib_type" />
+
+                <TextView
+                    android:id="@+id/typeNumeric"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_segment_on"
+                    android:gravity="center"
+                    android:minWidth="96dp"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:text="@string/bib_numeric"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/typeAlpha"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_segment"
+                    android:gravity="center"
+                    android:minWidth="96dp"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="12dp"
+                    android:text="@string/bib_alpha"
+                    android:textColor="#777777"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_category" />
+                <Switch android:id="@+id/swCategory" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_age" />
+                <Switch android:id="@+id/swAge" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_year" />
+                <Switch android:id="@+id/swYear" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_gender" />
+                <Switch android:id="@+id/swGender" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_third_gender" />
+                <Switch android:id="@+id/swThirdGender" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/RacerRow">
+                <TextView style="@style/RacerLabel" android:text="@string/racer_checkin" />
+                <Switch android:id="@+id/swCheckin" style="@style/RacerSwitch" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/menu_section_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="@string/configure_racer_settings"
+        android:textColor="#333333"
+        android:textSize="15sp" />
+
+    <include layout="@layout/bottom_bar" />
+</LinearLayout>

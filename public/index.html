@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VeloGripScorer — Online Competitions</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>">
+  <script>
+    // Apply the saved (or system) theme before first paint to avoid a flash.
+    (function () {
+      var t = localStorage.getItem('theme');
+      if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip_to_content">Skip to content</a>
+  <header class="topbar">
+    <a href="#/" class="brand" aria-label="VeloGripScorer home">🏆 <span>VeloGripScorer</span></a>
+    <nav class="topnav" aria-label="Main">
+      <a href="#/" data-i18n="nav_home">Home</a>
+      <a href="#/finished" data-i18n="nav_finished">Finished races</a>
+      <a href="#/startlists" id="nav-startlists" data-i18n="nav_startlists" hidden>Start lists</a>
+      <a href="#/admin" id="nav-admin" hidden data-i18n="nav_admin">Admin</a>
+    </nav>
+    <div class="topbar-right">
+      <button id="theme-toggle" class="ghost" aria-label="Toggle dark mode">🌙</button>
+      <button id="lang-toggle" class="ghost" aria-label="Switch language">עברית</button>
+      <div class="bell-wrap">
+        <button id="bell" class="ghost" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" hidden>
+          🔔<span id="bell-count" class="badge-dot" hidden></span>
+        </button>
+        <div id="bell-menu" class="dropdown" role="menu" hidden></div>
+      </div>
+      <span id="auth-area"></span>
+    </div>
+  </header>
+  <main id="main" class="container" tabindex="-1"></main>
+  <footer class="footer">
+    <span data-i18n="footer_tagline">Race timing with live results.</span>
+    <a href="openapi.yaml" id="footer-api" data-i18n="footer_api" hidden>API spec</a>
+  </footer>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
