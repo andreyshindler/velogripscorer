@@ -23,6 +23,7 @@ public class LapSetupActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lap_setup);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
         prefs = new Prefs(this);
 
         WizardNav.attach(this, WizardNav.LAP_SETUP);

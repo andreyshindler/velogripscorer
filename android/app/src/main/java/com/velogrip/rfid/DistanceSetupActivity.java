@@ -23,6 +23,7 @@ public class DistanceSetupActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_distance_setup);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
 
         WizardNav.attach(this, WizardNav.DISTANCE_SETUP);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());

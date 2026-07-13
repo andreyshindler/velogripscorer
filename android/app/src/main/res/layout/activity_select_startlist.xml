@@ -112,4 +112,6 @@
         android:text="@string/choose_setup_option"
         android:textColor="#333333"
         android:textSize="15sp" />
+
+    <include layout="@layout/bottom_bar" />
 </LinearLayout>

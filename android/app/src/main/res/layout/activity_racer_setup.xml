@@ -117,4 +117,6 @@
         android:text="@string/configure_racer_settings"
         android:textColor="#333333"
         android:textSize="15sp" />
+
+    <include layout="@layout/bottom_bar" />
 </LinearLayout>

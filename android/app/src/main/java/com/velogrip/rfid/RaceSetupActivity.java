@@ -26,6 +26,7 @@ public class RaceSetupActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_race_setup);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
         prefs = new Prefs(this);
 
         WizardNav.attach(this, WizardNav.RACE_SETUP);

@@ -136,4 +136,6 @@
         android:text="@string/results_options_hint"
         android:textColor="#333333"
         android:textSize="15sp" />
+
+    <include layout="@layout/bottom_bar" />
 </LinearLayout>

@@ -27,6 +27,7 @@ public class RacerInfoActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_racer_info);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
         store = new RaceStore(this);
         bib = getIntent().getStringExtra(EXTRA_BIB);
         box = findViewById(R.id.infoBox);

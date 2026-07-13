@@ -26,6 +26,7 @@ public class SelectLapCountActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_select_lap_count);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
         final String distance = getIntent().getStringExtra(EXTRA_DISTANCE) == null
                 ? "" : getIntent().getStringExtra(EXTRA_DISTANCE);
 

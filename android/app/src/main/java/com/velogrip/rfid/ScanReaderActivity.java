@@ -28,6 +28,7 @@ public class ScanReaderActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scan_reader);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
         prefs = new Prefs(this);
 
         ((TextView) findViewById(R.id.headerTitle)).setText(R.string.scan_reader_title);

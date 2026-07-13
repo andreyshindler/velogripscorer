@@ -28,6 +28,7 @@ public class ResultsOptionsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_results_options);
+        findViewById(R.id.navSettings).setOnClickListener(v -> startActivity(new android.content.Intent(this, SettingsActivity.class)));
         prefs = new Prefs(this);
 
         WizardNav.attach(this, WizardNav.RESULTS_OPTIONS);
