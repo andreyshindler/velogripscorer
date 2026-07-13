@@ -330,6 +330,56 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
   res.json(serializeContest(getContest(contest.id), req.user));
 });
 
+// Duplicate a race: clone the start list into a brand-new contest (new id,
+// fresh pairing token, no reads/results) so the same roster can time another
+// event without overwriting the original race's results.
+router.post('/contests/:id/duplicate', requireAuth, (req, res) => {
+  const src = getContest(req.params.id);
+  if (!src) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(src, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const b = req.body || {};
+  const title = String(b.title || `${src.title} (copy)`).trim().slice(0, 120) || src.title;
+
+  const clone = db.transaction(() => {
+    const info = db.prepare(
+      `INSERT INTO contests
+        (organizer_id, title, description, category, tags, visibility, invite_code,
+         voting_mode, blind_voting, scale_max, participant_cap,
+         start_at, end_at, voting_start_at, voting_end_at, kind, sport, location, photo_url, organizer_name,
+         suppress_secs, min_lap_gap_secs)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      req.user.id, title, src.description, src.category, src.tags,
+      src.visibility, src.visibility === 'private' ? crypto.randomBytes(6).toString('hex') : null,
+      src.voting_mode, src.blind_voting, src.scale_max, src.participant_cap,
+      b.start_at || src.start_at, b.end_at || src.end_at, src.voting_start_at, src.voting_end_at,
+      src.kind, src.sport, src.location, src.photo_url, src.organizer_name,
+      src.suppress_secs, src.min_lap_gap_secs
+    );
+    const newId = info.lastInsertRowid;
+    db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+      .run(newId, 'Timing app', `vgr_${crypto.randomBytes(24).toString('hex')}`, '');
+    // Recreate waves by name (no gun times) and remap the start list's wave_id.
+    const waveMap = new Map();
+    for (const w of db.prepare('SELECT id, name FROM waves WHERE contest_id = ?').all(src.id)) {
+      const wi = db.prepare('INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,NULL)').run(newId, w.name);
+      waveMap.set(w.id, wi.lastInsertRowid);
+    }
+    const ins = db.prepare(
+      `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id, category, distance, team, gender, racer_status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,'')`
+    );
+    for (const a of db.prepare('SELECT * FROM tag_assignments WHERE contest_id = ?').all(src.id)) {
+      ins.run(newId, a.epc, a.bib, a.participant, a.user_id,
+        a.wave_id ? (waveMap.get(a.wave_id) || null) : null, a.category, a.distance, a.team, a.gender);
+    }
+    return newId;
+  });
+  const newId = clone();
+  auditLog(req.user.id, 'contest.duplicate', 'contest', newId, `from ${src.id}`);
+  res.status(201).json(serializeContest(getContest(newId), req.user));
+});
+
 // ---- Participation (req 3.2) ----
 
 router.post('/contests/:id/join', requireAuth, (req, res) => {

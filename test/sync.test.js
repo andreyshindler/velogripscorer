@@ -120,3 +120,25 @@ test('app login flow: /my/races lists own races with pairing tokens', async () =
   const anon = await request(app).get('/api/my/races');
   assert.equal(anon.status, 401);
 });
+
+test('duplicating a race clones the start list into a new unique id, source untouched', async () => {
+  const dup = await request(app).post(`/api/contests/${contest.id}/duplicate`).set(auth(org)).send({ title: 'Second event' });
+  assert.equal(dup.status, 201);
+  assert.notEqual(dup.body.id, contest.id);            // a brand-new id
+  assert.equal(dup.body.title, 'Second event');
+  assert.ok(dup.body.app_token && dup.body.app_token !== reader.token); // fresh pairing token
+
+  // the clone carries the start list (with its wave), on its own token
+  const sl = await request(app).get('/api/ingest/startlist').set('X-Reader-Token', dup.body.app_token);
+  assert.equal(sl.status, 200);
+  assert.equal(sl.body.racers.length, 1);
+  assert.equal(sl.body.racers[0].bib, '500');
+  assert.equal(sl.body.racers[0].wave, 'elite');
+  assert.equal(sl.body.waves[0].started_at, null);     // no gun times carried over
+
+  // the original race still resolves to its own id and roster
+  const orig = await request(app).get('/api/ingest/startlist').set('X-Reader-Token', reader.token);
+  assert.equal(orig.status, 200);
+  assert.equal(orig.body.contest.id, contest.id);
+  assert.equal(orig.body.racers.length, 1);
+});

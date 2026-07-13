@@ -456,7 +456,10 @@ async function loadStartLists() {
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
       <td>${esc(r.location || '')}</td>
       <td>${esc(r.sport || '')}</td>
-      <td><button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button></td>
+      <td style="white-space:nowrap">
+        <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
+        <button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button>
+      </td>
     </tr>`).join('') || `<tr><td colspan="6" class="muted">${t('no_contests')}</td></tr>`;
   body.querySelectorAll('.list-del').forEach((btn) => {
     btn.onclick = async () => {
@@ -465,6 +468,17 @@ async function loadStartLists() {
         await api(`/contests/${btn.dataset.id}`, { method: 'DELETE' });
         toast('✓');
         loadStartLists();
+      } catch (err) { toast(err.message, true); }
+    };
+  });
+  body.querySelectorAll('.list-dup').forEach((btn) => {
+    btn.onclick = async () => {
+      const title = prompt(t('duplicate_race_prompt'), `${btn.dataset.title} ${new Date().getFullYear()}`);
+      if (title === null) return;
+      try {
+        const dup = await api(`/contests/${btn.dataset.id}/duplicate`, { method: 'POST', body: { title: title.trim() } });
+        toast(t('duplicated_ok'));
+        location.hash = `#/contest/${dup.id}/manage`; // a fresh race with its own id + pairing token
       } catch (err) { toast(err.message, true); }
     };
   });
