@@ -113,7 +113,11 @@ public class BridgeService extends Service {
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "velogrip:bridge");
         wakeLock.acquire();
 
-        requestReaderWifi();
+        // Join the reader WiFi through the shared, persistent holder (one request
+        // for the whole app) if it isn't already held from Settings.
+        if (!prefs.wifiSsid().isEmpty() && !ReaderWifi.isActive()) {
+            ReaderWifi.connect(this, prefs.wifiSsid(), prefs.wifiPass());
+        }
 
         readerThread = new Thread(this::readerLoop, "reader");
         readerThread.start();
@@ -200,13 +204,7 @@ public class BridgeService extends Service {
         int backoffMs = 1000;
         while (running.get()) {
             try {
-                // If a specific reader WiFi was requested, wait until it is up.
-                if (!prefs.wifiSsid().isEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                        && readerNetwork.get() == null) {
-                    Thread.sleep(500);
-                    continue;
-                }
-                connectAndRead();
+                connectAndRead();   // binds to the reader WiFi if held, else default network
                 backoffMs = 1000;
             } catch (InterruptedException e) {
                 return;
@@ -230,7 +228,9 @@ public class BridgeService extends Service {
                 : Prefs.PROTOCOL_UHF.equals(prefs.protocol()) ? new UhfFrameParser()
                 : new AsciiLineParser();
 
-        Network network = readerNetwork.get();
+        // Bind to the reader WiFi when held (keeps cellular for uploads); when
+        // it isn't, use the default network (phone already on the reader network).
+        Network network = ReaderWifi.getNetwork();
         Socket socket = network != null
                 ? network.getSocketFactory().createSocket()
                 : new Socket();

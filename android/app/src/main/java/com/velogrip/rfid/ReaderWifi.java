@@ -29,6 +29,8 @@ public final class ReaderWifi {
     public static String state() { return state; }
     public static String ssid() { return ssid; }
     public static boolean isActive() { return callback != null; }
+    /** The held reader network, or null if not connected yet. */
+    public static Network getNetwork() { return network; }
 
     public static synchronized void connect(Context ctx, String wantSsid, String pass) {
         Context app = ctx.getApplicationContext();

@@ -100,8 +100,8 @@ public class RaceStartActivity extends Activity {
             android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
             tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180);
             h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180), 350);
-            h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 550), 700);
-            h.postDelayed(tg::release, 1600);
+            h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 400), 700);
+            h.postDelayed(tg::release, 1400);
         } catch (RuntimeException ignored) {
             // some devices refuse the audio resource; the race still starts
         }
