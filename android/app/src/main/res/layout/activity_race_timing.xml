@@ -203,14 +203,6 @@
             <TextView style="@style/BottomIcon" android:text="⚙" />
             <TextView style="@style/BottomText" android:text="@string/rc_settings_short" />
         </LinearLayout>
-        <LinearLayout android:id="@+id/bDist" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="⟳" />
-            <TextView style="@style/BottomText" android:text="@string/next_distance" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/bCat" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="⟳" />
-            <TextView style="@style/BottomText" android:text="@string/next_category" />
-        </LinearLayout>
         <LinearLayout android:id="@+id/bMoreT" style="@style/BottomAction">
             <TextView style="@style/BottomIcon" android:text="•••" />
             <TextView style="@style/BottomText" android:text="@string/more" />

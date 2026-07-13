@@ -103,9 +103,6 @@ public class RaceTimingActivity extends Activity {
                 startActivity(new Intent(this, RaceProgressActivity.class)));
         findViewById(R.id.bHide).setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
-        int[] stubs = {R.id.bDist, R.id.bCat};
-        for (int id : stubs) findViewById(id).setOnClickListener(v ->
-                Toast.makeText(this, R.string.view_option_unsupported, Toast.LENGTH_SHORT).show());
 
         startReader(); // connect to the RFID reader and capture crossings for this race
     }
@@ -462,39 +459,72 @@ public class RaceTimingActivity extends Activity {
     private void renderResults(List<RaceEngine.Result> results, List<RaceStore.Pending> pendingEntries) {
         resultsBox.removeAllViews();
         int decimals = prefs.timingDecimals();
+        final Long gun = gunTime();
+
+        // Merge real finishers and banked No-Bib times into one time-ranked list,
+        // so a No-Bib tap earns a place number just like a bib finisher does.
+        List<Object> ranked = new ArrayList<>();
+        for (RaceEngine.Result r : results) if ("finished".equals(r.status)) ranked.add(r);
+        for (RaceStore.Pending p : pendingEntries) if (p.hasTime() && !p.hasRacer()) ranked.add(p);
+        java.util.Collections.sort(ranked,
+                (a, b) -> Long.compare(rowElapsed(a, gun), rowElapsed(b, gun)));
+
         int place = 1;
         long prevElapsed = -1;
         long leaderElapsed = -1;
         lastTapText = null;
-        for (final RaceEngine.Result r : results) {
-            if (!"finished".equals(r.status)) continue;
-            String time = RaceEngine.formatElapsed(r.elapsedMs, decimals);
+        for (Object item : ranked) {
             final int seq = place++;
-            resultsBox.addView(resultRow(String.valueOf(seq), r.bib, r.name, time, false,
-                    () -> editTime(r), () -> openRacerInfo(r.bib),
-                    () -> cancelEntry(seq, r), () -> bibActions(seq, r)));
-            if (prevElapsed >= 0) lastSplitMs = r.elapsedMs - prevElapsed;
-            prevElapsed = r.elapsedMs;
-            if (leaderElapsed < 0) leaderElapsed = r.elapsedMs;
-            String gap = RaceEngine.formatElapsed(Math.max(0, r.elapsedMs - leaderElapsed), 1);
-            lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
-                    r.name == null || r.name.isEmpty() ? r.bib : r.name);
+            long elapsed = rowElapsed(item, gun);
+            String time = RaceEngine.formatElapsed(Math.max(0, elapsed), decimals);
+            if (prevElapsed >= 0) lastSplitMs = elapsed - prevElapsed;
+            prevElapsed = elapsed;
+            if (leaderElapsed < 0) leaderElapsed = elapsed;
+            String gap = RaceEngine.formatElapsed(Math.max(0, elapsed - leaderElapsed), 1);
+
+            if (item instanceof RaceEngine.Result) {
+                final RaceEngine.Result r = (RaceEngine.Result) item;
+                resultsBox.addView(resultRow(String.valueOf(seq), r.bib, r.name, time, false,
+                        () -> editTime(r), () -> openRacerInfo(r.bib),
+                        () -> cancelEntry(seq, r), () -> bibActions(seq, r)));
+                lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
+                        r.name == null || r.name.isEmpty() ? r.bib : r.name);
+            } else {
+                final RaceStore.Pending p = (RaceStore.Pending) item;
+                // No-Bib finisher: place number deletes it, the row/arrow assigns
+                // it a bib later.
+                resultsBox.addView(resultRow(String.valueOf(seq), "-", getString(R.string.select_a_bib),
+                        time, true, () -> assignTimePending(p), () -> assignTimePending(p),
+                        () -> cancelNoBib(seq, p), () -> assignTimePending(p)));
+                lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap, getString(R.string.no_bib));
+            }
         }
-        // pending entries at the bottom: bib waiting for a time, or a time
-        // waiting for a bib
+        // bib pre-entered, still waiting for a time
         for (final RaceStore.Pending p : pendingEntries) {
             if (p.hasRacer() && !p.hasTime()) {
                 resultsBox.addView(resultRow("—", p.bib, p.name, getString(R.string.tap_time), true,
                         () -> { store.recordPassing(p.epc, System.currentTimeMillis());
                                 store.deletePending(p.id); render(); }, () -> openRacerInfo(p.bib)));
-            } else if (p.hasTime() && !p.hasRacer()) {
-                Long gun = gunTime();
-                long elapsed = gun == null ? 0 : p.readAtMs - gun;
-                resultsBox.addView(resultRow("—", "-", getString(R.string.select_a_bib),
-                        RaceEngine.formatElapsed(Math.max(0, elapsed), decimals), true,
-                        () -> assignTimePending(p), null));
             }
         }
+    }
+
+    /** Elapsed time (ms) of a results row — a finisher's elapsed, or a banked
+     *  No-Bib time measured from the gun. */
+    private long rowElapsed(Object item, Long gun) {
+        if (item instanceof RaceEngine.Result) return ((RaceEngine.Result) item).elapsedMs;
+        long readAt = ((RaceStore.Pending) item).readAtMs;
+        return gun == null ? 0 : readAt - gun;
+    }
+
+    /** Tap a No-Bib finisher's place number: confirm removing the banked time. */
+    private void cancelNoBib(int seq, RaceStore.Pending p) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.cancel_entry_title, seq))
+                .setMessage(R.string.cancel_no_bib_body)
+                .setPositiveButton(R.string.yes, (d, w) -> { store.deletePending(p.id); render(); })
+                .setNegativeButton(R.string.no, null)
+                .show();
     }
 
     private void openRacerInfo(String bib) {

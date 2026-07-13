@@ -151,6 +151,7 @@
     <string name="race_progress_help">המספרים מתעדכנים בזמן אמת מקריאות RFID והקשות ידניות. הקש על ״סיימו״ או ״במסלול״ במרחק כדי לדלג למשתתפים אלה ברשימת הסיום.</string>
     <string name="progress_list_footer">%1$s · %2$s</string>
     <string name="category_none">— ללא —</string>
+    <string name="cancel_no_bib_body">למחוק את זמן ״ללא מספר״ שלא שויך?</string>
     <string name="rc_settings_short">הגדרות</string>
     <string name="no_finishers_yet">אף אחד עוד לא סיים.</string>
     <string name="no_on_course">אין משתתפים במסלול.</string>
