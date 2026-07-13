@@ -224,8 +224,8 @@ router.post('/contests', requireAuth, (req, res) => {
         `INSERT INTO contests
           (organizer_id, title, description, category, tags, visibility, invite_code,
            voting_mode, blind_voting, scale_max, participant_cap,
-           start_at, end_at, voting_start_at, voting_end_at, kind, sport, location, photo_url)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           start_at, end_at, voting_start_at, voting_end_at, kind, sport, location, photo_url, organizer_name)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         req.user.id,
@@ -246,7 +246,8 @@ router.post('/contests', requireAuth, (req, res) => {
         kind,
         String(b.sport || '').trim(),
         String(b.location || '').trim(),
-        typeof b.photo_url === 'string' && b.photo_url.startsWith('data:image/') ? b.photo_url : ''
+        typeof b.photo_url === 'string' && b.photo_url.startsWith('data:image/') ? b.photo_url : '',
+        String(b.organizer_name || '').trim().slice(0, 80)
       );
     const contestId = info.lastInsertRowid;
     if (kind === 'race') {

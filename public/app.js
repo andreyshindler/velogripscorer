@@ -293,6 +293,65 @@ function fileToResizedDataURL(file, maxDim = 1000, quality = 0.82) {
   });
 }
 
+const SPORT_OPTIONS = [
+  'Running', 'MTB — Cross-country (XCO)', 'MTB — Marathon (XCM)', 'MTB — Enduro',
+  'MTB — Downhill', 'MTB — Trail', 'Gravel', 'Road cycling', 'Duathlon', 'Triathlon',
+];
+
+// Load Leaflet on demand (only when the organizer opens the map picker).
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  return new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve(window.L);
+    js.onerror = () => reject(new Error('leaflet failed to load'));
+    document.head.appendChild(js);
+  });
+}
+
+// Modal map: click to drop a pin, reverse-geocode to a place name via Nominatim.
+async function pickLocationOnMap(onPick) {
+  let L;
+  try { L = await loadLeaflet(); } catch { toast(t('map_unavailable'), true); return; }
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `<div style="background:#fff;border-radius:10px;max-width:560px;width:100%;overflow:hidden">
+    <div id="pickmap" style="height:360px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px">
+      <button class="btn small secondary" id="map-cancel">${t('cancel')}</button>
+      <button class="btn small" id="map-set">${t('set_location')}</button>
+    </div></div>`;
+  document.body.appendChild(overlay);
+  const map = L.map(overlay.querySelector('#pickmap')).setView([31.61, 34.76], 12); // Kiryat Gat
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19,
+  }).addTo(map);
+  let marker = null, coords = null;
+  map.on('click', (e) => {
+    coords = e.latlng;
+    if (marker) marker.setLatLng(e.latlng); else marker = L.marker(e.latlng).addTo(map);
+  });
+  setTimeout(() => map.invalidateSize(), 200);
+  const close = () => { map.remove(); overlay.remove(); };
+  overlay.querySelector('#map-cancel').onclick = close;
+  overlay.querySelector('#map-set').onclick = async () => {
+    if (!coords) { close(); return; }
+    let name = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=12&lat=${coords.lat}&lon=${coords.lng}`, { headers: { Accept: 'application/json' } });
+      const j = await r.json();
+      if (j && j.display_name) name = j.display_name.split(',').slice(0, 3).map((s) => s.trim()).join(', ');
+    } catch { /* keep the lat,lng fallback */ }
+    onPick(name);
+    close();
+  };
+}
+
 async function viewStartLists() {
   if (!state.user) { location.hash = '#/login'; return; }
   main.innerHTML = `
@@ -308,10 +367,16 @@ async function viewStartLists() {
         <input id="l-title" required maxlength="120">
         <div class="row2">
           <div><label for="l-date">${t('start_date')}</label><input id="l-date" type="date" required></div>
-          <div><label for="l-sport">${t('sport')}</label><input id="l-sport" placeholder="${t('sport_hint')}"></div>
+          <div><label for="l-sport">${t('sport')}</label>
+            <select id="l-sport">${SPORT_OPTIONS.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
         </div>
+        <label for="l-organizer">${t('organizer')}</label>
+        <input id="l-organizer" value="VeloGrip" maxlength="80">
         <label for="l-location">${t('location')}</label>
-        <input id="l-location" placeholder="${t('location_hint')}">
+        <div style="display:flex;gap:8px">
+          <input id="l-location" placeholder="${t('location_hint')}" style="flex:1">
+          <button type="button" class="btn small secondary" id="l-map" style="white-space:nowrap">📍 ${t('pick_on_map')}</button>
+        </div>
         <label for="l-file">${t('startlist_file_label')}</label>
         <input id="l-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
         <label for="l-photo">${t('race_photo')}</label>
@@ -335,6 +400,18 @@ async function viewStartLists() {
   const card = document.getElementById('new-list-card');
   addBtn.onclick = () => { card.hidden = !card.hidden; if (!card.hidden) document.getElementById('l-title').focus(); };
 
+  document.getElementById('l-map').onclick = () =>
+    pickLocationOnMap((name) => { document.getElementById('l-location').value = name; });
+
+  // Default the race title to the uploaded file's name (minus extension).
+  document.getElementById('l-file').onchange = (e) => {
+    const f = e.target.files[0];
+    const titleEl = document.getElementById('l-title');
+    if (f && !titleEl.value.trim()) {
+      titleEl.value = f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim();
+    }
+  };
+
   document.getElementById('new-list-form').onsubmit = async (e) => {
     e.preventDefault();
     const day = document.getElementById('l-date').value;
@@ -342,6 +419,7 @@ async function viewStartLists() {
       kind: 'race',
       title: document.getElementById('l-title').value,
       sport: document.getElementById('l-sport').value,
+      organizer_name: document.getElementById('l-organizer').value,
       location: document.getElementById('l-location').value,
       category: 'other',
       start_at: new Date(day + 'T00:00').toISOString(),
@@ -632,7 +710,7 @@ function raceInfoPanel(c, results) {
           <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
       </table>
       <div style="border-top:1px solid #ddd;margin-top:8px;padding-top:8px;color:#777">
-        ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer && c.organizer.name || '')}</strong>
+        ${t('organized_by')}: <strong style="color:#222">${esc(c.organizer_name || (c.organizer && c.organizer.name) || '')}</strong>
       </div>
     </div>
   </div>`;
