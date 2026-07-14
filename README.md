@@ -36,7 +36,32 @@ Environment variables:
 | `DATA_DIR` | `./data` | SQLite database + uploaded files |
 | `JWT_SECRET` | dev value | **Set in production** |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | see above | Seeded administrator |
+| `TELEGRAM_BOT_TOKEN` | unset | Enables the Telegram start-list bot |
+| `TELEGRAM_ALLOWED_USER_IDS` | unset | Comma-separated Telegram user ids allowed to use the bot |
 | `DISABLE_RATE_LIMIT` | unset | Disables rate limiting (tests only) |
+
+### Telegram start-list bot
+
+Set `TELEGRAM_BOT_TOKEN` (from [@BotFather](https://t.me/BotFather)) to manage a
+race's start list from Telegram — the same add / edit / delete a racer and CSV
+export the web **Manage** tab offers. The bot signs in as the admin account, so
+it can manage any race.
+
+Only allowlisted Telegram accounts are answered: put your numeric Telegram user
+id(s) in `TELEGRAM_ALLOWED_USER_IDS` (comma-separated). Everyone else — and
+everyone if the list is empty — is silently ignored. To find your id, start the
+bot, message it `/whoami`, add the id, and restart.
+
+Commands (also available as tap buttons — a persistent keyboard for the common
+ones and the Telegram “Menu” list): `/races` (pick a race), `/list [text]`,
+`/add` (guided, or one line
+`/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=…`),
+`/edit <bib>` (field buttons incl. wave & chip, or `/edit 101 name=… wave=…`),
+`/del <bib>`, `/csv`. A racer added without a chip gets its bib as a full
+24-char EPC (`000…000101`), matching what the readers emit. The bot uses long
+polling (outbound to `api.telegram.org`) — no inbound webhook or public URL is
+needed, so it works behind a `BASE_PATH` reverse proxy. Under Docker, set both
+vars in `.env`; `docker-compose.yml` passes them through.
 
 ## Architecture
 
@@ -52,6 +77,7 @@ server/
   scoring.js      weighted score: Score = Σ (weight/100 × avg criterion score)
   events.js       SSE hub (real-time leaderboards), in-app notifications,
                   HMAC-signed outbound webhooks
+  telegram.js     Telegram start-list bot (add/edit/delete racers, CSV export)
   moderation.js   automated profanity screen
   routes/         users, contests, entries (+votes/comments/reports), admin
 public/           vanilla-JS SPA — no build step; English + Hebrew (RTL) i18n

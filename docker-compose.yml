@@ -7,6 +7,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@velogripscorer.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
       BASE_PATH: ${BASE_PATH:-}
+      # Optional Telegram start-list bot (leave empty to keep it off).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:-}
     volumes:
       - vgs_data:/data
     # Published on localhost only: your reverse proxy (nginx/Caddy/Apache)

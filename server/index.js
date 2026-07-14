@@ -90,6 +90,11 @@ function seedAdmin() {
 function start(port = process.env.PORT || 3000) {
   seedAdmin();
   setInterval(contests.sweepEndedContests, 60_000).unref();
+  // Telegram start-list bot: only runs when a bot token is configured, so tests
+  // (which never call start()) and default deployments are unaffected.
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    require('./telegram').startBot({ port, basePath: BASE_PATH });
+  }
   return rootApp.listen(port, () =>
     console.log(`velogripscorer listening on http://localhost:${port}${BASE_PATH || ''}`));
 }
