@@ -77,6 +77,23 @@ public final class RaceEngine {
                                        List<RaceStore.Passing> passings,
                                        int suppressSecs, int minLapGapSecs, boolean recordLaps,
                                        Map<String, Integer> lapTargets, boolean finalizeLapsDown) {
+        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
+                lapTargets, finalizeLapsDown, 0L, 0L, 0L);
+    }
+
+    /**
+     * Start-line roll call. nowMs is the current time; a racer whose wave has
+     * been gunned, who has no crossings and was never read since the gun, is
+     * marked DNS once the roll call has closed for that wave — either the window
+     * (rollCallWindowMs, 0 = off) has elapsed or the operator closed it manually
+     * (rollCallClosedAt, 0 = open). It is recomputed every call, so a later read
+     * clears it automatically. All three zero = feature off (legacy behaviour).
+     */
+    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
+                                       List<RaceStore.Passing> passings,
+                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
+                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown,
+                                       long nowMs, long rollCallWindowMs, long rollCallClosedAt) {
         Map<String, Long> gunByWave = new HashMap<>();
         for (RaceStore.Wave w : waves) {
             if (w.startedAtMs != null) gunByWave.put(w.name, w.startedAtMs);
@@ -156,8 +173,16 @@ public final class RaceEngine {
             for (int i = 0; i < crossings.size(); i++) splits[i] = crossings.get(i) - gun;
             Result res;
             if (crossings.isEmpty()) {
+                // Start-line roll call: gunned but no crossings. If the roll call
+                // has closed and this racer was never read since the gun, they
+                // didn't start -> DNS; otherwise they're still out on course.
+                boolean seenSinceGun = false;
+                for (Read rd : raw) { if (rd.at >= gun) { seenSinceGun = true; break; } }
+                boolean rollCallClosed = (rollCallClosedAt > 0 && rollCallClosedAt > gun)
+                        || (rollCallWindowMs > 0 && nowMs >= gun + rollCallWindowMs);
+                String s = (rollCallClosed && !seenSinceGun) ? "DNS" : "on_course";
                 res = new Result(racer.bib, racer.name, racer.category, racer.wave,
-                        racer.distance, racer.gender,"on_course", 0, 0);
+                        racer.distance, racer.gender, s, 0, 0);
             } else if (!unlimited && crossings.size() < target && !finalizeLapsDown) {
                 // laps completed so far, still on course to the lap target
                 res = new Result(racer.bib, racer.name, racer.category, racer.wave,

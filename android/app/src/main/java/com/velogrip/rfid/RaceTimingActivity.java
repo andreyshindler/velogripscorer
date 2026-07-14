@@ -59,6 +59,9 @@ public class RaceTimingActivity extends Activity {
         @Override public void run() { tickClock(); handler.postDelayed(this, 100); }
     };
     private final Runnable renderTask = this::render;
+    // Fires once when the roll-call window next closes, so no-shows flip to DNS
+    // even if no further reads arrive.
+    private final Runnable rollCallTick = this::scheduleRender;
 
     private android.widget.Toast tapToast;
 
@@ -275,13 +278,17 @@ public class RaceTimingActivity extends Activity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized());
+                prefs.raceFinalized(), System.currentTimeMillis(),
+                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt());
 
         java.util.Set<String> finishedBibs = new java.util.HashSet<>();
+        // Racers auto-marked DNS by the start-line roll call (computed, not stored).
+        java.util.Set<String> rollCallDnsBibs = new java.util.HashSet<>();
         // Laps completed so far per bib, for the "On lap X/Y" tiles.
         java.util.Map<String, Integer> lapsByBib = new java.util.HashMap<>();
         for (RaceEngine.Result r : results) {
             if ("finished".equals(r.status)) finishedBibs.add(bibKey(r.bib, ""));
+            else if ("DNS".equals(r.status) && !r.bib.isEmpty()) rollCallDnsBibs.add(bibKey(r.bib, ""));
             else if ("on_course".equals(r.status) && r.laps > 0 && !r.bib.isEmpty()) {
                 lapsByBib.put(r.bib, r.laps);
             }
@@ -294,6 +301,7 @@ public class RaceTimingActivity extends Activity {
         // grid tiles: No Bib + every racer in a FIXED slot; finished/DNS/DNF/DSQ
         // racers keep their spot but render blank, so bib positions never move.
         java.util.Set<String> doneBibs = new java.util.HashSet<>(finishedBibs);
+        doneBibs.addAll(rollCallDnsBibs); // no-shows drop off the active grid
         List<RaceStore.Racer> allRacers = store.startListEntries();
         for (RaceStore.Racer r : allRacers) {
             if (!r.status.isEmpty()) doneBibs.add(bibKey(r.bib, r.epc));
@@ -319,6 +327,20 @@ public class RaceTimingActivity extends Activity {
                 : getString(R.string.tap_to_record));
 
         updateHint();
+
+        // Schedule a single re-render when the roll-call window next closes.
+        handler.removeCallbacks(rollCallTick);
+        long rcWin = prefs.rollCallSecs() * 1000L;
+        if (rcWin > 0 && prefs.rollCallClosedAt() == 0) {
+            long now = System.currentTimeMillis();
+            long soonest = Long.MAX_VALUE;
+            for (RaceStore.Wave w : store.waves()) {
+                if (w.startedAtMs == null) continue;
+                long boundary = w.startedAtMs + rcWin;
+                if (boundary > now && boundary < soonest) soonest = boundary;
+            }
+            if (soonest != Long.MAX_VALUE) handler.postDelayed(rollCallTick, soonest - now + 200);
+        }
     }
 
     private void updateHint() {
@@ -833,6 +855,10 @@ public class RaceTimingActivity extends Activity {
         content.addView(controlRow(R.drawable.ic_ctrl_bars, 0xFF159C93, 0xFFD9F1EF,
                 R.string.rc_progress_title, R.string.rc_progress_sub,
                 () -> { dlg.dismiss(); showRaceProgress(); }));
+        content.addView(controlDivider());
+        content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFFC0555A, 0xFFF6E1E2,
+                R.string.rc_rollcall_title, R.string.rc_rollcall_sub,
+                () -> { dlg.dismiss(); closeRollCall(); }));
 
         dlg.show();
     }
@@ -942,6 +968,14 @@ public class RaceTimingActivity extends Activity {
         startActivity(new Intent(this, ViewResultsActivity.class));
     }
 
+    /** Close the start-line roll call now: racers not yet read since the gun are
+     *  marked DNS immediately (a later read still clears them). */
+    private void closeRollCall() {
+        prefs.setRollCallClosedAt(System.currentTimeMillis());
+        scheduleRender();
+        tapToast(getString(R.string.rollcall_closed));
+    }
+
     /** Restart (false start): keep or discard recorded times, un-gun the race
      *  and return to Race Start so the organizer can start it again. */
     private void restartRace() {
@@ -958,6 +992,7 @@ public class RaceTimingActivity extends Activity {
             store.clearPending();
             store.clearGunTimes();                 // un-start every wave
             prefs.setRaceFinalized(false);
+            prefs.setRollCallClosedAt(0);          // fresh race: roll call re-opens
             // keep the reader (and its WiFi) connected through the restart;
             // clearing the gun re-arms the per-racer beeps
             Intent i = new Intent(this, RaceStartActivity.class);
@@ -1004,7 +1039,8 @@ public class RaceTimingActivity extends Activity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized());
+                prefs.raceFinalized(), System.currentTimeMillis(),
+                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt());
         int finished = 0, onCourse = 0, notStarted = 0, dns = 0;
         long lastElapsed = 0;
         for (RaceEngine.Result r : results) {
@@ -1053,6 +1089,7 @@ public class RaceTimingActivity extends Activity {
         super.onPause();
         handler.removeCallbacks(ticker);
         handler.removeCallbacks(renderTask); // onResume re-renders fresh anyway
+        handler.removeCallbacks(rollCallTick);
         unregisterReceiver(bridgeReceiver);
     }
 
