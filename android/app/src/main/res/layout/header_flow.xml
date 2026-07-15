@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Dark flow header: back · logo · title · forward. The forward button is
-     hidden until the screen's choice already exists, so returning users can
-     continue without redoing the step. -->
+<!-- Dark flow header: back · [logo · title centered] · forward. The title is
+     centered between two equal-width side slots so it sits in the middle of the
+     bar. The forward slot keeps its width even when the button is hidden, so
+     returning users can continue without the title drifting off-center. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -22,33 +23,47 @@
         android:textSize="18sp"
         android:textStyle="bold" />
 
-    <ImageView
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:layout_marginStart="12dp"
-        android:contentDescription="@string/app_name"
-        android:src="@drawable/logo_velogrip" />
-
-    <TextView
-        android:id="@+id/headerTitle"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
         android:layout_weight="1"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/nextButton"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:background="@drawable/bg_circle_green"
-        android:contentDescription="@string/next"
         android:gravity="center"
-        android:text="❯"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/logo_velogrip" />
+
+        <TextView
+            android:id="@+id/headerTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="44dp"
+        android:layout_height="44dp">
+
+        <TextView
+            android:id="@+id/nextButton"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_circle_green"
+            android:contentDescription="@string/next"
+            android:gravity="center"
+            android:text="❯"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </FrameLayout>
 </LinearLayout>
