@@ -63,6 +63,31 @@ polling (outbound to `api.telegram.org`) — no inbound webhook or public URL is
 needed, so it works behind a `BASE_PATH` reverse proxy. Under Docker, set both
 vars in `.env`; `docker-compose.yml` passes them through.
 
+## Continuous integration
+
+Two path-filtered GitHub Actions workflows so each change only runs what it
+affects:
+
+- **Web CI** (`.github/workflows/web.yml`) — runs the server + SPA tests and a
+  boot smoke test on the Node 20/22 matrix whenever `server/`, `public/`,
+  `test/`, or the package files change.
+- **Android APK** (`.github/workflows/android.yml`) — builds the debug APK when
+  `android/` changes (or via manual dispatch), uploads it as an artifact, and
+  **delivers it to Telegram**. Set two repository secrets to enable delivery
+  (Settings → Secrets and variables → Actions):
+  - `TG_BOT_TOKEN` — a Telegram bot token (the start-list bot's token works).
+  - `TG_CHAT_ID` — the chat to send to (your numeric Telegram user id for a DM).
+
+  Without those secrets the APK still builds and uploads; the Telegram step is
+  skipped. Delivery is skipped on pull requests.
+- **Deploy to VPS** (`.github/workflows/deploy.yml`) — on every push to `main`
+  (i.e. after a merge), a job runs on a **self-hosted runner installed on the
+  VPS**, fast-forwards the deployment clone to `main`, and runs
+  `docker compose up -d --build`. Only `main` triggers it (never pull requests),
+  so only reviewed code deploys. Set the repo variable `DEPLOY_DIR` if the clone
+  isn't at `~/projects/velogripscorer`. See DEPLOY.md for the one-time runner
+  setup.
+
 ## Architecture
 
 A deliberately simple, dependency-light monolith designed so each concern can later be

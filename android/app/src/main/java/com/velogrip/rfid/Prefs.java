@@ -42,6 +42,12 @@ public final class Prefs {
     public int dedupeWindowMs() { return sp.getInt("dedupeWindowMs", 2000); }
     public int suppressSecs() { return sp.getInt("suppressSecs", 10); }
     public int lapGapSecs() { return sp.getInt("lapGapSecs", 30); }
+    // Start-line roll call: seconds after the gun before racers never read are
+    // auto-marked DNS (0 = off). rollCallClosedAt is a runtime "closed now" stamp
+    // set by the manual button and reset when a race starts.
+    public int rollCallSecs() { return sp.getInt("rollCallSecs", 120); }
+    public long rollCallClosedAt() { return sp.getLong("rollCallClosedAt", 0L); }
+    public void setRollCallClosedAt(long ms) { sp.edit().putLong("rollCallClosedAt", ms).apply(); }
     public String contestTitle() { return sp.getString("contestTitle", ""); }
 
     public String accountEmail() { return sp.getString("accountEmail", DEFAULT_EMAIL); }
@@ -74,7 +80,7 @@ public final class Prefs {
         sp.edit().putString("readerHost", host.trim()).putInt("readerPort", port).apply();
     }
     public void saveChipTiming(boolean idEqualsBib, int chipsPerRacer, int suppressSecs,
-                              int lapGapSecs, int antennaPower, boolean beepUnknown) {
+                              int lapGapSecs, int antennaPower, boolean beepUnknown, int rollCallSecs) {
         sp.edit()
                 .putBoolean("chipIdEqualsBib", idEqualsBib)
                 .putInt("chipsPerRacer", Math.max(1, chipsPerRacer))
@@ -82,6 +88,7 @@ public final class Prefs {
                 .putInt("lapGapSecs", Math.max(0, lapGapSecs))
                 .putInt("antennaPower", Math.min(100, Math.max(1, antennaPower)))
                 .putBoolean("beepUnknownChip", beepUnknown)
+                .putInt("rollCallSecs", Math.max(0, rollCallSecs))
                 .apply();
     }
 

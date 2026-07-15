@@ -27,7 +27,7 @@ public class ChipTimingActivity extends Activity {
 
     private Prefs prefs;
     private TextView systemValue;
-    private EditText readerHost, chipsPerRacer, suppress, lapGap, antennaPower;
+    private EditText readerHost, chipsPerRacer, suppress, lapGap, antennaPower, rollCall;
     private Switch chipIdBib, beepUnknown;
 
     @Override
@@ -57,9 +57,12 @@ public class ChipTimingActivity extends Activity {
         chipsPerRacer.setText(String.valueOf(prefs.chipsPerRacer()));
         suppress.setText(mmss(prefs.suppressSecs()));
         lapGap.setText(mmss(prefs.lapGapSecs()));
-        // Set these two timers with a scroll-wheel picker instead of typing.
+        rollCall = findViewById(R.id.rollCall);
+        rollCall.setText(mmss(prefs.rollCallSecs()));
+        // Set these timers with a scroll-wheel picker instead of typing.
         makeScrollable(suppress, R.string.no_detect_after_start);
         makeScrollable(lapGap, R.string.no_redetect_after_lap);
+        makeScrollable(rollCall, R.string.rollcall_window_hint);
         antennaPower.setText(String.valueOf(prefs.antennaPower()));
         chipIdBib.setChecked(prefs.chipIdEqualsBib());
         beepUnknown.setChecked(prefs.beepUnknownChip());
@@ -134,7 +137,8 @@ public class ChipTimingActivity extends Activity {
                 parseMmss(suppress.getText().toString()),
                 parseMmss(lapGap.getText().toString()),
                 intOf(antennaPower.getText().toString(), 100),
-                beepUnknown.isChecked());
+                beepUnknown.isChecked(),
+                parseMmss(rollCall.getText().toString()));
     }
 
     private String protocolLabel(String protocol) {

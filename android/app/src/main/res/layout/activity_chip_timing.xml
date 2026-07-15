@@ -84,6 +84,15 @@
             </LinearLayout>
 
             <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/rollcall_window" />
+                <EditText
+                    android:id="@+id/rollCall"
+                    style="@style/ChipValueBox"
+                    android:inputType="datetime"
+                    android:digits="0123456789:" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
                 <TextView style="@style/ChipLabel" android:text="@string/chip_start_time" />
                 <Switch android:id="@+id/swChipStartTime" style="@style/RacerSwitch" />
             </LinearLayout>

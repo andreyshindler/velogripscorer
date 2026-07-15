@@ -1,0 +1,32 @@
+name: Deploy to VPS
+
+# Runs on the self-hosted runner installed on the VPS. On every push to main
+# (and on manual dispatch) it fast-forwards the deployment clone to main and
+# rebuilds the Docker stack. Only main triggers it — never pull requests — so
+# only reviewed, merged code is ever deployed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull main and rebuild the stack
+        env:
+          # Override in repo settings (Variables) if the clone lives elsewhere.
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          cd "${DEPLOY_DIR:-$HOME/projects/velogripscorer}"
+          echo "Deploying $(git rev-parse --short HEAD) -> main in $(pwd)"
+          git fetch origin main
+          git reset --hard origin/main
+          docker compose up -d --build
+          docker image prune -f
+          docker compose ps

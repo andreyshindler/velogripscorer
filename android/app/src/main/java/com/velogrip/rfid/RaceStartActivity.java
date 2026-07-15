@@ -75,6 +75,7 @@ public class RaceStartActivity extends Activity {
     private void startRace() {
         playStartSound();              // audible go signal
         prefs.setRaceFinalized(false); // fresh race: no laps-down finalisation
+        prefs.setRollCallClosedAt(0);  // fresh race: the start-line roll call re-opens
         boolean mass = !RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
         long gun = System.currentTimeMillis() + clockAdjustMs;
         if (mass) {

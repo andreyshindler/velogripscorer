@@ -163,6 +163,11 @@
     <string name="rc_live_sub">צפייה ועדכון של המסיימים בזמן אמת</string>
     <string name="rc_progress_title">התקדמות המרוץ</string>
     <string name="rc_progress_sub">סיימו מול במסלול, לפי מרחק</string>
+    <string name="rc_rollcall_title">סגור מפקד נוכחות</string>
+    <string name="rc_rollcall_sub">סמן כעת כ-DNS את מי שלא נראה בזינוק</string>
+    <string name="rollcall_closed">מפקד הנוכחות נסגר — מי שלא נראה סומן DNS</string>
+    <string name="rollcall_window">סמן DNS אוטומטית למי שלא הגיע, אחרי הזינוק בתוך:</string>
+    <string name="rollcall_window_hint">הזמן אחרי היריה שאחריו מתחרים שלא נקראו מסומנים DNS (0 = כבוי)</string>
     <string name="restart_save_sub">שמירת הזמנים שנרשמו</string>
     <string name="restart_discard_sub">מחיקת כל הזמנים והתחלה מחדש</string>
     <string name="rc_settings_short">הגדרות</string>
