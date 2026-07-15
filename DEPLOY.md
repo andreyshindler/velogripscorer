@@ -123,6 +123,41 @@ the commands. It needs only outbound access to `api.telegram.org` (long
 polling), so it works behind the reverse proxy and the `BASE_PATH` prefix with
 no extra ports or webhook URL.
 
+## Auto-deploy on merge to `main` (self-hosted runner)
+
+`.github/workflows/deploy.yml` redeploys the VPS on every push to `main`. It runs
+on a **self-hosted GitHub Actions runner installed on the VPS**, so GitHub never
+needs SSH access — the runner pulls jobs over an outbound HTTPS connection and
+runs the deploy commands locally.
+
+One-time setup on the VPS (run as the same user that owns the clone and can use
+Docker, e.g. `komodo`):
+
+```bash
+# 1. Get a registration token: repo → Settings → Actions → Runners →
+#    "New self-hosted runner" (Linux x64). Copy the token it shows.
+
+# 2. Install the runner (versions/URL from that page):
+mkdir -p ~/actions-runner && cd ~/actions-runner
+curl -o runner.tar.gz -L https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+tar xzf runner.tar.gz
+./config.sh --url https://github.com/andreyshindler/velogripscorer --token <TOKEN>
+
+# 3. Run it as a service so it survives reboots:
+sudo ./svc.sh install
+sudo ./svc.sh start
+```
+
+The deploy job `cd`s into `~/projects/velogripscorer` by default; if the clone
+lives elsewhere, set a repo **Variable** `DEPLOY_DIR` (Settings → Secrets and
+variables → Actions → Variables) to the absolute path. The runner user must be
+able to run `docker` (add it to the `docker` group: `sudo usermod -aG docker
+$USER`, then re-login). `.env` is untracked, so the `git reset --hard` in the
+job preserves it and the `vgs_data` volume.
+
+To deploy on demand without a push, use **Actions → Deploy to VPS → Run
+workflow**.
+
 ## Serving under a path prefix
 
 To host the app at `https://your-host/veloscorer` instead of the domain root
