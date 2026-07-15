@@ -84,7 +84,7 @@ public class CategorySetupActivity extends BaseActivity {
 
             TextView name = new TextView(this);
             name.setText(cat.name);
-            name.setTextColor(cat.enabled ? 0xFF111111 : 0xFF999999);
+            name.setTextColor(cat.enabled ? getColor(R.color.text_primary) : getColor(R.color.text_muted));
             name.setTextSize(19);
             name.setTypeface(null, android.graphics.Typeface.BOLD);
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -110,7 +110,7 @@ public class CategorySetupActivity extends BaseActivity {
             box.addView(row);
 
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFDDDDDD);
+            divider.setBackgroundColor(getColor(R.color.divider));
             divider.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);

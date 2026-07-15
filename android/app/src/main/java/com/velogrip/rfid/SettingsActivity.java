@@ -248,7 +248,7 @@ public class SettingsActivity extends BaseActivity {
                 status.setText(getString(R.string.wifi_connected_to, ReaderWifi.ssid()));
                 break;
             case ReaderWifi.CONNECTING:
-                status.setTextColor(0xFF555555);
+                status.setTextColor(getColor(R.color.text_muted));
                 status.setText(getString(R.string.wifi_connecting, ReaderWifi.ssid()));
                 break;
             case ReaderWifi.FAILED:

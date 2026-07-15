@@ -382,6 +382,16 @@ public final class RaceStore extends SQLiteOpenHelper {
                 new Object[]{team, bib});
     }
 
+    /** Change a racer's chip id. No-op if the new id is empty, unchanged, or
+     *  already used by another racer (epc is unique). */
+    public void setRacerEpc(String oldEpc, String newEpc) {
+        if (oldEpc == null || newEpc == null || newEpc.isEmpty() || newEpc.equals(oldEpc)) return;
+        try {
+            getWritableDatabase().execSQL("UPDATE racers SET epc = ? WHERE epc = ?",
+                    new Object[]{newEpc, oldEpc});
+        } catch (android.database.SQLException ignored) { /* duplicate chip id */ }
+    }
+
     // ---- lap targets per distance ("" = whole race when no distances) ----
 
     public int lapsFor(String distance) {

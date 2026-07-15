@@ -66,7 +66,7 @@ public class RacerSetupActivity extends BaseActivity {
 
     private void style(TextView button, boolean on) {
         button.setBackgroundResource(on ? R.drawable.bg_segment_on : R.drawable.bg_segment);
-        button.setTextColor(on ? 0xFFFFFFFF : 0xFF777777);
+        button.setTextColor(on ? 0xFFFFFFFF : getColor(R.color.text_muted));
     }
 
     private void save() {

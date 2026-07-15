@@ -146,7 +146,7 @@ public class ViewResultsActivity extends BaseActivity {
         tv.setTextSize(16);
         tv.setTextColor(getColor(R.color.text_primary));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
-        tv.setBackgroundColor(0xFFBFBFBF);
+        tv.setBackgroundColor(getColor(R.color.divider));
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
         return tv;
     }
@@ -186,7 +186,7 @@ public class ViewResultsActivity extends BaseActivity {
         wrap.addView(row);
         View div = new View(this);
         div.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
-        div.setBackgroundColor(0xFFDDDDDD);
+        div.setBackgroundColor(getColor(R.color.divider));
         wrap.addView(div);
         return wrap;
     }

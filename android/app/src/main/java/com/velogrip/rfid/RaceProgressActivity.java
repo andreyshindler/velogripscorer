@@ -80,7 +80,7 @@ public class RaceProgressActivity extends BaseActivity {
             TextView empty = new TextView(this);
             empty.setText(R.string.no_racers);
             empty.setPadding(dp(16), dp(24), dp(16), dp(24));
-            empty.setTextColor(0xFF777777);
+            empty.setTextColor(getColor(R.color.text_muted));
             empty.setTextSize(16);
             box.addView(empty);
             return;
@@ -110,7 +110,7 @@ public class RaceProgressActivity extends BaseActivity {
     private View sectionHeader(String distance) {
         TextView h = new TextView(this);
         h.setText(distance);
-        h.setBackgroundColor(0xFFBFBFBF);
+        h.setBackgroundColor(getColor(R.color.divider));
         h.setTextColor(getColor(R.color.text_primary));
         h.setTextSize(18);
         h.setTypeface(null, android.graphics.Typeface.BOLD);

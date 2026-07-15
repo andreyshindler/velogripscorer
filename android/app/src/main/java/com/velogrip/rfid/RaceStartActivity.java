@@ -148,7 +148,7 @@ public class RaceStartActivity extends BaseActivity {
 
             TextView name = new TextView(this);
             name.setText(r.name + (r.status.isEmpty() ? "" : "  (" + r.status + ")"));
-            name.setTextColor(r.status.isEmpty() ? 0xFF111111 : 0xFF999999);
+            name.setTextColor(r.status.isEmpty() ? getColor(R.color.text_primary) : getColor(R.color.text_muted));
             name.setTextSize(18);
             name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -158,7 +158,7 @@ public class RaceStartActivity extends BaseActivity {
             box.addView(row);
 
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFDDDDDD);
+            divider.setBackgroundColor(getColor(R.color.divider));
             divider.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);
         }

@@ -175,7 +175,7 @@ public class SegmentResultsActivity extends BaseActivity {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setBackgroundColor(alt ? 0xFFF2F2F2 : 0xFFFFFFFF);
+        r.setBackgroundColor(alt ? getColor(R.color.surface_alt) : getColor(R.color.surface));
         r.setPadding(dp(12), dp(14), dp(12), dp(14));
 
         r.addView(textCell(row.place, dp(36), false, Gravity.START));

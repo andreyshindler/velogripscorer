@@ -81,7 +81,7 @@ public class ProgressListActivity extends BaseActivity {
             TextView empty = new TextView(this);
             empty.setText(finished ? R.string.no_finishers_yet : R.string.no_on_course);
             empty.setPadding(dp(16), dp(24), dp(16), dp(24));
-            empty.setTextColor(0xFF777777);
+            empty.setTextColor(getColor(R.color.text_muted));
             empty.setTextSize(16);
             box.addView(empty);
         }
@@ -116,7 +116,7 @@ public class ProgressListActivity extends BaseActivity {
 
     private View divider() {
         View v = new View(this);
-        v.setBackgroundColor(0xFFDDDDDD);
+        v.setBackgroundColor(getColor(R.color.divider));
         v.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
         return v;
     }

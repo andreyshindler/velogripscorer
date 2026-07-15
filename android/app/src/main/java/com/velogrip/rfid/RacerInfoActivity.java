@@ -66,11 +66,23 @@ public class RacerInfoActivity extends BaseActivity {
         box.addView(editableRow(getString(R.string.wave), r.wave, val ->
                 store.editRacer(bib, r.name, r.category, val)));
 
-        // chip ids (two-chip racers share a bib)
+        // chip ids (two-chip racers share a bib) — editable
         java.util.List<String> chips = new java.util.ArrayList<>();
         for (RaceStore.Racer x : store.racers()) if (x.bib.equals(bib)) chips.add(x.epc);
-        box.addView(readonlyRow(getString(R.string.chip_id), chips.size() > 0 ? chips.get(0) : "—"));
-        box.addView(readonlyRow(getString(R.string.chip_id2), chips.size() > 1 ? chips.get(1) : "—"));
+        if (chips.size() > 0) {
+            final String oldEpc = chips.get(0);
+            box.addView(editableRow(getString(R.string.chip_id), oldEpc, val ->
+                    store.setRacerEpc(oldEpc, padEpc(val))));
+        } else {
+            box.addView(readonlyRow(getString(R.string.chip_id), "—"));
+        }
+        if (chips.size() > 1) {
+            final String oldEpc2 = chips.get(1);
+            box.addView(editableRow(getString(R.string.chip_id2), oldEpc2, val ->
+                    store.setRacerEpc(oldEpc2, padEpc(val))));
+        } else {
+            box.addView(readonlyRow(getString(R.string.chip_id2), "—"));
+        }
 
         // team comes from the start list (XLSX/CSV column or web sync)
         box.addView(dropdownRow(getString(R.string.team_name), r.team,
@@ -146,7 +158,7 @@ public class RacerInfoActivity extends BaseActivity {
         TextView v = new TextView(this);
         v.setText(value);
         v.setTextSize(17);
-        v.setTextColor(0xFF555555);
+        v.setTextColor(getColor(R.color.text_muted));
         v.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(v);
         return row;
@@ -168,9 +180,18 @@ public class RacerInfoActivity extends BaseActivity {
 
     private android.view.View divider() {
         android.view.View v = new android.view.View(this);
-        v.setBackgroundColor(0xFFDDDDDD);
+        v.setBackgroundColor(getColor(R.color.divider));
         v.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
         return v;
+    }
+
+    /** Left-pad a chip id to a full 24-char (96-bit) EPC, like the reader emits. */
+    private static String padEpc(String raw) {
+        String s = raw == null ? "" : raw.trim().toUpperCase();
+        if (s.isEmpty() || s.length() >= 24) return s;
+        StringBuilder sb = new StringBuilder();
+        for (int i = s.length(); i < 24; i++) sb.append('0');
+        return sb.append(s).toString();
     }
 
     private int dp(int value) {

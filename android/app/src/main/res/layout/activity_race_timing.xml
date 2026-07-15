@@ -79,9 +79,9 @@
             android:orientation="vertical"
             android:paddingVertical="10dp">
             <TextView android:id="@+id/clockText" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="0:00.0" android:textColor="@color/text_primary" android:textSize="30sp" android:textStyle="bold" />
+                android:text="0:00.0" android:textColor="#111111" android:textSize="30sp" android:textStyle="bold" />
             <TextView android:id="@+id/clockSub" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/tap_to_record" android:textColor="@color/text_muted" android:textSize="15sp" android:textStyle="bold" />
+                android:text="@string/tap_to_record" android:textColor="#294715" android:textSize="15sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -120,18 +120,18 @@
         android:id="@+id/resultsHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/divider"
+        android:background="#E4E7EB"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp">
         <TextView android:layout_width="54dp" android:layout_height="wrap_content"
-            android:text="@string/col_seq" android:textColor="@color/text_primary" android:textSize="16sp" />
+            android:text="@string/col_seq" android:textColor="#111111" android:textSize="16sp" />
         <TextView android:layout_width="52dp" android:layout_height="wrap_content"
-            android:text="@string/bib_col" android:textColor="@color/text_primary" android:textSize="16sp" />
+            android:text="@string/bib_col" android:textColor="#111111" android:textSize="16sp" />
         <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:text="@string/name_col" android:textColor="@color/text_primary" android:textSize="16sp" />
+            android:text="@string/name_col" android:textColor="#111111" android:textSize="16sp" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="@string/col_time" android:textColor="@color/text_primary" android:textSize="16sp" />
+            android:text="@string/col_time" android:textColor="#111111" android:textSize="16sp" />
     </LinearLayout>
 
     <ScrollView
