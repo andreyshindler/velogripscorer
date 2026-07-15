@@ -64,7 +64,10 @@ public class ChipTimingActivity extends BaseActivity {
         rollCallOn.setChecked(rollCallEnabled);
         rollCall.setText(mmss(rollCallEnabled ? prefs.rollCallSecs() : 120)); // default 2:00 when re-enabled
         rollCall.setEnabled(rollCallEnabled);
-        rollCallOn.setOnCheckedChangeListener((b, checked) -> rollCall.setEnabled(checked));
+        rollCallOn.setOnCheckedChangeListener((b, checked) -> {
+            rollCall.setEnabled(checked);
+            if (checked) Toast.makeText(this, R.string.rollcall_suppress_note, Toast.LENGTH_LONG).show();
+        });
         // Set these timers with a scroll-wheel picker instead of typing.
         makeScrollable(suppress, R.string.no_detect_after_start);
         makeScrollable(lapGap, R.string.no_redetect_after_lap);

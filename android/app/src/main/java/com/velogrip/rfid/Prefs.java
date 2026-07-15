@@ -45,7 +45,7 @@ public final class Prefs {
     // Start-line roll call: seconds after the gun before racers never read are
     // auto-marked DNS (0 = off). rollCallClosedAt is a runtime "closed now" stamp
     // set by the manual button and reset when a race starts.
-    public int rollCallSecs() { return sp.getInt("rollCallSecs", 120); }
+    public int rollCallSecs() { return sp.getInt("rollCallSecs", 0); } // 0 = off by default
     public long rollCallClosedAt() { return sp.getLong("rollCallClosedAt", 0L); }
     public void setRollCallClosedAt(long ms) { sp.edit().putLong("rollCallClosedAt", ms).apply(); }
     public String contestTitle() { return sp.getString("contestTitle", ""); }
