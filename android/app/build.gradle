@@ -10,8 +10,8 @@ android {
         applicationId 'com.velogrip.rfid'
         minSdk 26
         targetSdk 33
-        versionCode 12
-        versionName '0.4.8'
+        versionCode 13
+        versionName '0.4.9'
     }
 
     buildTypes {

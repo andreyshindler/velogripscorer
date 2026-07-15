@@ -150,6 +150,7 @@ public class ViewResultsActivity extends BaseActivity {
         tv.setTextColor(getColor(R.color.text_primary));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
         tv.setBackgroundColor(getColor(R.color.divider));
+        tv.setGravity(Gravity.LEFT);
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
         return tv;
     }
@@ -159,6 +160,9 @@ public class ViewResultsActivity extends BaseActivity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        // Pin the row left-to-right so every label starts at the same left edge
+        // (chevron on the right) instead of flipping right under Hebrew RTL.
+        row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         row.setPadding(dp(16), dp(14), dp(12), dp(14));
         row.setBackgroundColor(getColor(R.color.surface));
 
@@ -166,10 +170,9 @@ public class ViewResultsActivity extends BaseActivity {
         tv.setText(label);
         tv.setTextSize(17);
         tv.setTextColor(getColor(R.color.text_primary));
-        // Align every label to the row's start edge so Hebrew categories
-        // (e.g. "עד 44") line up in the same column as the English ones
-        // instead of jumping to the right.
-        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        // Left-align every label so distances, gender and category codes line up
+        // in the same column instead of jumping to the right in RTL.
+        tv.setGravity(Gravity.LEFT);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(tv);
 
