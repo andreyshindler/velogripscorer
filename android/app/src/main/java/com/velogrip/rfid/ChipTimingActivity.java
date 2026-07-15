@@ -64,10 +64,12 @@ public class ChipTimingActivity extends BaseActivity {
         rollCallOn.setChecked(rollCallEnabled);
         rollCall.setText(mmss(rollCallEnabled ? prefs.rollCallSecs() : 120)); // default 2:00 when re-enabled
         rollCall.setEnabled(rollCallEnabled);
+        rollCall.setAlpha(rollCallEnabled ? 1f : 0.4f); // grayed out while the toggle is off
         final View rollCallHint = findViewById(R.id.rollCallHint);
         rollCallHint.setVisibility(rollCallEnabled ? View.VISIBLE : View.GONE);
         rollCallOn.setOnCheckedChangeListener((b, checked) -> {
             rollCall.setEnabled(checked);
+            rollCall.setAlpha(checked ? 1f : 0.4f);
             rollCallHint.setVisibility(checked ? View.VISIBLE : View.GONE);
         });
         // Set these timers with a scroll-wheel picker instead of typing.
