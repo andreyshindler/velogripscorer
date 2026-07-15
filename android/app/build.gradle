@@ -10,11 +10,28 @@ android {
         applicationId 'com.velogrip.rfid'
         minSdk 26
         targetSdk 33
-        versionCode 14
-        versionName '0.5.0'
+        versionCode 15
+        versionName '0.5.1'
+    }
+
+    // A fixed debug keystore committed at android/debug.keystore so every build
+    // (local or CI) signs with the SAME key. Without it, each clean CI runner
+    // auto-generates a random debug key, and Android then refuses to install a
+    // new APK over an old one (signature mismatch). A debug key carries no real
+    // security, so committing it is standard for internal distribution.
+    signingConfigs {
+        debug {
+            storeFile file('../debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
         }
