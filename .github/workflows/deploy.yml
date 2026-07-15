@@ -1,12 +1,23 @@
 name: Deploy to VPS
 
-# Runs on the self-hosted runner installed on the VPS. On every push to main
-# (and on manual dispatch) it fast-forwards the deployment clone to main and
-# rebuilds the Docker stack. Only main triggers it — never pull requests — so
-# only reviewed, merged code is ever deployed.
+# Runs on the self-hosted runner installed on the VPS. On a push to main that
+# touches the web/server/Docker files (or on manual dispatch) it fast-forwards
+# the deployment clone to main and rebuilds the Docker stack, then pings
+# Telegram with the result. Android-only or docs-only merges don't redeploy.
+# Only main triggers it — never pull requests.
 on:
   push:
     branches: [main]
+    paths:
+      - 'server/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'openapi.yaml'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'Caddyfile'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 concurrency:
@@ -16,17 +27,39 @@ concurrency:
 jobs:
   deploy:
     runs-on: self-hosted
+    env:
+      TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+      TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
     steps:
       - name: Pull main and rebuild the stack
+        id: deploy
         env:
           # Override in repo settings (Variables) if the clone lives elsewhere.
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
         run: |
           set -euo pipefail
           cd "${DEPLOY_DIR:-$HOME/projects/velogripscorer}"
-          echo "Deploying $(git rev-parse --short HEAD) -> main in $(pwd)"
+          echo "Deploying to main in $(pwd)"
           git fetch origin main
           git reset --hard origin/main
           docker compose up -d --build
           docker image prune -f
           docker compose ps
+
+      - name: Notify Telegram
+        if: always() && env.TG_BOT_TOKEN != ''
+        env:
+          STATUS: ${{ steps.deploy.outcome }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -uo pipefail
+          if [ "$STATUS" = "success" ]; then ICON="✅"; WORD="deployed"; else ICON="❌"; WORD="deploy FAILED"; fi
+          SUBJECT=$(printf '%s' "${COMMIT_MSG:-manual dispatch}" | head -n1 | cut -c1-200)
+          TEXT="${ICON} VeloGrip ${WORD} — ${GITHUB_SHA::7} on main
+          ${SUBJECT}
+          ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          # Best-effort; a failed notification must not fail the deploy.
+          curl -sS \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" > /dev/null || true

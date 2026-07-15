@@ -80,13 +80,14 @@ affects:
 
   Without those secrets the APK still builds and uploads; the Telegram step is
   skipped. Delivery is skipped on pull requests.
-- **Deploy to VPS** (`.github/workflows/deploy.yml`) — on every push to `main`
-  (i.e. after a merge), a job runs on a **self-hosted runner installed on the
-  VPS**, fast-forwards the deployment clone to `main`, and runs
-  `docker compose up -d --build`. Only `main` triggers it (never pull requests),
-  so only reviewed code deploys. Set the repo variable `DEPLOY_DIR` if the clone
-  isn't at `~/projects/velogripscorer`. See DEPLOY.md for the one-time runner
-  setup.
+- **Deploy to VPS** (`.github/workflows/deploy.yml`) — when a push to `main`
+  touches web/server/Docker files (or on manual dispatch), a job runs on a
+  **self-hosted runner installed on the VPS**, fast-forwards the deployment
+  clone to `main`, runs `docker compose up -d --build`, and pings Telegram with
+  the result. Android-only or docs-only merges don't redeploy. Only `main`
+  triggers it (never pull requests), so only reviewed code deploys. Set the repo
+  variable `DEPLOY_DIR` if the clone isn't at `~/projects/velogripscorer`. See
+  DEPLOY.md for the one-time runner setup.
 
 ## Architecture
 
