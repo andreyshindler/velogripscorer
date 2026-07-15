@@ -40,8 +40,11 @@ public class ViewResultsActivity extends BaseActivity {
         findViewById(R.id.aShare).setOnClickListener(v -> openPostResults());
         findViewById(R.id.aResultsOpt).setOnClickListener(v ->
                 startActivity(new Intent(this, ResultsOptionsActivity.class)));
+        // The race is over here: opening the start list must not let the wizard
+        // step forward into Race Start (which would re-start the race).
         findViewById(R.id.aStartList).setOnClickListener(v ->
-                startActivity(new Intent(this, StartListActivity.class)));
+                startActivity(new Intent(this, StartListActivity.class)
+                        .putExtra(StartListActivity.EXTRA_NO_FORWARD, true)));
     }
 
     @Override
