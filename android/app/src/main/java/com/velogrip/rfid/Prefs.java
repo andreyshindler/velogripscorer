@@ -101,8 +101,8 @@ public final class Prefs {
     public boolean beepOnRead() { return sp.getBoolean("beepOnRead", true); }
     public void setBeepOnRead(boolean on) { sp.edit().putBoolean("beepOnRead", on).apply(); }
 
-    /** Appearance: "system" (follow the phone), "light", or "dark". */
-    public String themeMode() { return sp.getString("themeMode", "system"); }
+    /** Appearance: "system" (follow the phone), "light", or "dark". Defaults to dark. */
+    public String themeMode() { return sp.getString("themeMode", "dark"); }
     public void setThemeMode(String mode) { sp.edit().putString("themeMode", mode).apply(); }
 
     // Race start options.
