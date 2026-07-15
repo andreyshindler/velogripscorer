@@ -88,6 +88,10 @@ affects:
   triggers it (never pull requests), so only reviewed code deploys. Set the repo
   variable `DEPLOY_DIR` if the clone isn't at `~/projects/velogripscorer`. See
   DEPLOY.md for the one-time runner setup.
+- **Deploy to Staging** (`.github/workflows/deploy-staging.yml`) — a separate
+  preview stack (own clone, DB volume, port, and `/veloscorer-staging` URL) that
+  redeploys from the `staging` branch, so web changes can be clicked through on
+  the VPS before merging to prod. See DEPLOY.md.
 
 ## Architecture
 

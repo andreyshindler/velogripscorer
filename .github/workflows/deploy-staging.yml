@@ -1,0 +1,63 @@
+name: Deploy to Staging
+
+# Preview slot: push web/server/Docker changes to the `staging` branch and this
+# job (on the same self-hosted VPS runner) redeploys a SEPARATE stack — its own
+# clone, its own DB volume, its own port/URL — so you can click through changes
+# before merging to main/prod. Never touches the prod stack.
+on:
+  push:
+    branches: [staging]
+    paths:
+      - 'server/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'openapi.yaml'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'Caddyfile'
+      - '.github/workflows/deploy-staging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    env:
+      TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+      TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+    steps:
+      - name: Pull staging and rebuild the staging stack
+        id: deploy
+        env:
+          # Separate clone from prod. Override via repo Variable if elsewhere.
+          STAGING_DEPLOY_DIR: ${{ vars.STAGING_DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          cd "${STAGING_DEPLOY_DIR:-$HOME/projects/velogripscorer-staging}"
+          echo "Deploying staging in $(pwd)"
+          git fetch origin staging
+          git reset --hard origin/staging
+          docker compose up -d --build
+          docker image prune -f
+          docker compose ps
+
+      - name: Notify Telegram
+        if: always() && env.TG_BOT_TOKEN != ''
+        env:
+          STATUS: ${{ steps.deploy.outcome }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -uo pipefail
+          if [ "$STATUS" = "success" ]; then ICON="🟡"; WORD="STAGING deployed"; else ICON="❌"; WORD="STAGING deploy FAILED"; fi
+          SUBJECT=$(printf '%s' "${COMMIT_MSG:-manual dispatch}" | head -n1 | cut -c1-200)
+          TEXT="${ICON} VeloGrip ${WORD} — ${GITHUB_SHA::7}
+          ${SUBJECT}
+          ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -sS \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" > /dev/null || true
