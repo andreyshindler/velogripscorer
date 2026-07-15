@@ -1,0 +1,16 @@
+# Keep the Docker build context small and fast. The Dockerfile only copies
+# server/, public/, the package files and openapi.yaml, but everything here is
+# excluded from the context sent to the daemon on every build.
+.git
+.github
+android
+actions-runner
+node_modules
+data
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+*.md
+test
