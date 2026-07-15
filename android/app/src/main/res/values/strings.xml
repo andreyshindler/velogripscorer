@@ -168,7 +168,7 @@
     <string name="rollcall_closed">Roll call closed — unseen racers marked DNS</string>
     <string name="rollcall_window">Auto-DNS no-shows after start for:</string>
     <string name="rollcall_window_hint">Time after the gun before racers never read are marked DNS (0 = off)</string>
-    <string name="rollcall_suppress_note">Auto-DNS marks racers never read at the start as DNS. Keep an eye on your “Do not detect any chips after start for” window too.</string>
+    <string name="rollcall_suppress_note">Uses start-line reads — mind the “Do not detect…” window above.</string>
     <string name="restart_save_sub">Keep the recorded times</string>
     <string name="restart_discard_sub">Clear all recorded times and start over</string>
     <string name="rc_settings_short">Settings</string>

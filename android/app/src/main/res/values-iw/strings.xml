@@ -168,7 +168,7 @@
     <string name="rollcall_closed">מפקד הנוכחות נסגר — מי שלא נראה סומן DNS</string>
     <string name="rollcall_window">סמן DNS אוטומטית למי שלא הגיע, אחרי הזינוק בתוך:</string>
     <string name="rollcall_window_hint">הזמן אחרי היריה שאחריו מתחרים שלא נקראו מסומנים DNS (0 = כבוי)</string>
-    <string name="rollcall_suppress_note">סימון DNS אוטומטי מסמן מתחרים שלא נקראו בזינוק. שים לב גם לחלון ״אל תזהה שבבים אחרי הזינוק״.</string>
+    <string name="rollcall_suppress_note">מבוסס על קריאות בזינוק — שים לב לחלון ״אל תזהה…״ שמעל.</string>
     <string name="restart_save_sub">שמירת הזמנים שנרשמו</string>
     <string name="restart_discard_sub">מחיקת כל הזמנים והתחלה מחדש</string>
     <string name="rc_settings_short">הגדרות</string>

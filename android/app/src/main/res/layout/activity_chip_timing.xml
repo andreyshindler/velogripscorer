@@ -96,6 +96,16 @@
                     android:digits="0123456789:" />
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/rollCallHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/rollcall_suppress_note"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
             <LinearLayout style="@style/ChipRow">
                 <TextView style="@style/ChipLabel" android:text="@string/chip_start_time" />
                 <Switch android:id="@+id/swChipStartTime" style="@style/RacerSwitch" />
