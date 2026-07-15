@@ -14,7 +14,7 @@ import android.widget.Toast;
  * leading zeros and, for a decimal existing ID, auto-incremented as a
  * convenience. Verify a write by tapping Read again.
  */
-public class ProgramChipsActivity extends Activity {
+public class ProgramChipsActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView status, oneChip, twoChip;

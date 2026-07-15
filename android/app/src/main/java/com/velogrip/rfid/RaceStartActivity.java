@@ -19,7 +19,7 @@ import java.util.List;
  * options. "Start race" records the gun (mass or per-wave, honouring the Race
  * Setup choice) and opens the race console.
  */
-public class RaceStartActivity extends Activity {
+public class RaceStartActivity extends BaseActivity {
 
     private Prefs prefs;
     private RaceStore store;
@@ -141,7 +141,7 @@ public class RaceStartActivity extends Activity {
 
             TextView bib = new TextView(this);
             bib.setText(r.bib);
-            bib.setTextColor(0xFF111111);
+            bib.setTextColor(getColor(R.color.text_primary));
             bib.setTextSize(19);
             bib.setTypeface(null, android.graphics.Typeface.BOLD);
             bib.setLayoutParams(new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));

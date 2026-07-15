@@ -349,6 +349,10 @@
     <string name="label_poll_interval">מרווח תשאול (מ״ש)</string>
     <string name="label_dedupe">חלון כפילויות לתג (מ״ש)</string>
     <string name="label_beep">צפצוף בזיהוי שבב</string>
+    <string name="label_appearance">מראה</string>
+    <string name="appearance_system">לפי המערכת</string>
+    <string name="appearance_light">בהיר</string>
+    <string name="appearance_dark">כהה</string>
 
     <string name="section_wifi">WiFi של הקורא (רשות)</string>
     <string name="wifi_help">באנדרואיד 10 ומעלה האפליקציה יכולה להתחבר בעצמה ל-WiFi של נתב ה-RFID ולשמור על חבילת הנתונים להעלאות. השאר ריק לשימוש ברשת הנוכחית.</string>

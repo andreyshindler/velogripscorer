@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -18,7 +18,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/scan_help"
-            android:textColor="#222222"
+            android:textColor="@color/text_primary"
             android:textSize="16sp" />
 
         <LinearLayout
@@ -55,7 +55,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:textColor="#111111"
+            android:textColor="@color/text_primary"
             android:textSize="17sp"
             android:textStyle="bold" />
 
@@ -67,7 +67,7 @@
             android:paddingHorizontal="4dp"
             android:paddingVertical="8dp"
             android:text="@string/reader_address"
-            android:textColor="#222222"
+            android:textColor="@color/text_primary"
             android:textSize="18sp" />
 
         <ScrollView
@@ -90,7 +90,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/scan_screen_hint"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <include layout="@layout/bottom_bar" />

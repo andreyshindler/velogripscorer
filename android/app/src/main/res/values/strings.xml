@@ -349,6 +349,10 @@
     <string name="label_poll_interval">Poll interval (ms)</string>
     <string name="label_dedupe">Duplicate window per tag (ms)</string>
     <string name="label_beep">Beep on chip detected</string>
+    <string name="label_appearance">Appearance</string>
+    <string name="appearance_system">System</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
 
     <string name="section_wifi">Reader WiFi (optional)</string>
     <string name="wifi_help">On Android 10+ the app can join the RFID router\'s WiFi itself and keep mobile data for uploads. Leave empty to use the phone\'s current network.</string>

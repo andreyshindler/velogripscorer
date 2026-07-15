@@ -13,7 +13,7 @@ import com.velogrip.rfid.db.RaceStore;
  * Race setup after a start list is selected: confirm the race name and pick
  * how the field starts. Mass = one gun for everyone; Wave = per-wave guns.
  */
-public class RaceSetupActivity extends Activity {
+public class RaceSetupActivity extends BaseActivity {
 
     public static final String TYPE_MASS = "mass";
     public static final String TYPE_WAVE = "wave";

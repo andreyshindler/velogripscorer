@@ -17,7 +17,7 @@ import com.velogrip.rfid.db.RaceStore;
  * email / info fields mirror the reference but are not part of the start-list
  * data, so they are shown read-only.
  */
-public class RacerInfoActivity extends Activity {
+public class RacerInfoActivity extends BaseActivity {
 
     public static final String EXTRA_BIB = "bib";
 
@@ -160,7 +160,7 @@ public class RacerInfoActivity extends Activity {
         TextView l = new TextView(this);
         l.setText(label);
         l.setTextSize(16);
-        l.setTextColor(0xFF111111);
+        l.setTextColor(getColor(R.color.text_primary));
         l.setLayoutParams(new LinearLayout.LayoutParams(dp(110), LinearLayout.LayoutParams.WRAP_CONTENT));
         row.addView(l);
         return row;

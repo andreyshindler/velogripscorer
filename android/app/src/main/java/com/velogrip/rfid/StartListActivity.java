@@ -23,7 +23,7 @@ import java.util.Locale;
  * bottom bar (More toggles) offers search, DNS, delete, merge / add, sort,
  * share. Automate is not implemented yet.
  */
-public class StartListActivity extends Activity {
+public class StartListActivity extends BaseActivity {
 
     /** Set true to hide the wizard's forward button (e.g. opened mid-race). */
     public static final String EXTRA_NO_FORWARD = "no_forward";
@@ -118,7 +118,7 @@ public class StartListActivity extends Activity {
 
             TextView bib = new TextView(this);
             bib.setText(r.bib);
-            bib.setTextColor(0xFF111111);
+            bib.setTextColor(getColor(R.color.text_primary));
             bib.setTextSize(19);
             bib.setTypeface(null, android.graphics.Typeface.BOLD);
             bib.setLayoutParams(new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));

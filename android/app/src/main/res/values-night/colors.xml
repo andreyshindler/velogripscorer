@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-mode overrides (navy palette, matching the approved mockup). -->
+<resources>
+    <color name="app_bg">#0F1319</color>
+    <color name="surface">#161B22</color>
+    <color name="surface_alt">#1B222C</color>
+    <color name="text_primary">#ECF1F7</color>
+    <color name="text_secondary">#C8D0DA</color>
+    <color name="text_muted">#93A0AD</color>
+    <color name="text_faint">#5A6472</color>
+    <color name="border">#2A3340</color>
+    <color name="divider">#232B36</color>
+    <color name="menu_section_bg">#1B222C</color>
+    <color name="menu_divider">#232B36</color>
+    <color name="nav_bar_bg">#0A0D12</color>
+    <color name="tile_idle_bg">#161B22</color>
+    <color name="tile_idle_text">#3B4551</color>
+    <color name="on_accent">#FFFFFF</color>
+</resources>

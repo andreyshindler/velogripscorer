@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -53,14 +53,14 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#BFBFBF"
+        android:background="@color/divider"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp">
         <TextView android:layout_width="64dp" android:layout_height="wrap_content"
-            android:text="@string/bib_col" android:textColor="#222222" android:textSize="18sp" />
+            android:text="@string/bib_col" android:textColor="@color/text_primary" android:textSize="18sp" />
         <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:text="@string/name_col" android:textColor="#222222" android:textSize="18sp" />
+            android:text="@string/name_col" android:textColor="@color/text_primary" android:textSize="18sp" />
     </LinearLayout>
 
     <ScrollView
@@ -81,7 +81,7 @@
         android:background="@color/menu_section_bg"
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <LinearLayout

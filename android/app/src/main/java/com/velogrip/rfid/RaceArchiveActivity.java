@@ -17,7 +17,7 @@ import java.util.Locale;
  * at a time (switching races in "Download races" clears it), so the archive
  * shows that race's summary and final standings.
  */
-public class RaceArchiveActivity extends Activity {
+public class RaceArchiveActivity extends BaseActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

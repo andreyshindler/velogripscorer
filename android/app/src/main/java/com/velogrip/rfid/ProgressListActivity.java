@@ -17,7 +17,7 @@ import java.util.List;
  * with one status (finished or on course), shown as bib + name. Reached by
  * tapping the ❯ on a distance's Finished / On course row.
  */
-public class ProgressListActivity extends Activity {
+public class ProgressListActivity extends BaseActivity {
 
     public static final String EXTRA_DISTANCE = "distance";
     public static final String EXTRA_STATUS = "status"; // "finished" | "on_course"
@@ -98,14 +98,14 @@ public class ProgressListActivity extends Activity {
 
         TextView b = new TextView(this);
         b.setText(bib);
-        b.setTextColor(0xFF111111);
+        b.setTextColor(getColor(R.color.text_primary));
         b.setTextSize(19);
         b.setTypeface(null, android.graphics.Typeface.BOLD);
         b.setLayoutParams(new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));
 
         TextView n = new TextView(this);
         n.setText(name);
-        n.setTextColor(0xFF111111);
+        n.setTextColor(getColor(R.color.text_primary));
         n.setTextSize(18);
         n.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 

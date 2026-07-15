@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -22,7 +22,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/race_name_label"
-                android:textColor="#111111"
+                android:textColor="@color/text_primary"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -40,7 +40,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="18sp" />
 
                 <Button
@@ -59,7 +59,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
                 android:text="@string/start_type_label"
-                android:textColor="#111111"
+                android:textColor="@color/text_primary"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -93,7 +93,7 @@
                     android:gravity="center"
                     android:paddingVertical="14dp"
                     android:text="@string/start_wave"
-                    android:textColor="#777777"
+                    android:textColor="@color/text_muted"
                     android:textSize="17sp"
                     android:textStyle="bold" />
 
@@ -106,7 +106,7 @@
                     android:gravity="center"
                     android:paddingVertical="14dp"
                     android:text="@string/start_individual"
-                    android:textColor="#777777"
+                    android:textColor="@color/text_muted"
                     android:textSize="17sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -128,7 +128,7 @@
                     android:gravity="center"
                     android:paddingVertical="14dp"
                     android:text="@string/start_interval"
-                    android:textColor="#777777"
+                    android:textColor="@color/text_muted"
                     android:textSize="17sp"
                     android:textStyle="bold" />
 
@@ -141,7 +141,7 @@
                     android:gravity="center"
                     android:paddingVertical="14dp"
                     android:text="@string/start_pursuit"
-                    android:textColor="#777777"
+                    android:textColor="@color/text_muted"
                     android:textSize="17sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -155,7 +155,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/proceed_hint"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <include layout="@layout/bottom_bar" />

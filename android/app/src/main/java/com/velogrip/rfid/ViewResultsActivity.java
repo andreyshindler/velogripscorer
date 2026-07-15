@@ -19,7 +19,7 @@ import java.util.List;
  * category. Tapping a row (❯) opens that segment's ranked finishers. The Share
  * button opens Post Results to publish to the web.
  */
-public class ViewResultsActivity extends Activity {
+public class ViewResultsActivity extends BaseActivity {
 
     private Prefs prefs;
     private RaceStore store;
@@ -144,7 +144,7 @@ public class ViewResultsActivity extends Activity {
         TextView tv = new TextView(this);
         tv.setText(label);
         tv.setTextSize(16);
-        tv.setTextColor(0xFF111111);
+        tv.setTextColor(getColor(R.color.text_primary));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
         tv.setBackgroundColor(0xFFBFBFBF);
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
@@ -157,12 +157,12 @@ public class ViewResultsActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(16), dp(14), dp(12), dp(14));
-        row.setBackgroundColor(0xFFFFFFFF);
+        row.setBackgroundColor(getColor(R.color.surface));
 
         TextView tv = new TextView(this);
         tv.setText(label);
         tv.setTextSize(17);
-        tv.setTextColor(0xFF111111);
+        tv.setTextColor(getColor(R.color.text_primary));
         // Align every label to the row's start edge so Hebrew categories
         // (e.g. "עד 44") line up in the same column as the English ones
         // instead of jumping to the right.

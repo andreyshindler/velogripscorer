@@ -24,7 +24,7 @@ import java.util.Locale;
  * share a place); DNS/DNF/DSQ racers list below. The ❯ on a row opens that
  * racer's info.
  */
-public class SegmentResultsActivity extends Activity {
+public class SegmentResultsActivity extends BaseActivity {
 
     public static final String EXTRA_DISTANCE = "distance";
     public static final String EXTRA_CATEGORY = "category";
@@ -183,7 +183,7 @@ public class SegmentResultsActivity extends Activity {
         TextView nm = new TextView(this);
         nm.setText(row.name);
         nm.setTextSize(17);
-        nm.setTextColor(0xFF111111);
+        nm.setTextColor(getColor(R.color.text_primary));
         nm.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
         // Keep a gap on both sides so a right-aligned Hebrew name never touches
         // the bib on one side or the time on the other.
@@ -193,7 +193,7 @@ public class SegmentResultsActivity extends Activity {
         TextView tv = new TextView(this);
         tv.setText(row.time);
         tv.setTextSize(17);
-        tv.setTextColor(0xFF111111);
+        tv.setTextColor(getColor(R.color.text_primary));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
         tv.setGravity(Gravity.END);
         tv.setPadding(dp(6), 0, dp(8), 0);
@@ -222,7 +222,7 @@ public class SegmentResultsActivity extends Activity {
         TextView t = new TextView(this);
         t.setText(text);
         t.setTextSize(17);
-        t.setTextColor(0xFF111111);
+        t.setTextColor(getColor(R.color.text_primary));
         t.setGravity(gravity);
         if (bold) t.setTypeface(null, android.graphics.Typeface.BOLD);
         t.setLayoutParams(new LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT));

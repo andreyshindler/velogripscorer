@@ -15,7 +15,7 @@ import android.widget.Toast;
  * top-x, team scoring, penalties and handicaps mirror the reference but are not
  * implemented yet.
  */
-public class ResultsOptionsActivity extends Activity {
+public class ResultsOptionsActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView orderValue, precisionValue;

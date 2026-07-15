@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -13,7 +13,7 @@
         android:gravity="center"
         android:paddingVertical="18dp"
         android:text="@string/for_each_racer"
-        android:textColor="#111111"
+        android:textColor="@color/text_primary"
         android:textSize="22sp"
         android:textStyle="bold" />
 
@@ -71,7 +71,7 @@
                     android:paddingHorizontal="14dp"
                     android:paddingVertical="12dp"
                     android:text="@string/bib_alpha"
-                    android:textColor="#777777"
+                    android:textColor="@color/text_muted"
                     android:textSize="16sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -115,7 +115,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/configure_racer_settings"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <include layout="@layout/bottom_bar" />

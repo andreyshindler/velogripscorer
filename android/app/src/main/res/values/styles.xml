@@ -36,7 +36,7 @@
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
-        <item name="android:textColor">#111111</item>
+        <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">20sp</item>
         <item name="android:textStyle">bold</item>
     </style>
@@ -59,7 +59,7 @@
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
-        <item name="android:textColor">#111111</item>
+        <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">18sp</item>
         <item name="android:textStyle">bold</item>
     </style>
@@ -78,7 +78,7 @@
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
-        <item name="android:textColor">#111111</item>
+        <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">17sp</item>
     </style>
 
@@ -126,7 +126,7 @@
         <item name="android:layout_weight">1.1</item>
         <item name="android:background">@drawable/bg_box</item>
         <item name="android:padding">10dp</item>
-        <item name="android:textColor">#111111</item>
+        <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">17sp</item>
     </style>
 </resources>

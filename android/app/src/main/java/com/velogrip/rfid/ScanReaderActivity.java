@@ -15,7 +15,7 @@ import android.widget.Toast;
  * readers field straight away (and tapping a listed address re-selects it), so
  * returning to Chip Timing shows the reader as the default.
  */
-public class ScanReaderActivity extends Activity {
+public class ScanReaderActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView status;

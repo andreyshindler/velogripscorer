@@ -19,7 +19,7 @@ import java.util.List;
  * category results. A green ✓ marks an included category; tapping toggles it.
  * Edit adds a new category; Delete removes the tapped one (delete mode).
  */
-public class CategorySetupActivity extends Activity {
+public class CategorySetupActivity extends BaseActivity {
 
     private RaceStore store;
     private LinearLayout box;

@@ -101,6 +101,10 @@ public final class Prefs {
     public boolean beepOnRead() { return sp.getBoolean("beepOnRead", true); }
     public void setBeepOnRead(boolean on) { sp.edit().putBoolean("beepOnRead", on).apply(); }
 
+    /** Appearance: "system" (follow the phone), "light", or "dark". */
+    public String themeMode() { return sp.getString("themeMode", "system"); }
+    public void setThemeMode(String mode) { sp.edit().putString("themeMode", mode).apply(); }
+
     // Race start options.
     public long clockAdjustMs() { return sp.getLong("clockAdjustMs", 0); }
     public void setClockAdjustMs(long ms) { sp.edit().putLong("clockAdjustMs", ms).apply(); }

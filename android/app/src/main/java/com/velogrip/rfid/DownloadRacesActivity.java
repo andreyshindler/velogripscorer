@@ -23,7 +23,7 @@ import java.util.Locale;
  * lists the account's start lists; tap one to pair this phone and pull it.
  * The login form only appears on first use or when the saved login fails.
  */
-public class DownloadRacesActivity extends Activity {
+public class DownloadRacesActivity extends BaseActivity {
 
     private Prefs prefs;
     private LinearLayout form;

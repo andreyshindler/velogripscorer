@@ -14,7 +14,7 @@
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light.DarkActionBar"
+        android:theme="@style/AppTheme.DarkActionBar"
         android:usesCleartextTraffic="true">
 
         <activity
@@ -41,128 +41,128 @@
         <activity
             android:name=".SelectStartListActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".RaceSetupActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".LapSetupActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".DistanceSetupActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".SelectLapCountActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".RacerSetupActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".CategorySetupActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".ResultsOptionsActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".HardwareSetupActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".ChipTimingActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".ScanReaderActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".ProgramChipsActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".StartListActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".RaceStartActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".RaceTimingActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".LiveResultsActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".RacerInfoActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".ViewResultsActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".SegmentResultsActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".PostResultsActivity"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".DownloadRacesActivity"
             android:label="@string/download_title"
             android:parentActivityName=".MainActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
@@ -175,13 +175,13 @@
             android:name=".RaceProgressActivity"
             android:label="@string/race_progress_title"
             android:parentActivityName=".RaceTimingActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <activity
             android:name=".ProgressListActivity"
             android:parentActivityName=".RaceProgressActivity"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
         <service

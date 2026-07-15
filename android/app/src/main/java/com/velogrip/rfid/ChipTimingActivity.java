@@ -23,7 +23,7 @@ import java.util.Locale;
  * mm:ss timers drive the on-device results (start suppression and minimum lap
  * gap); "Test connection" opens a socket to the reader to confirm it answers.
  */
-public class ChipTimingActivity extends Activity {
+public class ChipTimingActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView systemValue;

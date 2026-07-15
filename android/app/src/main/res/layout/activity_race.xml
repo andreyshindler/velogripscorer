@@ -116,7 +116,7 @@
             android:id="@+id/resultsView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#111827"
+            android:background="@color/nav_bar_bg"
             android:fontFamily="monospace"
             android:padding="8dp"
             android:textColor="#D5E0FF"

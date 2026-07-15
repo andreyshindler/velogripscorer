@@ -14,7 +14,7 @@ import android.widget.Toast;
  * gets a link whether posting is on or off; when off, the page simply shows
  * whatever was last uploaded.
  */
-public class LiveResultsActivity extends Activity {
+public class LiveResultsActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView sportValue;

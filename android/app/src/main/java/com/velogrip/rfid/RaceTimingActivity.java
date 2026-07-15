@@ -29,7 +29,7 @@ import java.util.Locale;
  * records an unassigned time you can assign later, and the live finish order
  * below. Reads from the RFID reader (via the bridge) land here too.
  */
-public class RaceTimingActivity extends Activity {
+public class RaceTimingActivity extends BaseActivity {
 
     private static final String NO_BIB = "NOBIB";
     private static final int PAGE_SIZE = 20;
@@ -666,7 +666,7 @@ public class RaceTimingActivity extends Activity {
         TextView nm = new TextView(this);
         nm.setText(name);
         nm.setTextSize(17);
-        nm.setTextColor(0xFF111111);
+        nm.setTextColor(getColor(R.color.text_primary));
         nm.setPadding(dp(8), 0, dp(8), 0);
         nm.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
         nm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -722,7 +722,7 @@ public class RaceTimingActivity extends Activity {
         TextView t = new TextView(this);
         t.setText(text);
         t.setTextSize(17);
-        t.setTextColor(0xFF111111);
+        t.setTextColor(getColor(R.color.text_primary));
         t.setGravity(Gravity.CENTER);
         t.setPadding(dp(6), dp(4), dp(6), dp(4));
         android.graphics.drawable.GradientDrawable bgd = new android.graphics.drawable.GradientDrawable();
@@ -920,7 +920,7 @@ public class RaceTimingActivity extends Activity {
 
     private View controlDivider() {
         View v = new View(this);
-        v.setBackgroundColor(0xFFECEFEB);
+        v.setBackgroundColor(getColor(R.color.divider));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 1);
         lp.setMargins(dp(22 + 46 + 15), 0, 0, 0); // indent past the icon

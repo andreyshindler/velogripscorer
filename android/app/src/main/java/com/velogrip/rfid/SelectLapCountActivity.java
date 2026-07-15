@@ -14,7 +14,7 @@ import com.velogrip.rfid.db.RaceStore;
  * Full-screen lap-count picker (Webscorer-style): X cancels, ✓ confirms.
  * "Time-limited" is shown to match the reference but not supported yet.
  */
-public class SelectLapCountActivity extends Activity {
+public class SelectLapCountActivity extends BaseActivity {
 
     public static final String EXTRA_DISTANCE = "distance";
     private static final int MAX_LAPS = 50;
@@ -67,7 +67,7 @@ public class SelectLapCountActivity extends Activity {
 
         TextView text = new TextView(this);
         text.setText(label);
-        text.setTextColor(0xFF111111);
+        text.setTextColor(getColor(R.color.text_primary));
         text.setTextSize(18);
         text.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
