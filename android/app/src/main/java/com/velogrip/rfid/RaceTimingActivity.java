@@ -722,7 +722,7 @@ public class RaceTimingActivity extends BaseActivity {
         TextView t = new TextView(this);
         t.setText(text);
         t.setTextSize(17);
-        t.setTextColor(getColor(R.color.text_primary));
+        t.setTextColor(0xFF1A1A1A); // the chip backgrounds are bright yellow in both themes
         t.setGravity(Gravity.CENTER);
         t.setPadding(dp(6), dp(4), dp(6), dp(4));
         android.graphics.drawable.GradientDrawable bgd = new android.graphics.drawable.GradientDrawable();
@@ -840,23 +840,23 @@ public class RaceTimingActivity extends BaseActivity {
                 .setNegativeButton(R.string.close, null)
                 .create();
 
-        content.addView(controlRow(R.drawable.ic_ctrl_restart, 0xFFE39A2B, 0xFFFBEFD8,
+        content.addView(controlRow(R.drawable.ic_ctrl_restart, 0xFFE39A2B, 0xFF3A2F18,
                 R.string.rc_restart_title, R.string.rc_restart_sub,
                 () -> { dlg.dismiss(); restartRace(); }));
         content.addView(controlDivider());
-        content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFF4F9E27, 0xFFE6F2DA,
+        content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFF4F9E27, 0xFF1C3320,
                 R.string.rc_finish_title, R.string.rc_finish_sub,
                 () -> { dlg.dismiss(); finishRace(); }));
         content.addView(controlDivider());
-        content.addView(controlRow(R.drawable.ic_ctrl_list, 0xFF3F6FD1, 0xFFE2EAFA,
+        content.addView(controlRow(R.drawable.ic_ctrl_list, 0xFF3F6FD1, 0xFF182A44,
                 R.string.rc_live_title, R.string.rc_live_sub,
                 () -> { dlg.dismiss(); startActivity(new Intent(this, LiveResultsActivity.class)); }));
         content.addView(controlDivider());
-        content.addView(controlRow(R.drawable.ic_ctrl_bars, 0xFF159C93, 0xFFD9F1EF,
+        content.addView(controlRow(R.drawable.ic_ctrl_bars, 0xFF159C93, 0xFF123230,
                 R.string.rc_progress_title, R.string.rc_progress_sub,
                 () -> { dlg.dismiss(); showRaceProgress(); }));
         content.addView(controlDivider());
-        content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFFC0555A, 0xFFF6E1E2,
+        content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFFC0555A, 0xFF3A1F22,
                 R.string.rc_rollcall_title, R.string.rc_rollcall_sub,
                 () -> { dlg.dismiss(); closeRollCall(); }));
 
@@ -896,12 +896,12 @@ public class RaceTimingActivity extends BaseActivity {
         TextView t = new TextView(this);
         t.setText(titleRes);
         t.setTextSize(16.5f);
-        t.setTextColor(0xFF17201B);
+        t.setTextColor(getColor(R.color.text_primary));
         t.setTypeface(null, android.graphics.Typeface.BOLD);
         TextView s = new TextView(this);
         s.setText(subRes);
         s.setTextSize(12.5f);
-        s.setTextColor(0xFF6A7771);
+        s.setTextColor(getColor(R.color.text_muted));
         s.setPadding(0, dp(2), 0, 0);
         text.addView(t);
         text.addView(s);
@@ -1000,7 +1000,7 @@ public class RaceTimingActivity extends BaseActivity {
             startActivity(i);
         };
 
-        content.addView(controlRow(R.drawable.ic_ctrl_save, 0xFF4F9E27, 0xFFE6F2DA,
+        content.addView(controlRow(R.drawable.ic_ctrl_save, 0xFF4F9E27, 0xFF1C3320,
                 R.string.restart_save, R.string.restart_save_sub,
                 () -> { dlg.dismiss(); restart.run(); }));                 // keep times
         content.addView(controlDivider());
@@ -1016,18 +1016,19 @@ public class RaceTimingActivity extends BaseActivity {
     private LinearLayout controlSheetHeader(String title, String subtitle) {
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
+        content.setBackgroundColor(getColor(R.color.surface)); // a cohesive dark (or light) sheet
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.VERTICAL);
         head.setPadding(dp(22), dp(18), dp(22), dp(10));
         TextView t = new TextView(this);
         t.setText(title);
         t.setTextSize(21);
-        t.setTextColor(0xFF17201B);
+        t.setTextColor(getColor(R.color.text_primary));
         t.setTypeface(null, android.graphics.Typeface.BOLD);
         TextView s = new TextView(this);
         s.setText(subtitle);
         s.setTextSize(13);
-        s.setTextColor(0xFF6A7771);
+        s.setTextColor(getColor(R.color.text_muted));
         s.setPadding(0, dp(2), 0, 0);
         head.addView(t);
         head.addView(s);
