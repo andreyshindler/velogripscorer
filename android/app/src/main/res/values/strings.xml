@@ -210,6 +210,9 @@
     <string name="add_racer">Add racer</string>
     <string name="automate">Automate</string>
     <string name="sort_list">Sort list</string>
+    <string name="sort_by_place">By place / time</string>
+    <string name="sort_by_bib">By bib</string>
+    <string name="sort_by_name">By name</string>
     <string name="share_print">Share/Print</string>
     <string name="post_start_list">Post\nstart list</string>
     <string name="automate_unsupported">Chip auto-assign is not supported yet.</string>

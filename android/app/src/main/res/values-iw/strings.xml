@@ -210,6 +210,9 @@
     <string name="add_racer">הוספת רוכב</string>
     <string name="automate">אוטומציה</string>
     <string name="sort_list">מיון</string>
+    <string name="sort_by_place">לפי מקום / זמן</string>
+    <string name="sort_by_bib">לפי מספר</string>
+    <string name="sort_by_name">לפי שם</string>
     <string name="share_print">שיתוף/הדפסה</string>
     <string name="post_start_list">פרסום\nרשימה</string>
     <string name="automate_unsupported">שיוך שבבים אוטומטי אינו נתמך עדיין.</string>

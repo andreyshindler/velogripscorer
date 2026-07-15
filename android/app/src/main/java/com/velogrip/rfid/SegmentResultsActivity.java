@@ -33,7 +33,7 @@ public class SegmentResultsActivity extends BaseActivity {
     private Prefs prefs;
     private RaceStore store;
     private String distance = "", category = "", gender = "";
-    private boolean sortByBib = false;
+    private int sortMode = 0; // 0 = place/time, 1 = bib, 2 = name
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +51,15 @@ public class SegmentResultsActivity extends BaseActivity {
         ((TextView) findViewById(R.id.contestDate)).setText(raceDate());
 
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
-        findViewById(R.id.aSort).setOnClickListener(v -> { sortByBib = !sortByBib; render(); });
+        findViewById(R.id.aSort).setOnClickListener(v -> {
+            String[] opts = { getString(R.string.sort_by_place), getString(R.string.sort_by_bib),
+                    getString(R.string.sort_by_name) };
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.sort_list)
+                    .setSingleChoiceItems(opts, sortMode, (d, which) -> { sortMode = which; d.dismiss(); render(); })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
         findViewById(R.id.aSearch).setOnClickListener(v -> searchRacer());
         findViewById(R.id.aShare).setOnClickListener(v -> shareLink());
     }
@@ -135,9 +143,13 @@ public class SegmentResultsActivity extends BaseActivity {
                     ? getString(R.string.status_dns) : r.status;
             display.add(new Row("–", r.bib, r.name, tag));
         }
-        if (sortByBib) {
+        if (sortMode == 1) {
             Collections.sort(display, new Comparator<Row>() {
                 @Override public int compare(Row a, Row b) { return Long.compare(bibNum(a.bib), bibNum(b.bib)); }
+            });
+        } else if (sortMode == 2) {
+            Collections.sort(display, new Comparator<Row>() {
+                @Override public int compare(Row a, Row b) { return a.name.compareToIgnoreCase(b.name); }
             });
         }
 

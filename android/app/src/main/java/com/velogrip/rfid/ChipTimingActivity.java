@@ -28,6 +28,7 @@ public class ChipTimingActivity extends BaseActivity {
     private Prefs prefs;
     private TextView systemValue;
     private EditText readerHost, chipsPerRacer, suppress, lapGap, antennaPower, rollCall;
+    private android.widget.Switch rollCallOn;
     private Switch chipIdBib, beepUnknown;
 
     @Override
@@ -58,7 +59,12 @@ public class ChipTimingActivity extends BaseActivity {
         suppress.setText(mmss(prefs.suppressSecs()));
         lapGap.setText(mmss(prefs.lapGapSecs()));
         rollCall = findViewById(R.id.rollCall);
-        rollCall.setText(mmss(prefs.rollCallSecs()));
+        rollCallOn = findViewById(R.id.rollCallOn);
+        boolean rollCallEnabled = prefs.rollCallSecs() > 0;
+        rollCallOn.setChecked(rollCallEnabled);
+        rollCall.setText(mmss(rollCallEnabled ? prefs.rollCallSecs() : 120)); // default 2:00 when re-enabled
+        rollCall.setEnabled(rollCallEnabled);
+        rollCallOn.setOnCheckedChangeListener((b, checked) -> rollCall.setEnabled(checked));
         // Set these timers with a scroll-wheel picker instead of typing.
         makeScrollable(suppress, R.string.no_detect_after_start);
         makeScrollable(lapGap, R.string.no_redetect_after_lap);
@@ -138,7 +144,7 @@ public class ChipTimingActivity extends BaseActivity {
                 parseMmss(lapGap.getText().toString()),
                 intOf(antennaPower.getText().toString(), 100),
                 beepUnknown.isChecked(),
-                parseMmss(rollCall.getText().toString()));
+                rollCallOn.isChecked() ? parseMmss(rollCall.getText().toString()) : 0);
     }
 
     private String protocolLabel(String protocol) {

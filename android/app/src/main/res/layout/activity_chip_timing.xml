@@ -85,6 +85,10 @@
 
             <LinearLayout style="@style/ChipRow">
                 <TextView style="@style/ChipLabel" android:text="@string/rollcall_window" />
+                <Switch
+                    android:id="@+id/rollCallOn"
+                    style="@style/RacerSwitch"
+                    android:layout_marginEnd="8dp" />
                 <EditText
                     android:id="@+id/rollCall"
                     style="@style/ChipValueBox"
