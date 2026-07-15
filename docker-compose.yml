@@ -14,8 +14,10 @@ services:
       - vgs_data:/data
     # Published on localhost only: your reverse proxy (nginx/Caddy/Apache)
     # forwards to it; the app is never directly exposed to the internet.
+    # Host port is configurable so a staging stack can run alongside prod
+    # (prod keeps 3000; staging sets HOST_PORT=3001 in its .env).
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${HOST_PORT:-3000}:3000"
 
   # OPTIONAL bundled reverse proxy with automatic HTTPS, for a VPS with no
   # web server of its own. Start it with:  docker compose --profile caddy up -d

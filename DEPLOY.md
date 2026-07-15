@@ -158,6 +158,39 @@ job preserves it and the `vgs_data` volume.
 To deploy on demand without a push, use **Actions → Deploy to VPS → Run
 workflow**.
 
+## Staging preview (click through web changes before prod)
+
+A separate stack — its own clone, DB volume, port and URL — that auto-deploys
+from the **`staging`** branch, so web changes can be reviewed on the VPS before
+they reach prod. Prod (from `main`, port 3000, `/veloscorer`) is never touched.
+
+One-time setup on the VPS (as the runner user):
+
+```bash
+cd ~/projects
+git clone https://github.com/andreyshindler/velogripscorer.git velogripscorer-staging
+cd velogripscorer-staging
+git checkout staging
+cp ~/projects/velogripscorer/.env .env      # start from prod's env, then edit:
+#   BASE_PATH=/veloscorer-staging
+#   HOST_PORT=3001
+#   COMPOSE_PROJECT_NAME=velogripscorer_staging   # isolates its DB volume
+docker compose up -d --build
+```
+
+Add the nginx block from [`deploy/nginx-veloscorer-staging.conf`](deploy/nginx-veloscorer-staging.conf)
+next to the prod one and reload nginx. Staging is then at
+`https://<host>/veloscorer-staging`.
+
+After that, the `.github/workflows/deploy-staging.yml` job (same self-hosted
+runner) redeploys it on every push to `staging` and pings Telegram with a 🟡
+STAGING notice. Override the clone path with a repo Variable `STAGING_DEPLOY_DIR`
+if it isn't `~/projects/velogripscorer-staging`.
+
+Typical loop: a feature is previewed by pushing it to `staging` → click through
+at `/veloscorer-staging` → when approved, merge the feature to `main` → prod
+deploys. Staging has its **own** database, so test data never touches prod.
+
 ## Serving under a path prefix
 
 To host the app at `https://your-host/veloscorer` instead of the domain root
