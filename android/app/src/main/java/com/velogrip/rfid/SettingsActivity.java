@@ -61,6 +61,9 @@ public class SettingsActivity extends BaseActivity {
         wifiSsid.setText(prefs.wifiSsid());
         wifiPass.setText(prefs.wifiPass());
         dedupeWindow.setText(String.valueOf(prefs.dedupeWindowMs()));
+
+        PasswordReveal.attach(findViewById(R.id.accountPasswordShow), findViewById(R.id.accountPassword));
+        PasswordReveal.attach(findViewById(R.id.wifiPassShow), wifiPass);
         android.widget.Switch beepSwitch = findViewById(R.id.beepOnRead);
         beepSwitch.setChecked(prefs.beepOnRead());
 

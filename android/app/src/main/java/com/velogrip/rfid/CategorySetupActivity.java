@@ -70,6 +70,9 @@ public class CategorySetupActivity extends BaseActivity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
+            // Category codes (43-49, 56+, 42 TV) are latin/numeric — pin the row
+            // and its text left-aligned so they don't drift right under Hebrew RTL.
+            row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
             row.setPadding(dp(12), dp(18), dp(12), dp(18));
             android.util.TypedValue tv = new android.util.TypedValue();
             getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
@@ -84,6 +87,7 @@ public class CategorySetupActivity extends BaseActivity {
 
             TextView name = new TextView(this);
             name.setText(cat.name);
+            name.setGravity(Gravity.LEFT);
             name.setTextColor(cat.enabled ? getColor(R.color.text_primary) : getColor(R.color.text_muted));
             name.setTextSize(19);
             name.setTypeface(null, android.graphics.Typeface.BOLD);

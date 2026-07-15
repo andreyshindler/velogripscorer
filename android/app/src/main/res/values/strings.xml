@@ -327,6 +327,7 @@
     <string name="account_help">Log in with your website account and pick your race — the start list and result upload connect automatically.</string>
     <string name="label_email">Email</string>
     <string name="label_password">Password</string>
+    <string name="show_password">Show password</string>
     <string name="login_pick_race">Log in &amp; choose race</string>
     <string name="login_needs_fields">Enter server URL, email and password first.</string>
     <string name="no_races_on_account">No races on this account yet — create one on the website.</string>

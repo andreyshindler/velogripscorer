@@ -46,6 +46,7 @@ public class DownloadRacesActivity extends BaseActivity {
         connectedAs = findViewById(R.id.dlConnectedAs);
         email = findViewById(R.id.dlEmail);
         password = findViewById(R.id.dlPassword);
+        PasswordReveal.attach(findViewById(R.id.dlPasswordShow), password);
         login = findViewById(R.id.dlLogin);
 
         email.setText(prefs.accountEmail());

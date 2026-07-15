@@ -327,6 +327,7 @@
     <string name="account_help">התחבר עם חשבון האתר ובחר את המרוץ שלך — רשימת הזינוק והעלאת התוצאות יתחברו אוטומטית.</string>
     <string name="label_email">אימייל</string>
     <string name="label_password">סיסמה</string>
+    <string name="show_password">הצג סיסמה</string>
     <string name="login_pick_race">התחבר ובחר מרוץ</string>
     <string name="login_needs_fields">הזן תחילה כתובת שרת, אימייל וסיסמה.</string>
     <string name="no_races_on_account">אין מרוצים בחשבון זה — צור מרוץ באתר.</string>
