@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -28,7 +28,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/rfid_reader_label"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -48,7 +48,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/existing_chip_id"
-                android:textColor="#111111"
+                android:textColor="@color/text_primary"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -77,7 +77,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
                 android:text="@string/new_chip_id"
-                android:textColor="#111111"
+                android:textColor="@color/text_primary"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -130,7 +130,7 @@
                     android:gravity="center"
                     android:paddingVertical="14dp"
                     android:text="@string/two_chips_per_id"
-                    android:textColor="#777777"
+                    android:textColor="@color/text_muted"
                     android:textSize="17sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -140,7 +140,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
                 android:text="@string/program_instructions"
-                android:textColor="#222222"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp" />
 
             <TextView
@@ -148,7 +148,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/program_notes"
-                android:textColor="#222222"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp" />
         </LinearLayout>
     </ScrollView>
@@ -160,7 +160,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/program_chips_hint"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <include layout="@layout/bottom_bar" />

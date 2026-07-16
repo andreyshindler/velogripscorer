@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -31,7 +31,7 @@
 
             <!-- Optional race photo, published with the results -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/race_photo_label" android:textColor="#111111"
+                android:text="@string/race_photo_label" android:textColor="@color/text_primary"
                 android:textSize="17sp" android:textStyle="bold" />
             <LinearLayout
                 android:layout_width="match_parent"
@@ -84,14 +84,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/post_to_web"
-                        android:textColor="#111111"
+                        android:textColor="@color/text_primary"
                         android:textSize="19sp"
                         android:textStyle="bold" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/post_to_web_hint"
-                        android:textColor="#777777"
+                        android:textColor="@color/text_muted"
                         android:textSize="13sp" />
                 </LinearLayout>
                 <TextView style="@style/RaceStartChevron" android:text="❯" />
@@ -99,7 +99,7 @@
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_marginTop="16dp" android:text="@string/url_label"
-                android:textColor="#111111" android:textSize="17sp" android:textStyle="bold" />
+                android:textColor="@color/text_primary" android:textSize="17sp" android:textStyle="bold" />
             <TextView android:id="@+id/urlValue" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="4dp" android:autoLink="web" android:textColor="#1E6FBF"
                 android:textSize="16sp" android:textIsSelectable="true" />
@@ -118,7 +118,7 @@
             </LinearLayout>
 
             <TextView android:id="@+id/postStatus" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginTop="14dp" android:textColor="#555555" android:textSize="15sp" />
+                android:layout_marginTop="14dp" android:textColor="@color/text_muted" android:textSize="15sp" />
         </LinearLayout>
     </ScrollView>
 
@@ -129,7 +129,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/post_results_hint"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <include layout="@layout/bottom_bar" />

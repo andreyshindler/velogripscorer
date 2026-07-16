@@ -19,7 +19,7 @@ import java.util.List;
  * category results. A green ✓ marks an included category; tapping toggles it.
  * Edit adds a new category; Delete removes the tapped one (delete mode).
  */
-public class CategorySetupActivity extends Activity {
+public class CategorySetupActivity extends BaseActivity {
 
     private RaceStore store;
     private LinearLayout box;
@@ -70,6 +70,9 @@ public class CategorySetupActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
+            // Category codes (43-49, 56+, 42 TV) are latin/numeric — pin the row
+            // and its text left-aligned so they don't drift right under Hebrew RTL.
+            row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
             row.setPadding(dp(12), dp(18), dp(12), dp(18));
             android.util.TypedValue tv = new android.util.TypedValue();
             getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
@@ -84,7 +87,8 @@ public class CategorySetupActivity extends Activity {
 
             TextView name = new TextView(this);
             name.setText(cat.name);
-            name.setTextColor(cat.enabled ? 0xFF111111 : 0xFF999999);
+            name.setGravity(Gravity.LEFT);
+            name.setTextColor(cat.enabled ? getColor(R.color.text_primary) : getColor(R.color.text_muted));
             name.setTextSize(19);
             name.setTypeface(null, android.graphics.Typeface.BOLD);
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -110,7 +114,7 @@ public class CategorySetupActivity extends Activity {
             box.addView(row);
 
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFDDDDDD);
+            divider.setBackgroundColor(getColor(R.color.divider));
             divider.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);

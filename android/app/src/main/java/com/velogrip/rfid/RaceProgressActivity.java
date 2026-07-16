@@ -20,7 +20,7 @@ import java.util.Map;
  * are still on course. Numbers are computed live from RFID reads and manual
  * taps. Tapping a Finished / On course row returns to the timing finish list.
  */
-public class RaceProgressActivity extends Activity {
+public class RaceProgressActivity extends BaseActivity {
 
     private RaceStore store;
     private LinearLayout box;
@@ -80,7 +80,7 @@ public class RaceProgressActivity extends Activity {
             TextView empty = new TextView(this);
             empty.setText(R.string.no_racers);
             empty.setPadding(dp(16), dp(24), dp(16), dp(24));
-            empty.setTextColor(0xFF777777);
+            empty.setTextColor(getColor(R.color.text_muted));
             empty.setTextSize(16);
             box.addView(empty);
             return;
@@ -110,8 +110,8 @@ public class RaceProgressActivity extends Activity {
     private View sectionHeader(String distance) {
         TextView h = new TextView(this);
         h.setText(distance);
-        h.setBackgroundColor(0xFFBFBFBF);
-        h.setTextColor(0xFF222222);
+        h.setBackgroundColor(getColor(R.color.divider));
+        h.setTextColor(getColor(R.color.text_primary));
         h.setTextSize(18);
         h.setTypeface(null, android.graphics.Typeface.BOLD);
         h.setPadding(dp(14), dp(10), dp(14), dp(10));
@@ -127,14 +127,14 @@ public class RaceProgressActivity extends Activity {
 
         TextView num = new TextView(this);
         num.setText(String.valueOf(count));
-        num.setTextColor(0xFF111111);
+        num.setTextColor(getColor(R.color.text_primary));
         num.setTextSize(22);
         num.setTypeface(null, android.graphics.Typeface.BOLD);
         num.setLayoutParams(new LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT));
 
         TextView name = new TextView(this);
         name.setText(label);
-        name.setTextColor(0xFF333333);
+        name.setTextColor(getColor(R.color.text_secondary));
         name.setTextSize(18);
         name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -160,7 +160,7 @@ public class RaceProgressActivity extends Activity {
 
     private View divider() {
         View v = new View(this);
-        v.setBackgroundColor(0xFFEEEEEE);
+        v.setBackgroundColor(getColor(R.color.divider));
         v.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
         return v;
     }

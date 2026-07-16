@@ -16,7 +16,7 @@ import java.util.List;
  * "Race with start list" chooser: pull the start list from the website, or
  * import a .xlsx/.csv file already copied to the phone.
  */
-public class SelectStartListActivity extends Activity {
+public class SelectStartListActivity extends BaseActivity {
 
     private static final int PICK_FILE = 41;
 

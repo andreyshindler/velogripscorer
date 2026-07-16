@@ -23,7 +23,7 @@ import java.util.Locale;
  * lists the account's start lists; tap one to pair this phone and pull it.
  * The login form only appears on first use or when the saved login fails.
  */
-public class DownloadRacesActivity extends Activity {
+public class DownloadRacesActivity extends BaseActivity {
 
     private Prefs prefs;
     private LinearLayout form;
@@ -46,6 +46,7 @@ public class DownloadRacesActivity extends Activity {
         connectedAs = findViewById(R.id.dlConnectedAs);
         email = findViewById(R.id.dlEmail);
         password = findViewById(R.id.dlPassword);
+        PasswordReveal.attach(findViewById(R.id.dlPasswordShow), password);
         login = findViewById(R.id.dlLogin);
 
         email.setText(prefs.accountEmail());
@@ -133,7 +134,7 @@ public class DownloadRacesActivity extends Activity {
             box.addView(row);
 
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFDDDDDD);
+            divider.setBackgroundColor(getColor(R.color.divider));
             divider.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);

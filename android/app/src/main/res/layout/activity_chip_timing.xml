@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -85,12 +85,26 @@
 
             <LinearLayout style="@style/ChipRow">
                 <TextView style="@style/ChipLabel" android:text="@string/rollcall_window" />
+                <Switch
+                    android:id="@+id/rollCallOn"
+                    style="@style/RacerSwitch"
+                    android:layout_marginEnd="8dp" />
                 <EditText
                     android:id="@+id/rollCall"
                     style="@style/ChipValueBox"
                     android:inputType="datetime"
                     android:digits="0123456789:" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/rollCallHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/rollcall_suppress_note"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
             <LinearLayout style="@style/ChipRow">
                 <TextView style="@style/ChipLabel" android:text="@string/chip_start_time" />
@@ -146,7 +160,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/chip_timing_hint"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <!-- Bottom bar: Settings · Test connection -->

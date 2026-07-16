@@ -30,7 +30,7 @@ import java.util.Map;
  * record manual bib entries for failed chips. The web platform is only used
  * to pull the start list down and (via the bridge service) push results up.
  */
-public class RaceActivity extends Activity {
+public class RaceActivity extends BaseActivity {
 
     private RaceStore store;
     private Prefs prefs;

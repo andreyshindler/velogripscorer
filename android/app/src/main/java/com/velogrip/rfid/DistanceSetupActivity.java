@@ -17,7 +17,7 @@ import java.util.LinkedHashSet;
  * racer of that distance must complete. Tapping a row opens the lap-count
  * picker. Races without distances get a single row for the whole field.
  */
-public class DistanceSetupActivity extends Activity {
+public class DistanceSetupActivity extends BaseActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,14 +68,14 @@ public class DistanceSetupActivity extends Activity {
 
             TextView name = new TextView(this);
             name.setText(distance.isEmpty() ? getString(R.string.mass_race_label) : distance);
-            name.setTextColor(0xFF111111);
+            name.setTextColor(getColor(R.color.text_primary));
             name.setTextSize(19);
             name.setTypeface(null, android.graphics.Typeface.BOLD);
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView lapCount = new TextView(this);
             lapCount.setText(String.valueOf(laps));
-            lapCount.setTextColor(0xFF111111);
+            lapCount.setTextColor(getColor(R.color.text_primary));
             lapCount.setTextSize(19);
             lapCount.setPadding(0, 0, dp(18), 0);
 
@@ -99,7 +99,7 @@ public class DistanceSetupActivity extends Activity {
             box.addView(row);
 
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFDDDDDD);
+            divider.setBackgroundColor(getColor(R.color.divider));
             divider.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);

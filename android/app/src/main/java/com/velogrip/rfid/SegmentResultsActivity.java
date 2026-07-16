@@ -24,7 +24,7 @@ import java.util.Locale;
  * share a place); DNS/DNF/DSQ racers list below. The ❯ on a row opens that
  * racer's info.
  */
-public class SegmentResultsActivity extends Activity {
+public class SegmentResultsActivity extends BaseActivity {
 
     public static final String EXTRA_DISTANCE = "distance";
     public static final String EXTRA_CATEGORY = "category";
@@ -33,7 +33,7 @@ public class SegmentResultsActivity extends Activity {
     private Prefs prefs;
     private RaceStore store;
     private String distance = "", category = "", gender = "";
-    private boolean sortByBib = false;
+    private int sortMode = 0; // 0 = place/time, 1 = bib, 2 = name
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +51,15 @@ public class SegmentResultsActivity extends Activity {
         ((TextView) findViewById(R.id.contestDate)).setText(raceDate());
 
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
-        findViewById(R.id.aSort).setOnClickListener(v -> { sortByBib = !sortByBib; render(); });
+        findViewById(R.id.aSort).setOnClickListener(v -> {
+            String[] opts = { getString(R.string.sort_by_place), getString(R.string.sort_by_bib),
+                    getString(R.string.sort_by_name) };
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.sort_list)
+                    .setSingleChoiceItems(opts, sortMode, (d, which) -> { sortMode = which; d.dismiss(); render(); })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
         findViewById(R.id.aSearch).setOnClickListener(v -> searchRacer());
         findViewById(R.id.aShare).setOnClickListener(v -> shareLink());
     }
@@ -135,9 +143,13 @@ public class SegmentResultsActivity extends Activity {
                     ? getString(R.string.status_dns) : r.status;
             display.add(new Row("–", r.bib, r.name, tag));
         }
-        if (sortByBib) {
+        if (sortMode == 1) {
             Collections.sort(display, new Comparator<Row>() {
                 @Override public int compare(Row a, Row b) { return Long.compare(bibNum(a.bib), bibNum(b.bib)); }
+            });
+        } else if (sortMode == 2) {
+            Collections.sort(display, new Comparator<Row>() {
+                @Override public int compare(Row a, Row b) { return a.name.compareToIgnoreCase(b.name); }
             });
         }
 
@@ -175,7 +187,7 @@ public class SegmentResultsActivity extends Activity {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setBackgroundColor(alt ? 0xFFF2F2F2 : 0xFFFFFFFF);
+        r.setBackgroundColor(alt ? getColor(R.color.surface_alt) : getColor(R.color.surface));
         r.setPadding(dp(12), dp(14), dp(12), dp(14));
 
         r.addView(textCell(row.place, dp(36), false, Gravity.START));
@@ -183,7 +195,7 @@ public class SegmentResultsActivity extends Activity {
         TextView nm = new TextView(this);
         nm.setText(row.name);
         nm.setTextSize(17);
-        nm.setTextColor(0xFF111111);
+        nm.setTextColor(getColor(R.color.text_primary));
         nm.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
         // Keep a gap on both sides so a right-aligned Hebrew name never touches
         // the bib on one side or the time on the other.
@@ -193,7 +205,7 @@ public class SegmentResultsActivity extends Activity {
         TextView tv = new TextView(this);
         tv.setText(row.time);
         tv.setTextSize(17);
-        tv.setTextColor(0xFF111111);
+        tv.setTextColor(getColor(R.color.text_primary));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
         tv.setGravity(Gravity.END);
         tv.setPadding(dp(6), 0, dp(8), 0);
@@ -222,7 +234,7 @@ public class SegmentResultsActivity extends Activity {
         TextView t = new TextView(this);
         t.setText(text);
         t.setTextSize(17);
-        t.setTextColor(0xFF111111);
+        t.setTextColor(getColor(R.color.text_primary));
         t.setGravity(gravity);
         if (bold) t.setTypeface(null, android.graphics.Typeface.BOLD);
         t.setLayoutParams(new LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT));

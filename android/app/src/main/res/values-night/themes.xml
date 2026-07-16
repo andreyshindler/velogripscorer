@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark base for the same theme names, so dialogs/spinners/EditText/switches
+     and the window chrome go dark. Custom colors come from values-night/colors.xml. -->
+<resources>
+    <style name="AppTheme.NoActionBar" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:colorBackground">@color/app_bg</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_muted</item>
+        <item name="android:colorAccent">@color/velogrip_green</item>
+        <item name="android:statusBarColor">@color/nav_bar_bg</item>
+    </style>
+
+    <style name="AppTheme.DarkActionBar" parent="@android:style/Theme.Material">
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:colorBackground">@color/app_bg</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_muted</item>
+        <item name="android:colorAccent">@color/velogrip_green</item>
+        <item name="android:statusBarColor">@color/nav_bar_bg</item>
+    </style>
+</resources>

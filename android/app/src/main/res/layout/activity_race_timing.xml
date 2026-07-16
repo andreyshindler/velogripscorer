@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <!-- Dark header: Home · title · finish flag -->
@@ -65,7 +65,7 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="‹" android:textColor="@color/velogrip_green" android:textSize="22sp" android:textStyle="bold" />
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/or_swipe" android:textColor="#888888" android:textSize="11sp" />
+                android:text="@string/or_swipe" android:textColor="@color/text_muted" android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -81,7 +81,7 @@
             <TextView android:id="@+id/clockText" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="0:00.0" android:textColor="#111111" android:textSize="30sp" android:textStyle="bold" />
             <TextView android:id="@+id/clockSub" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/tap_to_record" android:textColor="#1E4032" android:textSize="15sp" android:textStyle="bold" />
+                android:text="@string/tap_to_record" android:textColor="#294715" android:textSize="15sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -96,7 +96,7 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="›" android:textColor="@color/velogrip_green" android:textSize="22sp" android:textStyle="bold" />
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/or_swipe" android:textColor="#888888" android:textSize="11sp" />
+                android:text="@string/or_swipe" android:textColor="@color/text_muted" android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -120,18 +120,18 @@
         android:id="@+id/resultsHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#BFBFBF"
+        android:background="@color/surface_alt"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp">
         <TextView android:layout_width="54dp" android:layout_height="wrap_content"
-            android:text="@string/col_seq" android:textColor="#222222" android:textSize="16sp" />
+            android:text="@string/col_seq" android:textColor="@color/text_primary" android:textSize="16sp" />
         <TextView android:layout_width="52dp" android:layout_height="wrap_content"
-            android:text="@string/bib_col" android:textColor="#222222" android:textSize="16sp" />
+            android:text="@string/bib_col" android:textColor="@color/text_primary" android:textSize="16sp" />
         <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:text="@string/name_col" android:textColor="#222222" android:textSize="16sp" />
+            android:text="@string/name_col" android:textColor="@color/text_primary" android:textSize="16sp" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="@string/col_time" android:textColor="#222222" android:textSize="16sp" />
+            android:text="@string/col_time" android:textColor="@color/text_primary" android:textSize="16sp" />
     </LinearLayout>
 
     <ScrollView
@@ -153,7 +153,7 @@
         android:background="@color/menu_section_bg"
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <!-- Bottom bar page A (swipe sideways to flip to page B) -->

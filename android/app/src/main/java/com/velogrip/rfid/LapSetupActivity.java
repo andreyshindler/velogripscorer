@@ -15,7 +15,7 @@ import com.velogrip.rfid.db.RaceStore;
  * "Record lap times" defaults to on. The relay/exclude/skip/rename options
  * mirror the reference screen but are not implemented yet.
  */
-public class LapSetupActivity extends Activity {
+public class LapSetupActivity extends BaseActivity {
 
     private Prefs prefs;
 

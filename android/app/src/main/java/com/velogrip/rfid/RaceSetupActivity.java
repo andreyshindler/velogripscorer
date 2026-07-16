@@ -13,7 +13,7 @@ import com.velogrip.rfid.db.RaceStore;
  * Race setup after a start list is selected: confirm the race name and pick
  * how the field starts. Mass = one gun for everyone; Wave = per-wave guns.
  */
-public class RaceSetupActivity extends Activity {
+public class RaceSetupActivity extends BaseActivity {
 
     public static final String TYPE_MASS = "mass";
     public static final String TYPE_WAVE = "wave";
@@ -84,6 +84,6 @@ public class RaceSetupActivity extends Activity {
 
     private void style(TextView button, boolean on) {
         button.setBackgroundResource(on ? R.drawable.bg_segment_on : R.drawable.bg_segment);
-        button.setTextColor(on ? 0xFFFFFFFF : 0xFF777777);
+        button.setTextColor(on ? 0xFFFFFFFF : getColor(R.color.text_muted));
     }
 }

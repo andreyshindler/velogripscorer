@@ -12,7 +12,7 @@ import android.widget.Toast;
 import com.velogrip.rfid.db.RaceStore;
 
 /** Home menu (Webscorer-style): time a race, race data, settings, account. */
-public class MainActivity extends Activity {
+public class MainActivity extends BaseActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

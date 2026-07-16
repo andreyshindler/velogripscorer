@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/surface"
     android:orientation="vertical">
 
     <include layout="@layout/header_flow" />
@@ -30,7 +30,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/multiple_distances"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -52,7 +52,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/fixed_relay"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -74,7 +74,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/flexible_relay"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -102,7 +102,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/record_lap_times"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -124,7 +124,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/exclude_laps"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -146,7 +146,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/skip_laps"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -168,7 +168,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/customize_lap_names"
-                    android:textColor="#111111"
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
@@ -187,7 +187,7 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:text="@string/lap_setup_hint"
-        android:textColor="#333333"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
     <include layout="@layout/bottom_bar" />

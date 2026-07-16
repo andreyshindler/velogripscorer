@@ -48,11 +48,13 @@ jobs:
         run: |
           set -euo pipefail
           SHORT="${GITHUB_SHA::7}"
-          OUT="velogrip-${SHORT}.apk"
+          VERSION=$(sed -n "s/.*versionName '\(.*\)'.*/\1/p" app/build.gradle | head -1)
+          VCODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' app/build.gradle | head -1)
+          OUT="velogrip-v${VERSION}-${SHORT}.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$OUT"
           # First line of the commit message, bounded for Telegram's caption limit.
           SUBJECT=$(printf '%s' "${COMMIT_MSG:-}" | head -n1 | cut -c1-200)
-          CAPTION="✅ VeloGrip APK — ${GITHUB_REF_NAME} @ ${SHORT}
+          CAPTION="✅ VeloGrip APK v${VERSION} (build ${VCODE}) — ${GITHUB_REF_NAME} @ ${SHORT}
           ${SUBJECT}"
           curl -sS -f \
             -F chat_id="${TG_CHAT_ID}" \

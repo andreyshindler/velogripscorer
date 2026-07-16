@@ -168,6 +168,7 @@
     <string name="rollcall_closed">מפקד הנוכחות נסגר — מי שלא נראה סומן DNS</string>
     <string name="rollcall_window">סמן DNS אוטומטית למי שלא הגיע, אחרי הזינוק בתוך:</string>
     <string name="rollcall_window_hint">הזמן אחרי היריה שאחריו מתחרים שלא נקראו מסומנים DNS (0 = כבוי)</string>
+    <string name="rollcall_suppress_note">מבוסס על קריאות בזינוק — שים לב לחלון ״אל תזהה…״ שמעל.</string>
     <string name="restart_save_sub">שמירת הזמנים שנרשמו</string>
     <string name="restart_discard_sub">מחיקת כל הזמנים והתחלה מחדש</string>
     <string name="rc_settings_short">הגדרות</string>
@@ -210,6 +211,9 @@
     <string name="add_racer">הוספת רוכב</string>
     <string name="automate">אוטומציה</string>
     <string name="sort_list">מיון</string>
+    <string name="sort_by_place">לפי מקום / זמן</string>
+    <string name="sort_by_bib">לפי מספר</string>
+    <string name="sort_by_name">לפי שם</string>
     <string name="share_print">שיתוף/הדפסה</string>
     <string name="post_start_list">פרסום\nרשימה</string>
     <string name="automate_unsupported">שיוך שבבים אוטומטי אינו נתמך עדיין.</string>
@@ -323,6 +327,7 @@
     <string name="account_help">התחבר עם חשבון האתר ובחר את המרוץ שלך — רשימת הזינוק והעלאת התוצאות יתחברו אוטומטית.</string>
     <string name="label_email">אימייל</string>
     <string name="label_password">סיסמה</string>
+    <string name="show_password">הצג סיסמה</string>
     <string name="login_pick_race">התחבר ובחר מרוץ</string>
     <string name="login_needs_fields">הזן תחילה כתובת שרת, אימייל וסיסמה.</string>
     <string name="no_races_on_account">אין מרוצים בחשבון זה — צור מרוץ באתר.</string>
@@ -349,6 +354,10 @@
     <string name="label_poll_interval">מרווח תשאול (מ״ש)</string>
     <string name="label_dedupe">חלון כפילויות לתג (מ״ש)</string>
     <string name="label_beep">צפצוף בזיהוי שבב</string>
+    <string name="label_appearance">מראה</string>
+    <string name="appearance_system">לפי המערכת</string>
+    <string name="appearance_light">בהיר</string>
+    <string name="appearance_dark">כהה</string>
 
     <string name="section_wifi">WiFi של הקורא (רשות)</string>
     <string name="wifi_help">באנדרואיד 10 ומעלה האפליקציה יכולה להתחבר בעצמה ל-WiFi של נתב ה-RFID ולשמור על חבילת הנתונים להעלאות. השאר ריק לשימוש ברשת הנוכחית.</string>

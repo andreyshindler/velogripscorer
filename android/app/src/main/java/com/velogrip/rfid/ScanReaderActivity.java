@@ -15,7 +15,7 @@ import android.widget.Toast;
  * readers field straight away (and tapping a listed address re-selects it), so
  * returning to Chip Timing shows the reader as the default.
  */
-public class ScanReaderActivity extends Activity {
+public class ScanReaderActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView status;
@@ -106,7 +106,7 @@ public class ScanReaderActivity extends Activity {
         row.setOnClickListener(v -> select(ip));
         foundBox.addView(row);
         View divider = new View(this);
-        divider.setBackgroundColor(0xFFDDDDDD);
+        divider.setBackgroundColor(getColor(R.color.divider));
         divider.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 1));
         foundBox.addView(divider);
@@ -126,7 +126,7 @@ public class ScanReaderActivity extends Activity {
             if (child instanceof TextView) {
                 boolean on = ((TextView) child).getText().toString().equals(selected);
                 child.setBackgroundColor(on ? 0xFFE6F4D8 : 0x00000000);
-                ((TextView) child).setTextColor(on ? 0xFF3F7A16 : 0xFF111111);
+                ((TextView) child).setTextColor(on ? 0xFF3F7A16 : getColor(R.color.text_primary));
                 ((TextView) child).setTypeface(null,
                         on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             }

@@ -23,7 +23,7 @@ import java.util.Locale;
  * bottom bar (More toggles) offers search, DNS, delete, merge / add, sort,
  * share. Automate is not implemented yet.
  */
-public class StartListActivity extends Activity {
+public class StartListActivity extends BaseActivity {
 
     /** Set true to hide the wizard's forward button (e.g. opened mid-race). */
     public static final String EXTRA_NO_FORWARD = "no_forward";
@@ -111,21 +111,21 @@ public class StartListActivity extends Activity {
             boolean flagged = !r.status.isEmpty();
             TextView check = new TextView(this);
             check.setText(deleteMode == 1 ? "🗑" : flagged ? "✕" : "✓");
-            check.setTextColor(deleteMode == 1 ? 0xFFC0392B : flagged ? 0xFF999999 : 0xFF76B82A);
+            check.setTextColor(deleteMode == 1 ? 0xFFC0392B : flagged ? getColor(R.color.text_muted) : 0xFF76B82A);
             check.setTextSize(18);
             check.setTypeface(null, android.graphics.Typeface.BOLD);
             check.setLayoutParams(new LinearLayout.LayoutParams(dp(30), LinearLayout.LayoutParams.WRAP_CONTENT));
 
             TextView bib = new TextView(this);
             bib.setText(r.bib);
-            bib.setTextColor(0xFF111111);
+            bib.setTextColor(getColor(R.color.text_primary));
             bib.setTextSize(19);
             bib.setTypeface(null, android.graphics.Typeface.BOLD);
             bib.setLayoutParams(new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));
 
             TextView name = new TextView(this);
             name.setText(r.name + (flagged ? "  (" + r.status + ")" : ""));
-            name.setTextColor(flagged ? 0xFF999999 : 0xFF111111);
+            name.setTextColor(flagged ? getColor(R.color.text_muted) : getColor(R.color.text_primary));
             name.setTextSize(18);
             name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL); // force left, even Hebrew names
             name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -146,7 +146,7 @@ public class StartListActivity extends Activity {
             box.addView(row);
 
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFDDDDDD);
+            divider.setBackgroundColor(getColor(R.color.divider));
             divider.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
             box.addView(divider);
         }

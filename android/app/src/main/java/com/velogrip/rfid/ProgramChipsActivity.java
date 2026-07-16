@@ -14,7 +14,7 @@ import android.widget.Toast;
  * leading zeros and, for a decimal existing ID, auto-incremented as a
  * convenience. Verify a write by tapping Read again.
  */
-public class ProgramChipsActivity extends Activity {
+public class ProgramChipsActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView status, oneChip, twoChip;
@@ -123,9 +123,9 @@ public class ProgramChipsActivity extends Activity {
 
     private void styleSegments() {
         oneChip.setBackgroundResource(twoPerId ? R.drawable.bg_segment : R.drawable.bg_segment_on);
-        oneChip.setTextColor(twoPerId ? 0xFF777777 : 0xFFFFFFFF);
+        oneChip.setTextColor(twoPerId ? getColor(R.color.text_muted) : 0xFFFFFFFF);
         twoChip.setBackgroundResource(twoPerId ? R.drawable.bg_segment_on : R.drawable.bg_segment);
-        twoChip.setTextColor(twoPerId ? 0xFFFFFFFF : 0xFF777777);
+        twoChip.setTextColor(twoPerId ? 0xFFFFFFFF : getColor(R.color.text_muted));
     }
 
     @Override

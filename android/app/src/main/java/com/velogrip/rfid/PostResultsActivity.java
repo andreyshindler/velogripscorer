@@ -29,7 +29,7 @@ import java.util.List;
  * outstanding gun times and passings, enables the public results page, and
  * surfaces its shareable link (…/race-results/&lt;id&gt;).
  */
-public class PostResultsActivity extends Activity {
+public class PostResultsActivity extends BaseActivity {
 
     private static final int REQ_GALLERY = 71, REQ_CAMERA = 72;
 

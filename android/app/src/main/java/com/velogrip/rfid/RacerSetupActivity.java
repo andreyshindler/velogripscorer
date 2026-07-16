@@ -14,7 +14,7 @@ import android.widget.Toast;
  * and drive the standings columns and the manual-entry keyboard. Age / Year /
  * 3rd gender / check-in mirror the reference but are not wired up yet.
  */
-public class RacerSetupActivity extends Activity {
+public class RacerSetupActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView numeric, alpha;
@@ -66,7 +66,7 @@ public class RacerSetupActivity extends Activity {
 
     private void style(TextView button, boolean on) {
         button.setBackgroundResource(on ? R.drawable.bg_segment_on : R.drawable.bg_segment);
-        button.setTextColor(on ? 0xFFFFFFFF : 0xFF777777);
+        button.setTextColor(on ? 0xFFFFFFFF : getColor(R.color.text_muted));
     }
 
     private void save() {

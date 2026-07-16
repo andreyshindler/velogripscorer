@@ -19,7 +19,7 @@ import java.util.List;
  * category. Tapping a row (❯) opens that segment's ranked finishers. The Share
  * button opens Post Results to publish to the web.
  */
-public class ViewResultsActivity extends Activity {
+public class ViewResultsActivity extends BaseActivity {
 
     private Prefs prefs;
     private RaceStore store;
@@ -40,8 +40,11 @@ public class ViewResultsActivity extends Activity {
         findViewById(R.id.aShare).setOnClickListener(v -> openPostResults());
         findViewById(R.id.aResultsOpt).setOnClickListener(v ->
                 startActivity(new Intent(this, ResultsOptionsActivity.class)));
+        // The race is over here: opening the start list must not let the wizard
+        // step forward into Race Start (which would re-start the race).
         findViewById(R.id.aStartList).setOnClickListener(v ->
-                startActivity(new Intent(this, StartListActivity.class)));
+                startActivity(new Intent(this, StartListActivity.class)
+                        .putExtra(StartListActivity.EXTRA_NO_FORWARD, true)));
     }
 
     @Override
@@ -144,9 +147,10 @@ public class ViewResultsActivity extends Activity {
         TextView tv = new TextView(this);
         tv.setText(label);
         tv.setTextSize(16);
-        tv.setTextColor(0xFF111111);
+        tv.setTextColor(getColor(R.color.text_primary));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
-        tv.setBackgroundColor(0xFFBFBFBF);
+        tv.setBackgroundColor(getColor(R.color.divider));
+        tv.setGravity(Gravity.LEFT);
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
         return tv;
     }
@@ -156,17 +160,19 @@ public class ViewResultsActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        // Pin the row left-to-right so every label starts at the same left edge
+        // (chevron on the right) instead of flipping right under Hebrew RTL.
+        row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         row.setPadding(dp(16), dp(14), dp(12), dp(14));
-        row.setBackgroundColor(0xFFFFFFFF);
+        row.setBackgroundColor(getColor(R.color.surface));
 
         TextView tv = new TextView(this);
         tv.setText(label);
         tv.setTextSize(17);
-        tv.setTextColor(0xFF111111);
-        // Align every label to the row's start edge so Hebrew categories
-        // (e.g. "עד 44") line up in the same column as the English ones
-        // instead of jumping to the right.
-        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        tv.setTextColor(getColor(R.color.text_primary));
+        // Left-align every label so distances, gender and category codes line up
+        // in the same column instead of jumping to the right in RTL.
+        tv.setGravity(Gravity.LEFT);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(tv);
 
@@ -186,7 +192,7 @@ public class ViewResultsActivity extends Activity {
         wrap.addView(row);
         View div = new View(this);
         div.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
-        div.setBackgroundColor(0xFFDDDDDD);
+        div.setBackgroundColor(getColor(R.color.divider));
         wrap.addView(div);
         return wrap;
     }

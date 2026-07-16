@@ -15,7 +15,7 @@ import android.widget.Toast;
  * system row opens the reader configuration (protocol, IP, scan). The other
  * external-hardware options mirror the reference but are not wired up yet.
  */
-public class HardwareSetupActivity extends Activity {
+public class HardwareSetupActivity extends BaseActivity {
 
     private Prefs prefs;
     private TextView systemValue;

@@ -16,7 +16,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Configuration form: server, reader connection, protocol, reader WiFi. */
-public class SettingsActivity extends Activity {
+public class SettingsActivity extends BaseActivity {
 
     private EditText serverUrl, readerToken, readerHost, readerPort;
     private EditText onConnectHex, pollHex, pollInterval, wifiSsid, wifiPass, dedupeWindow;
@@ -61,8 +61,29 @@ public class SettingsActivity extends Activity {
         wifiSsid.setText(prefs.wifiSsid());
         wifiPass.setText(prefs.wifiPass());
         dedupeWindow.setText(String.valueOf(prefs.dedupeWindowMs()));
+
+        PasswordReveal.attach(findViewById(R.id.accountPasswordShow), findViewById(R.id.accountPassword));
+        PasswordReveal.attach(findViewById(R.id.wifiPassShow), wifiPass);
         android.widget.Switch beepSwitch = findViewById(R.id.beepOnRead);
         beepSwitch.setChecked(prefs.beepOnRead());
+
+        Button themeMode = findViewById(R.id.themeMode);
+        themeMode.setText(themeLabel(prefs.themeMode()));
+        themeMode.setOnClickListener(v -> {
+            final String[] modes = { ThemeUtil.SYSTEM, ThemeUtil.LIGHT, ThemeUtil.DARK };
+            String[] labels = { getString(R.string.appearance_system),
+                    getString(R.string.appearance_light), getString(R.string.appearance_dark) };
+            int current = java.util.Arrays.asList(modes).indexOf(prefs.themeMode());
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.label_appearance)
+                    .setSingleChoiceItems(labels, current < 0 ? 0 : current, (d, which) -> {
+                        prefs.setThemeMode(modes[which]);
+                        d.dismiss();
+                        recreate(); // re-apply the theme immediately
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
 
         Button save = findViewById(R.id.save);
         save.setOnClickListener(v -> {
@@ -230,7 +251,7 @@ public class SettingsActivity extends Activity {
                 status.setText(getString(R.string.wifi_connected_to, ReaderWifi.ssid()));
                 break;
             case ReaderWifi.CONNECTING:
-                status.setTextColor(0xFF555555);
+                status.setTextColor(getColor(R.color.text_muted));
                 status.setText(getString(R.string.wifi_connecting, ReaderWifi.ssid()));
                 break;
             case ReaderWifi.FAILED:
@@ -281,6 +302,12 @@ public class SettingsActivity extends Activity {
                 intOf(text(pollInterval), 1000),
                 text(wifiSsid), wifiPass.getText().toString(),
                 intOf(text(dedupeWindow), 2000));
+    }
+
+    private String themeLabel(String mode) {
+        if (ThemeUtil.LIGHT.equals(mode)) return getString(R.string.appearance_light);
+        if (ThemeUtil.DARK.equals(mode)) return getString(R.string.appearance_dark);
+        return getString(R.string.appearance_system);
     }
 
     private String text(EditText field) {
