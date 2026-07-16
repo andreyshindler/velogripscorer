@@ -89,7 +89,7 @@ router.post('/ingest/reads', (req, res) => {
 
   const accepted = [];
   const insert = db.prepare(
-    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, read_at) VALUES (?,?,?,?,?,?)'
+    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, manual, read_at) VALUES (?,?,?,?,?,?,?)'
   );
   const tx = db.transaction(() => {
     for (const r of reads) {
@@ -98,7 +98,7 @@ router.post('/ingest/reads', (req, res) => {
       const readAt = r.read_at && !Number.isNaN(Date.parse(r.read_at)) ? new Date(r.read_at).toISOString() : new Date().toISOString();
       const rssi = Number.isFinite(Number(r.rssi)) ? Number(r.rssi) : null;
       const antenna = r.antenna != null && Number.isInteger(Number(r.antenna)) ? Number(r.antenna) : null;
-      const info = insert.run(reader.id, reader.contest_id, epc, rssi, antenna, readAt);
+      const info = insert.run(reader.id, reader.contest_id, epc, rssi, antenna, r.manual ? 1 : 0, readAt);
       accepted.push({ id: info.lastInsertRowid, epc, rssi, read_at: readAt, ...(assignments.get(epc) || {}) });
     }
     db.prepare(`UPDATE readers SET last_seen = datetime('now') WHERE id = ?`).run(reader.id);
@@ -809,7 +809,7 @@ router.post('/contests/:id/manual-read', requireAuth, (req, res) => {
   const at = req.body?.at && !Number.isNaN(Date.parse(req.body.at))
     ? new Date(req.body.at).toISOString()
     : new Date().toISOString();
-  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, read_at) VALUES (?,?,?,?,?)')
+  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, manual, read_at) VALUES (?,?,?,?,1,?)')
     .run(manual.id, contest.id, assignment.epc, null, at);
   auditLog(req.user.id, 'read.manual', 'contest', contest.id, `bib ${bib} @ ${at}`);
   sseBroadcast(contest.id, 'tag_reads', {

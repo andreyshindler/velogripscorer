@@ -834,6 +834,9 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
   const finished = scope.filter((r) => r.status === 'finished').sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
   const onCourse = scope.filter((r) => r.status === 'on_course');
   const notStarted = scope.filter((r) => r.status === 'not_started');
+  const dns = scope.filter((r) => r.status === 'DNS');
+  const dnf = scope.filter((r) => r.status === 'DNF');
+  const dsq = scope.filter((r) => r.status === 'DSQ');
   const leader = finished[0] || null;
   const genderCrumb = gender === 'Male' ? t('male') + ' ' : gender === 'Female' ? t('female') + ' ' : '';
   const crumb = `${esc(dist || t('overall'))} ${genderCrumb}- ${cat ? esc(cat) : t('overall')}`;
@@ -848,11 +851,12 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
       <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td></tr>`;
   }).join('') || `<tr><td colspan="5" class="muted">${t('no_results_yet')}</td></tr>`;
-  const onCourseHtml = onCourse.length
-    ? `<h3 style="margin:16px 0 6px">${t('status_on_course')} <span class="muted">(${onCourse.length})</span></h3>
-       <div style="display:flex;flex-wrap:wrap;gap:6px">${onCourse
-      .sort((a, b) => bibNumW(a.bib) - bibNumW(b.bib))
+  const pillList = (label, rows) => rows.length
+    ? `<h3 style="margin:16px 0 6px">${label} <span class="muted">(${rows.length})</span></h3>
+       <div style="display:flex;flex-wrap:wrap;gap:6px">${rows
+      .slice().sort((a, b) => bibNumW(a.bib) - bibNumW(b.bib))
       .map((r) => `<span class="pill">${esc(r.bib || '')} · ${esc(r.participant)}</span>`).join('')}</div>` : '';
+  const onCourseHtml = pillList(t('status_on_course'), onCourse) + pillList('DNS', dns);
   return `
     <p style="margin:12px 0 8px"><a href="#/results/${id}/winners" style="color:var(--brand,#2f8a57);font-weight:700">${t('race_winners')}</a>
       <span class="muted"> » ${crumb} — ${raceDone ? t('results_word') : t('live_race')}</span></p>
@@ -861,6 +865,9 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       ${stat(finished.length, t('status_finished_r'), 'finished')}
       ${stat(onCourse.length, t('status_on_course'), 'oncourse')}
       ${stat(notStarted.length, t('status_not_started'), 'notstarted')}
+      ${stat(dns.length, 'DNS', 'dns')}
+      ${dnf.length ? stat(dnf.length, 'DNF', 'dns') : ''}
+      ${dsq.length ? stat(dsq.length, 'DSQ', 'dns') : ''}
     </div>
     <div style="overflow-x:auto"><table class="board"><thead><tr>
       <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>

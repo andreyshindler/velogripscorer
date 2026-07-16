@@ -46,6 +46,8 @@ public final class Uploader {
             json.append("{\"epc\":\"").append(row.epc).append('"');
             if (row.rssi != null) json.append(",\"rssi\":").append(row.rssi);
             if (row.antenna != null) json.append(",\"antenna\":").append(row.antenna);
+            // Operator taps count even inside the start-suppression window.
+            if (row.manual) json.append(",\"manual\":true");
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
         json.append("]}");

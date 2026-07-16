@@ -267,6 +267,8 @@ for (const stmt of [
   `ALTER TABLE tag_assignments ADD COLUMN team TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tag_assignments ADD COLUMN gender TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tag_reads ADD COLUMN antenna INTEGER`,
+  // Operator taps from the app/web: exempt from the start-suppression window.
+  `ALTER TABLE tag_reads ADD COLUMN manual INTEGER NOT NULL DEFAULT 0`,
 ]) {
   try {
     db.exec(stmt);

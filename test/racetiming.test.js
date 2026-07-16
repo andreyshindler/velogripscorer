@@ -126,6 +126,39 @@ test('manual bib entry records a passing, synthesizing assignments when needed',
   assert.equal(rider103.elapsed, '3:20.0');
 });
 
+test('manual taps count even inside the start-suppression window', async () => {
+  // A racer tapped manually 5s after the gun (suppress window is 10s).
+  const tagged = await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0104', bib: '104', participant: 'Early Tap', wave_id: wave1.id });
+  assert.equal(tagged.status, 201);
+
+  // An RFID read at +5s is suppressed (start-line noise)...
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
+    reads: [{ epc: 'AAAA0104', read_at: atOffset(5) }],
+  });
+  let res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '104').status, 'on_course',
+    'RFID read inside the window stays suppressed');
+
+  // ...but the same moment tapped by the operator is a deliberate finish.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
+    reads: [{ epc: 'AAAA0104', read_at: atOffset(5), manual: true }],
+  });
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const rider = res.body.results.find((r) => r.bib === '104');
+  assert.equal(rider.status, 'finished');
+  assert.equal(rider.elapsed, '0:05.0');
+
+  // The web Manual-entry endpoint is manual too, even inside the window.
+  await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0105', bib: '105', participant: 'Web Tap', wave_id: wave1.id });
+  const tap = await request(app).post(`/api/contests/${contest.id}/manual-read`).set(auth(org))
+    .send({ bib: '105', at: atOffset(6) });
+  assert.equal(tap.status, 201);
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '105').status, 'finished');
+});
+
 test('timing settings are adjustable and affect results', async () => {
   const patch = await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
     .send({ suppress_secs: 100, min_lap_gap_secs: 30 });

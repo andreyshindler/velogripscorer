@@ -196,6 +196,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .stat-tile.finished { background: #e6f2da; }
 .stat-tile.oncourse { background: #fdf3d0; }
 .stat-tile.notstarted { background: #f0f0f0; }
+.stat-tile.dns { background: #f7e3e3; }
 .stat-num { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 0.8rem; }
 
@@ -282,3 +283,4 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] .stat-tile.notstarted { background: #201b30; }
 :root[data-theme="dark"] .stat-tile.finished { background: #16301c; }
 :root[data-theme="dark"] .stat-tile.oncourse { background: #322912; }
+:root[data-theme="dark"] .stat-tile.dns { background: #331b1f; }

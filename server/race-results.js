@@ -24,12 +24,12 @@ function computeRaceResults(contest, { category } = {}) {
     .all(contest.id)
     .filter((a) => !category || a.category === category);
   const allReads = db
-    .prepare('SELECT epc, read_at FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
+    .prepare('SELECT epc, read_at, manual FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
     .all(contest.id);
   const readsByEpc = new Map();
   for (const r of allReads) {
     if (!readsByEpc.has(r.epc)) readsByEpc.set(r.epc, []);
-    readsByEpc.get(r.epc).push(Date.parse(r.read_at));
+    readsByEpc.get(r.epc).push({ at: Date.parse(r.read_at), manual: !!r.manual });
   }
 
   const suppressMs = contest.suppress_secs * 1000;
@@ -59,15 +59,17 @@ function computeRaceResults(contest, { category } = {}) {
     if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
     if (!wave || !wave.started_at) return { ...base, status: 'not_started', laps: 0 };
     const startMs = Date.parse(wave.started_at);
+    // Operator taps are deliberate: exempt from the start-suppression window
+    // and the lap-gap dedupe (each tap is one crossing) — mirrors the app.
     const valid = a.epcs
       .flatMap((epc) => readsByEpc.get(epc) || [])
-      .sort((x, y) => x - y)
-      .filter((t) => t >= startMs + suppressMs);
+      .sort((x, y) => x.at - y.at)
+      .filter((r) => r.manual || r.at >= startMs + suppressMs);
     if (!valid.length) return { ...base, status: 'on_course', laps: 0 };
 
     const crossings = [];
-    for (const t of valid) {
-      if (!crossings.length || t - crossings[crossings.length - 1] >= lapGapMs) crossings.push(t);
+    for (const r of valid) {
+      if (r.manual || !crossings.length || r.at - crossings[crossings.length - 1] >= lapGapMs) crossings.push(r.at);
     }
     const lastMs = crossings[crossings.length - 1];
     return {
