@@ -2,9 +2,12 @@ name: Android APK
 
 # Builds the debug APK and delivers it to Telegram. Runs only when the Android
 # app changes (or on a manual dispatch), so web-only pushes don't rebuild it.
+# The staging branch is excluded: it mirrors a feature branch that already
+# built the identical APK, so building there just duplicated the Telegram
+# delivery.
 on:
   push:
-    branches: ['**']
+    branches: ['**', '!staging']
     paths:
       - 'android/**'
       - '.github/workflows/android.yml'
