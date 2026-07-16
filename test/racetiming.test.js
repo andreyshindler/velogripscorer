@@ -159,6 +159,43 @@ test('manual taps count even inside the start-suppression window', async () => {
   assert.equal(res.body.results.find((r) => r.bib === '105').status, 'finished');
 });
 
+test('racer statuses sync from the app and record_laps disables lap counting', async () => {
+  // no-read racer marked DNS on the phone -> synced -> web shows DNS
+  await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0106', bib: '106', participant: 'No Show', wave_id: wave1.id });
+  const noToken = await request(app).post('/api/ingest/racer-statuses').send({ statuses: [] });
+  assert.equal(noToken.status, 401);
+
+  const sync = await request(app).post('/api/ingest/racer-statuses').set('X-Reader-Token', reader.token)
+    .send({ statuses: [{ bib: '106', status: 'dns' }, { bib: 'nope', status: 'DNF' }, { bib: '106', status: 'XX' }] });
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.applied, 1, 'only the valid known-bib status applies');
+  let res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '106').status, 'DNS');
+
+  // clearing the status puts the racer back on course
+  await request(app).post('/api/ingest/racer-statuses').set('X-Reader-Token', reader.token)
+    .send({ statuses: [{ bib: '106', status: '' }] });
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '106').status, 'on_course');
+
+  // record_laps off: rider 100's two crossings collapse to a single finish
+  // at the FIRST crossing (+65s), instead of 2 laps ending at +125s.
+  await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
+    .send({ record_laps: false });
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r100 = res.body.results.find((r) => r.bib === '100');
+  assert.equal(r100.laps, 1);
+  assert.equal(r100.elapsed, '1:05.0');
+
+  // the app pushes its lap mode when finishing the race
+  const fin = await request(app).post('/api/ingest/finish').set('X-Reader-Token', reader.token)
+    .send({ record_laps: true });
+  assert.equal(fin.status, 200);
+  const c = await request(app).get(`/api/contests/${contest.id}`).set(auth(org));
+  assert.equal(c.body.record_laps, 1, 'finish restored lap recording');
+});
+
 test('timing settings are adjustable and affect results', async () => {
   const patch = await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
     .send({ suppress_secs: 100, min_lap_gap_secs: 30 });

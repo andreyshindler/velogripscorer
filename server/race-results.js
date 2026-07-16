@@ -70,6 +70,8 @@ function computeRaceResults(contest, { category } = {}) {
     const crossings = [];
     for (const r of valid) {
       if (r.manual || !crossings.length || r.at - crossings[crossings.length - 1] >= lapGapMs) crossings.push(r.at);
+      // Single-crossing race: the first valid crossing IS the finish.
+      if (contest.record_laps === 0 && crossings.length) break;
     }
     const lastMs = crossings[crossings.length - 1];
     return {

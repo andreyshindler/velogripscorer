@@ -175,7 +175,36 @@ router.post('/ingest/finish', (req, res) => {
   const reader = readerFromToken(req);
   if (!reader) return res.status(401).json({ error: 'unknown reader token' });
   db.prepare(`UPDATE contests SET status = 'finished' WHERE id = ? AND status = 'active'`).run(reader.contest_id);
+  // The app is authoritative for its race setup: adopt its lap mode so a
+  // single-crossing race never shows phantom "lap times" from double reads.
+  if (typeof req.body?.record_laps === 'boolean') {
+    db.prepare('UPDATE contests SET record_laps = ? WHERE id = ?')
+      .run(req.body.record_laps ? 1 : 0, reader.contest_id);
+  }
   res.json({ ok: true });
+});
+
+// Racer statuses declared on the phone (DNS/DNF/DSQ, '' = racing). Without
+// this sync a racer who never crossed would show "On course" on the web
+// forever, because web results are recomputed from reads alone.
+router.post('/ingest/racer-statuses', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const statuses = Array.isArray(req.body?.statuses) ? req.body.statuses.slice(0, MAX_BATCH) : null;
+  if (!statuses) return res.status(400).json({ error: 'statuses array required' });
+
+  const update = db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND bib = ?');
+  let applied = 0;
+  db.transaction(() => {
+    for (const s of statuses) {
+      const bib = String(s?.bib || '').trim();
+      const status = String(s?.status || '').trim().toUpperCase();
+      if (!bib || !['', 'DNS', 'DNF', 'DSQ'].includes(status)) continue;
+      if (update.run(status, reader.contest_id, bib).changes > 0) applied++;
+    }
+  })();
+  if (applied) sseBroadcast(reader.contest_id, 'tag_reads', { statuses: applied });
+  res.json({ ok: true, applied });
 });
 
 // Race photo pushed from the app's Post Results screen (reader-token auth).
@@ -552,9 +581,10 @@ router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
   if (!contest) return;
   const suppress = Number(req.body?.suppress_secs);
   const lapGap = Number(req.body?.min_lap_gap_secs);
-  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ? WHERE id = ?').run(
+  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ?, record_laps = ? WHERE id = ?').run(
     Number.isFinite(suppress) && suppress >= 0 ? Math.round(suppress) : contest.suppress_secs,
     Number.isFinite(lapGap) && lapGap >= 0 ? Math.round(lapGap) : contest.min_lap_gap_secs,
+    typeof req.body?.record_laps === 'boolean' ? (req.body.record_laps ? 1 : 0) : contest.record_laps,
     contest.id
   );
   res.json({ ok: true });

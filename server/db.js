@@ -269,6 +269,9 @@ for (const stmt of [
   `ALTER TABLE tag_reads ADD COLUMN antenna INTEGER`,
   // Operator taps from the app/web: exempt from the start-suppression window.
   `ALTER TABLE tag_reads ADD COLUMN manual INTEGER NOT NULL DEFAULT 0`,
+  // 0 = single-crossing race: the first valid crossing is the finish and
+  // later reads are ignored (no phantom "laps" from double reads).
+  `ALTER TABLE contests ADD COLUMN record_laps INTEGER NOT NULL DEFAULT 1`,
 ]) {
   try {
     db.exec(stmt);

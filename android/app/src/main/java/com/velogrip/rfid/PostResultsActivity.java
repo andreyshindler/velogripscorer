@@ -241,8 +241,9 @@ public class PostResultsActivity extends BaseActivity {
                     store.markUploaded(batch.get(batch.size() - 1).id);
                     uploaded += batch.size();
                 }
+                uploader.uploadStatuses(store.startListEntries()); // DNS/DNF/DSQ declared on the phone
                 if (photoDataUrl != null) uploader.uploadPhoto(photoDataUrl); // publish the race photo
-                uploader.finishRace(); // list it under the web's Finished races
+                uploader.finishRace(prefs.recordLaps()); // list it under the web's Finished races
             } catch (Exception e) {
                 error = getString(R.string.post_failed, e.getMessage() == null ? "" : e.getMessage());
             }

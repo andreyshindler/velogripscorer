@@ -1131,6 +1131,8 @@ async function renderManage(box, c) {
           <input name="suppress" type="number" min="0" value="${wavesData.suppress_secs}" style="width:70px">
           <label style="margin:0;font-weight:400">${t('lap_gap')}</label>
           <input name="lapgap" type="number" min="0" value="${wavesData.min_lap_gap_secs}" style="width:70px">
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px">
+            <input name="recordlaps" type="checkbox" ${c.record_laps === 0 ? '' : 'checked'} style="width:auto">${t('record_laps_label')}</label>
           <button class="btn small secondary">${t('save_settings')}</button>
         </form>
       </div>
@@ -1281,6 +1283,7 @@ async function renderManage(box, c) {
     try {
       await api(`/contests/${c.id}/timing-settings`, { method: 'PATCH', body: {
         suppress_secs: Number(e.target.suppress.value), min_lap_gap_secs: Number(e.target.lapgap.value),
+        record_laps: e.target.recordlaps.checked,
       }});
       toast('✓');
     } catch (err) { toast(err.message, true); }
