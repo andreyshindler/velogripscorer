@@ -18,6 +18,9 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Drill-in arrow that points in the reading direction (left in Hebrew RTL).
+function arrow() { return LANG === 'he' ? '◂' : '▸'; }
+
 async function api(path, { method = 'GET', body, form } = {}) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -864,8 +867,8 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       ${stat(scope.length, t('racers'), 'total')}
       ${stat(finished.length, t('status_finished_r'), 'finished')}
       ${stat(onCourse.length, t('status_on_course'), 'oncourse')}
-      ${stat(notStarted.length, t('status_not_started'), 'notstarted')}
       ${stat(dns.length, 'DNS', 'dns')}
+      ${notStarted.length ? stat(notStarted.length, t('status_not_started'), 'notstarted') : ''}
       ${dnf.length ? stat(dnf.length, 'DNF', 'dns') : ''}
       ${dsq.length ? stat(dsq.length, 'DSQ', 'dns') : ''}
     </div>
@@ -919,7 +922,7 @@ function filteredResultsTable(results, id, dist, cat, gender) {
 function raceWinnersTables(id, results, raceDone) {
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
-  return `<p class="muted" style="margin:8px 0">▸ ${t('click_green_category')}</p>` + dists.map((d) => {
+  return `<p class="muted" style="margin:8px 0">${arrow()} ${t('click_green_category')}</p>` + dists.map((d) => {
     const rows = byDist.get(d);
     const multiLap = rows.some((r) => (r.laps || 0) > 1);
     const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
@@ -928,14 +931,14 @@ function raceWinnersTables(id, results, raceDone) {
     const line = (label, scope, indent, catFilter, gender) => {
       const leader = leaderOf(scope);
       return `<tr>
-        <td style="padding-left:${indent}px"><a href="${seg('winners', catFilter, gender)}" class="cat-link">▸ ${esc(label)}</a></td>
+        <td style="padding-left:${indent}px"><a href="${seg('winners', catFilter, gender)}" class="cat-link">${arrow()} ${esc(label)}</a></td>
         <td>${leader ? esc(leader.participant) : '–'}</td>
         <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
         <td><strong>${scope.length}</strong></td>
-        <td>${raceDone ? `<a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${t('results_word')}</a>`
-          : scope.some((r) => r.wave_started_at) ? `<a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${t('live_race')}</a>`
+        <td>${raceDone ? `<a href="${seg('live', catFilter, gender)}" class="live-link">${arrow()} ${t('results_word')}</a>`
+          : scope.some((r) => r.wave_started_at) ? `<a href="${seg('live', catFilter, gender)}" class="live-link">${arrow()} ${t('live_race')}</a>`
           : `<span class="muted">${t('not_started_yet')}</span>`}</td>
-        ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
+        ${multiLap ? `<td><a href="#/results/${id}/laps">${arrow()} ${t('lap_times')}</a></td>` : ''}
       </tr>`;
     };
     return `
