@@ -925,7 +925,9 @@ function raceWinnersTables(id, results, raceDone) {
         <td>${leader ? esc(leader.participant) : '–'}</td>
         <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
         <td><strong>${scope.length}</strong></td>
-        <td><a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${raceDone ? t('results_word') : t('live_race')}</a></td>
+        <td>${raceDone ? `<a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${t('results_word')}</a>`
+          : scope.some((r) => r.wave_started_at) ? `<a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${t('live_race')}</a>`
+          : `<span class="muted">${t('not_started_yet')}</span>`}</td>
         ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
       </tr>`;
     };
