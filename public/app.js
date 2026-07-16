@@ -167,6 +167,8 @@ async function route() {
     if (page === 'finished') return viewFinishedRaces();
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
+    if (page === 'leagues') return viewLeagues();
+    if (page === 'league') return viewLeague(Number(arg), sub || 'individual');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
     if (page === 'admin') return viewAdmin(arg || 'reports');
@@ -1368,13 +1370,116 @@ async function viewProfile(id) {
   };
 }
 
+// ---------- league standings ----------
+
+async function viewLeagues() {
+  const { leagues } = await api('/leagues');
+  main.innerHTML = `
+    <h1>${t('leagues_title')}</h1>
+    ${leagues.length ? `<div class="grid">${leagues.map((l) => `
+      <a class="card contest-card" href="#/league/${l.id}">
+        <h3>${esc(l.name)}</h3>
+        <p class="muted">${l.season ? esc(l.season) + ' · ' : ''}${t('league_rounds_count', { n: l.race_count })}</p>
+        <span class="pill ${l.status === 'finished' ? 'finished' : 'live'}">${l.status === 'finished' ? t('status_finished') : t('status_active')}</span>
+      </a>`).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
+}
+
+async function viewLeague(id, tab) {
+  const data = await api(`/leagues/${id}/standings`).catch(() => null);
+  if (!data) { main.innerHTML = `<div class="card">${t('league_not_found')}</div>`; return; }
+  const { league, races, individual, teams } = data;
+  const provisional = races.some((r) => r.status !== 'finished');
+
+  const tabs = [['individual', 'league_tab_individual'], ['teams', 'league_tab_teams'], ['races', 'league_tab_races']];
+  main.innerHTML = `
+    <div class="pubresults">
+      <h1 style="text-align:center;margin-bottom:2px">${esc(league.name)}</h1>
+      <p style="text-align:center;margin:0 0 12px;color:var(--muted)">
+        ${league.season ? esc(league.season) + ' — ' : ''}${t('league_rounds_count', { n: races.length })}
+        ${provisional ? ` · ${t('league_provisional')}` : ''}</p>
+      <div class="pubtabs">
+        ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/league/${id}/${k}">${t(key)}</a>`).join('')}
+      </div>
+      <div style="text-align:center;margin:8px 0">
+        <button class="btn small secondary" id="lg-csv-ind">⬇ ${t('export_individual_csv')}</button>
+        <button class="btn small secondary" id="lg-csv-team">⬇ ${t('export_team_csv')}</button>
+      </div>
+      <div id="lgbody"></div>
+    </div>`;
+  document.getElementById('lg-csv-ind').onclick = () =>
+    downloadAuthed(`/leagues/${id}/standings?format=csv&table=individual`, `league-${id}-individual.csv`);
+  document.getElementById('lg-csv-team').onclick = () =>
+    downloadAuthed(`/leagues/${id}/standings?format=csv&table=team`, `league-${id}-team.csv`);
+
+  const body = document.getElementById('lgbody');
+  if (tab === 'teams') body.innerHTML = leagueTeamsTable(teams, races);
+  else if (tab === 'races') body.innerHTML = leagueRacesTable(races);
+  else body.innerHTML = leagueIndividualTables(individual, races);
+}
+
+// Per-race columns shared by the individual and team standings tables. Cells
+// whose score is dropped (not among the best-N counted) render muted.
+function leagueRoundHeads(races) {
+  return races.map((r) => `<th title="${esc(r.title)}"><a href="#/results/${r.contest_id}" style="color:inherit">R${r.round}</a></th>`).join('');
+}
+function leaguePointCells(row, races) {
+  return races.map((r) => {
+    const pts = row.per_race[r.contest_id];
+    if (pts === undefined) return '<td class="muted">–</td>';
+    const counted = row.counted_ids.includes(r.contest_id);
+    return `<td style="font-variant-numeric:tabular-nums${counted ? '' : ';opacity:.45;text-decoration:line-through'}">${pts}</td>`;
+  }).join('');
+}
+
+function leagueIndividualTables(individual, races) {
+  if (!individual.length) return `<p class="muted">${t('league_no_scores')}</p>`;
+  let html = '';
+  for (const g of individual) {
+    const title = [g.distance, g.gender && t(g.gender === 'Female' ? 'female' : 'male'), g.category]
+      .filter(Boolean).join(' — ') || t('overall');
+    html += `<div style="overflow-x:auto"><table class="board winners mt"><thead>
+      <tr><th colspan="${4 + races.length + 1}">${esc(title)}</th></tr>
+      <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('team')}</th>
+        ${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
+      <tbody>${g.rows.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
+        <td><strong>${i + 1}</strong></td><td><strong>${esc(row.bib)}</strong></td>
+        <td>${esc(row.name || '')}</td><td>${esc(row.team || '')}</td>
+        ${leaguePointCells(row, races)}
+        <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  html += `<p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
+  return html;
+}
+
+function leagueTeamsTable(teams, races) {
+  if (!teams.length) return `<p class="muted">${t('league_no_scores')}</p>`;
+  return `<div style="overflow-x:auto"><table class="board winners mt"><thead>
+    <tr><th>${t('place')}</th><th>${t('team')}</th>${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
+    <tbody>${teams.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
+      <td><strong>${i + 1}</strong></td><td>${esc(row.team)}</td>
+      ${leaguePointCells(row, races)}
+      <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>
+    <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
+}
+
+function leagueRacesTable(races) {
+  if (!races.length) return `<p class="muted">${t('league_no_races_attached')}</p>`;
+  return `<div style="overflow-x:auto"><table class="board mt"><thead>
+    <tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('date_word')}</th><th>${t('status_word')}</th></tr></thead>
+    <tbody>${races.map((r) => `<tr>
+      <td><strong>R${r.round}</strong></td>
+      <td><a href="#/results/${r.contest_id}">${esc(r.title)}</a></td>
+      <td>${fmtDate(r.start_at)}</td>
+      <td><span class="pill ${r.status === 'finished' ? 'finished' : 'live'}">${r.status === 'finished' ? t('status_finished') : t('league_provisional')}</span></td></tr>`).join('')}</tbody></table></div>`;
+}
+
 // ---------- admin ----------
 
 async function viewAdmin(section) {
   if (!state.user || state.user.role !== 'admin') { main.innerHTML = `<div class="card">${t('need_login')}</div>`; return; }
   main.innerHTML = `
     <div class="tabs" role="tablist">
-      ${['reports', 'users', 'audit'].map((s) => `<button role="tab" aria-selected="${s === section}" data-s="${s}">${t('admin_' + (s === 'audit' ? 'audit' : s))}</button>`).join('')}
+      ${['reports', 'users', 'leagues', 'audit'].map((s) => `<button role="tab" aria-selected="${s === section}" data-s="${s}">${t('admin_' + s)}</button>`).join('')}
     </div>
     <div id="admin-box"></div>`;
   main.querySelectorAll('[data-s]').forEach((b) => (b.onclick = () => { location.hash = `#/admin/${b.dataset.s}`; }));
@@ -1413,6 +1518,8 @@ async function viewAdmin(section) {
         viewAdmin('users');
       };
     });
+  } else if (section === 'leagues') {
+    await renderAdminLeagues(box);
   } else {
     const { audit_log } = await api('/admin/audit-log');
     box.innerHTML = `<div class="card mt" style="overflow-x:auto"><table class="board">
@@ -1420,6 +1527,137 @@ async function viewAdmin(section) {
       <tbody>${audit_log.map((a) => `
         <tr><td>${a.id}</td><td>${esc(a.user_name || '—')}</td><td><code>${esc(a.action)}</code></td>
         <td>${esc(a.target_type)} ${a.target_id ?? ''}</td><td>${esc(a.details)}</td><td class="muted">${fmtDate(a.created_at)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+}
+
+// Admin > Leagues: create leagues, attach races as rounds, tune scoring rules.
+async function renderAdminLeagues(box) {
+  const [{ leagues }, { contests }] = await Promise.all([
+    api('/leagues?status=all'), // admin sees archived leagues too
+    api('/contests'),
+  ]);
+  const allRaces = (contests || []).filter((c) => c.kind === 'race');
+
+  box.innerHTML = `
+    <div class="card mt form-narrow">
+      <h3>${t('league_create')}</h3>
+      <form id="lg-new">
+        <label>${t('league_name')}<input id="lg-name" required></label>
+        <label>${t('league_season')}<input id="lg-season" placeholder="2026"></label>
+        <button class="btn">${t('league_create')}</button>
+      </form>
+    </div>
+    <div id="lg-list"></div>`;
+
+  document.getElementById('lg-new').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api('/leagues', { method: 'POST', body: {
+        name: document.getElementById('lg-name').value,
+        season: document.getElementById('lg-season').value,
+      }});
+      toast(t('league_saved'));
+      viewAdmin('leagues');
+    } catch (err) { toast(err.message, true); }
+  };
+
+  const list = document.getElementById('lg-list');
+  if (!leagues.length) { list.innerHTML = `<p class="muted mt">${t('league_no_leagues')}</p>`; return; }
+
+  for (const row of leagues) {
+    const { league, races } = await api(`/leagues/${row.id}`);
+    const attachedIds = new Set(races.map((r) => r.contest_id));
+    const attachable = allRaces.filter((c) => !attachedIds.has(c.id));
+    const s = league.settings;
+    const card = document.createElement('div');
+    card.className = 'card mt';
+    card.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <h3 style="margin:0"><a href="#/league/${league.id}">${esc(league.name)}</a></h3>
+        <span class="muted">${esc(league.season || '')}</span>
+        <select data-f="status">
+          ${['active', 'finished', 'archived'].map((st) => `<option value="${st}" ${league.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+        </select>
+        <button class="btn small danger" data-act="delete" style="margin-inline-start:auto">${t('delete')}</button>
+      </div>
+
+      <table class="board mt"><thead><tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('status_word')}</th><th></th></tr></thead>
+      <tbody>${races.map((r) => `<tr>
+        <td><input type="number" min="1" value="${r.round}" data-round="${r.contest_id}" style="width:60px"></td>
+        <td>${esc(r.title)}${r.visibility !== 'public' ? ` <span class="pill tag">${t('visibility_private')}</span>` : ''}</td>
+        <td>${r.status}</td>
+        <td><button class="btn small secondary" data-detach="${r.contest_id}">${t('league_detach')}</button></td></tr>`).join('')
+        || `<tr><td colspan="4" class="muted">${t('league_no_races_attached')}</td></tr>`}</tbody></table>
+
+      ${attachable.length ? `<form data-form="attach" class="mt" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select data-f="contest">${attachable.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}</select>
+        <button class="btn small">${t('league_attach')}</button>
+        <span class="muted" style="font-size:12px">${t('league_attach_hint')}</span>
+      </form>` : ''}
+
+      <details class="mt"><summary>${t('league_settings')}</summary>
+        <form data-form="settings" class="mt" style="display:grid;gap:6px;max-width:460px">
+          <label>${t('league_ind_points')}<input data-f="individual_points" value="${s.individual_points.join(', ')}"></label>
+          <label>${t('league_ind_other_points')}<input data-f="individual_other_points" type="number" min="0" value="${s.individual_other_points}"></label>
+          <label>${t('league_ind_best_n')}<input data-f="individual_best_n" type="number" min="1" value="${s.individual_best_n}"></label>
+          <label>${t('league_team_points')}<input data-f="team_points" value="${s.team_points.join(', ')}"></label>
+          <label>${t('league_team_other_points')}<input data-f="team_other_points" type="number" min="0" value="${s.team_other_points}"></label>
+          <label>${t('league_team_top_runners')}<input data-f="team_top_runners" type="number" min="1" value="${s.team_top_runners}"></label>
+          <label>${t('league_team_best_n')}<input data-f="team_best_n" type="number" min="1" value="${s.team_best_n}"></label>
+          <button class="btn small">${t('save')}</button>
+        </form>
+      </details>`;
+
+    card.querySelector('[data-f="status"]').onchange = async (e) => {
+      try { await api(`/leagues/${league.id}`, { method: 'PATCH', body: { status: e.target.value } }); toast(t('league_saved')); }
+      catch (err) { toast(err.message, true); }
+    };
+    card.querySelector('[data-act="delete"]').onclick = async () => {
+      if (!confirm(t('league_confirm_delete', { name: league.name }))) return;
+      try { await api(`/leagues/${league.id}`, { method: 'DELETE' }); toast(t('league_deleted')); viewAdmin('leagues'); }
+      catch (err) { toast(err.message, true); }
+    };
+    card.querySelectorAll('[data-detach]').forEach((btn) => {
+      btn.onclick = async () => {
+        try { await api(`/leagues/${league.id}/races/${btn.dataset.detach}`, { method: 'DELETE' }); viewAdmin('leagues'); }
+        catch (err) { toast(err.message, true); }
+      };
+    });
+    card.querySelectorAll('[data-round]').forEach((inp) => {
+      inp.onchange = async () => {
+        try {
+          await api(`/leagues/${league.id}/races/${inp.dataset.round}`, { method: 'PATCH', body: { round: Number(inp.value) } });
+          toast(t('league_saved'));
+        } catch (err) { toast(err.message, true); }
+      };
+    });
+    const attachForm = card.querySelector('[data-form="attach"]');
+    if (attachForm) attachForm.onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api(`/leagues/${league.id}/races`, { method: 'POST',
+          body: { contest_id: Number(attachForm.querySelector('[data-f="contest"]').value) } });
+        viewAdmin('leagues');
+      } catch (err) { toast(err.message, true); }
+    };
+    card.querySelector('[data-form="settings"]').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = (name) => e.target.querySelector(`[data-f="${name}"]`).value;
+      const nums = (v) => v.split(',').map((x) => Number(x.trim())).filter((x) => !Number.isNaN(x));
+      try {
+        await api(`/leagues/${league.id}`, { method: 'PATCH', body: { settings: {
+          individual_points: nums(f('individual_points')),
+          individual_other_points: Number(f('individual_other_points')),
+          individual_best_n: Number(f('individual_best_n')),
+          team_points: nums(f('team_points')),
+          team_other_points: Number(f('team_other_points')),
+          team_top_runners: Number(f('team_top_runners')),
+          team_best_n: Number(f('team_best_n')),
+        }}});
+        toast(t('league_saved'));
+      } catch (err) { toast(err.message, true); }
+    };
+    list.appendChild(card);
   }
 }
 

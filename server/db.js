@@ -221,6 +221,27 @@ CREATE TABLE IF NOT EXISTS telegram_sessions (
   updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- A league is a season series of races: per-race points are computed from each
+-- attached race's results and aggregated into individual + team standings.
+-- Scoring rules live in the settings JSON (see server/league-scoring.js defaults).
+CREATE TABLE IF NOT EXISTS leagues (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  season     TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','finished','archived')),
+  settings   TEXT NOT NULL DEFAULT '{}',
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS league_races (
+  league_id  INTEGER NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
+  contest_id INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+  round      INTEGER NOT NULL,
+  PRIMARY KEY (league_id, contest_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_league_races      ON league_races(league_id, round);
 CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);
 CREATE INDEX IF NOT EXISTS idx_entries_contest   ON entries(contest_id);
