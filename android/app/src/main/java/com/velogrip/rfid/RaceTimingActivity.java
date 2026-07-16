@@ -287,13 +287,20 @@ public class RaceTimingActivity extends BaseActivity {
         java.util.Set<String> rollCallDnsBibs = new java.util.HashSet<>();
         // Laps completed so far per bib, for the "On lap X/Y" tiles.
         java.util.Map<String, Integer> lapsByBib = new java.util.HashMap<>();
+        int finishedCount = 0, outCount = 0; // out = DNS/DNF/DSQ, never going to finish
         for (RaceEngine.Result r : results) {
-            if ("finished".equals(r.status)) finishedBibs.add(bibKey(r.bib, ""));
-            else if ("DNS".equals(r.status) && !r.bib.isEmpty()) rollCallDnsBibs.add(bibKey(r.bib, ""));
-            else if ("on_course".equals(r.status) && r.laps > 0 && !r.bib.isEmpty()) {
+            if ("finished".equals(r.status)) { finishedBibs.add(bibKey(r.bib, "")); finishedCount++; }
+            else if ("DNS".equals(r.status) || "DNF".equals(r.status) || "DSQ".equals(r.status)) {
+                outCount++;
+                if ("DNS".equals(r.status) && !r.bib.isEmpty()) rollCallDnsBibs.add(bibKey(r.bib, ""));
+            } else if ("on_course".equals(r.status) && r.laps > 0 && !r.bib.isEmpty()) {
                 lapsByBib.put(r.bib, r.laps);
             }
         }
+        // Finish counter: finished so far / racers still expected to finish
+        // (start list minus DNS — incl. roll-call no-shows — minus DNF/DSQ).
+        ((TextView) findViewById(R.id.finishCounter)).setText(
+                "✓ " + finishedCount + "/" + Math.max(0, results.size() - outCount));
 
         List<RaceStore.Pending> pendingEntries = store.pendingEntries();
         java.util.Set<String> pendingBibs = new java.util.HashSet<>();
@@ -345,6 +352,10 @@ public class RaceTimingActivity extends BaseActivity {
     }
 
     private void updateHint() {
+        // Bib-grid page position, shown under the ‹ › arrows.
+        String pagePos = (page + 1) + "/" + totalPages;
+        ((TextView) findViewById(R.id.prevPageSub)).setText(pagePos);
+        ((TextView) findViewById(R.id.nextPageSub)).setText(pagePos);
         if (swapBib != null) {
             hint.setText(R.string.tap_correct_racer);
             return;

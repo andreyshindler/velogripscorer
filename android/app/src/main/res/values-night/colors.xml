@@ -16,4 +16,7 @@
     <color name="tile_idle_bg">#161B22</color>
     <color name="tile_idle_text">#3B4551</color>
     <color name="on_accent">#FFFFFF</color>
+    <color name="counter_bg">#14251A</color>
+    <color name="counter_text">#8BE28B</color>
+    <color name="counter_stroke">#2E7D32</color>
 </resources>

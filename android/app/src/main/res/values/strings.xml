@@ -489,7 +489,11 @@
     <string name="post_to_web_hint">Publish to srv1515969.hstgr.cloud/veloscorer</string>
     <string name="post_results_hint">Results are published to your VeloGripScorer site</string>
     <string name="posting">Posting results…</string>
-    <string name="posted_ok">Posted to the web — %1$d crossings uploaded</string>
+    <string name="post_success_title">Results published!</string>
+    <string name="post_success_live">Live at %1$s</string>
+    <string name="post_success_sent">%1$d crossings uploaded</string>
+    <string name="post_success_synced">Everything already synced — results are live.</string>
+    <string name="view_results_page">🌐 View results page</string>
     <string name="post_failed">Post failed: %1$s</string>
     <string name="results_header">Results</string>
     <string name="segment_footer">%1$s | %2$d racers</string>
