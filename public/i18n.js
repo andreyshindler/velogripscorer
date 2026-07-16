@@ -231,7 +231,7 @@ const I18N = {
     visibility_private: 'פרטי', organized_by: 'מאורגן על ידי', live_results_label: 'תוצאות בשידור חי',
     results_word: 'תוצאות', final_results_label: 'תוצאות סופיות',
     affiliation: 'שיוך', finish_time: 'זמן סיום', difference: 'הפרש', gender_col: 'מין',
-    click_green_category: 'לחץ על שם קטגוריה ירוק כדי לראות תוצאות',
+    click_green_category: 'לחצו על שם קטגוריה בירוק כדי לראות את התוצאות',
     status_finished_r: 'סיים', status_on_course: 'במסלול', status_not_started: 'המקצה לא זונק',
     manual_entry: 'הזנה ידנית (מספר חזה)', record: 'רשום', suppress: 'השהיית זינוק (שנ׳)',
     lap_gap: 'מרווח הקפה מזערי (שנ׳)', save_settings: 'שמור', restart_wave_confirm: 'המקצה כבר זונק. לזנק מחדש ולאפס את זמן הזינוק?',
