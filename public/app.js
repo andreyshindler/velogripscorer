@@ -421,7 +421,7 @@ async function viewStartLists() {
       <table class="board" style="margin:0">
         <thead><tr>
           <th>${t('contest_title')}</th><th>${t('racers_count')}</th><th>${t('start_date')}</th>
-          <th>${t('location')}</th><th>${t('sport')}</th><th></th>
+          <th>${t('location')}</th><th>${t('sport')}</th><th>${t('nav_leagues')}</th><th></th>
         </tr></thead>
         <tbody id="lists-body"></tbody>
       </table>
@@ -487,11 +487,12 @@ async function loadStartLists() {
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
       <td>${esc(r.location || '')}</td>
       <td>${esc(r.sport || '')}</td>
+      <td>${r.league_names ? `<span class="pill tag">${esc(r.league_names)}</span>` : ''}</td>
       <td style="white-space:nowrap">
         <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
         <button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button>
       </td>
-    </tr>`).join('') || `<tr><td colspan="6" class="muted">${t('no_contests')}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="7" class="muted">${t('no_contests')}</td></tr>`;
   body.querySelectorAll('.list-del').forEach((btn) => {
     btn.onclick = async () => {
       if (!confirm(`${t('delete_race')}: ${btn.dataset.title}?`)) return;
@@ -1096,14 +1097,15 @@ async function renderManage(box, c) {
       </form>
       <div id="tags-list" class="mt" style="max-height:420px;overflow:auto">
         ${tags.map((a, i) => `
-          <div class="comment" id="racer-row-${i}" style="display:flex;gap:8px;align-items:center">
-            <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
-            ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
-            ${a.distance ? `<span class="pill">${esc(a.distance)}</span>` : ''}
-            ${a.team ? `<span class="muted" style="font-size:.8rem">${esc(a.team)}</span>` : ''}
-            ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
+          <div class="comment racer-grid" id="racer-row-${i}">
+            <strong>#${esc(a.bib || '—')}</strong>
+            <span>${esc(a.participant)}</span>
+            <span>${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}</span>
+            <span>${a.distance ? `<span class="pill">${esc(a.distance)}</span>` : ''}</span>
+            <span class="muted" style="font-size:.8rem">${esc(a.team || '')}</span>
+            <span>${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}</span>
             <code style="font-size:0.7rem;overflow-wrap:anywhere" class="muted">${esc((a.epcs || [a.epc]).join(' + '))}</code>
-            <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
+            <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;padding:2px 6px">
               ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
             </select>
             <button class="ghost tag-edit" data-idx="${i}" title="${t('edit')}" aria-label="${t('edit')}">✏️</button>
@@ -1210,6 +1212,7 @@ async function renderManage(box, c) {
     btn.onclick = () => {
       const a = tags[Number(btn.dataset.idx)];
       const row = box.querySelector(`#racer-row-${btn.dataset.idx}`);
+      row.classList.remove('racer-grid'); // the edit form lays itself out
       row.innerHTML = racerEditForm(a, waves);
       const f = row.querySelector('.racer-edit');
       row.querySelector('.racer-cancel').onclick = () => viewContest(c.id, 'manage');
@@ -1593,7 +1596,7 @@ async function renderAdminLeagues(box) {
         <select data-f="contest">${attachable.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}</select>
         <button class="btn small">${t('league_attach')}</button>
         <span class="muted" style="font-size:12px">${t('league_attach_hint')}</span>
-      </form>` : ''}
+      </form>` : `<p class="muted mt" style="font-size:13px">${t('league_no_attachable')}</p>`}
 
       <details class="mt"><summary>${t('league_settings')}</summary>
         <form data-form="settings" class="mt" style="display:grid;gap:6px;max-width:460px">

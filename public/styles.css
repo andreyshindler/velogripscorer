@@ -228,6 +228,33 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 }
 :root[data-theme="dark"] input::placeholder,
 :root[data-theme="dark"] textarea::placeholder { color: var(--muted); }
+
+/* Manage-tab start list: fixed columns so bib / name / category / distance /
+   team / wave / chip line up down the list instead of trailing each name. */
+.racer-grid {
+  display: grid;
+  grid-template-columns: 52px minmax(110px, 1.3fr) 68px 46px minmax(70px, 0.9fr) 64px minmax(150px, 1.6fr) auto auto auto;
+  gap: 6px 8px;
+  align-items: center;
+}
+.racer-grid > * { min-width: 0; justify-self: start; }
+.racer-grid > select.tag-status { justify-self: end; }
+@media (max-width: 760px) {
+  .racer-grid { grid-template-columns: 46px 1fr 60px 42px auto auto auto; }
+  .racer-grid > :nth-child(5), .racer-grid > :nth-child(6), .racer-grid > code { display: none; }
+}
+/* Chrome paints autofilled fields with its own light-blue background, which
+   glares in dark mode. The inset box-shadow trick overrides it. */
+:root[data-theme="dark"] input:-webkit-autofill,
+:root[data-theme="dark"] input:-webkit-autofill:hover,
+:root[data-theme="dark"] input:-webkit-autofill:focus,
+:root[data-theme="dark"] textarea:-webkit-autofill,
+:root[data-theme="dark"] select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
 :root[data-theme="dark"] .btn {
   background: linear-gradient(135deg, #7d5cff 0%, #b84dff 100%);
   color: #fff;
