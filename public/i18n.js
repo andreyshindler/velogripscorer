@@ -288,7 +288,9 @@ const I18N = {
   },
 };
 
-let LANG = localStorage.getItem('lang') || 'en';
+// Default to Hebrew: the public results/standings links are shared with a
+// Hebrew-speaking audience. Anyone can switch to English with the toggle.
+let LANG = localStorage.getItem('lang') || 'he';
 
 function t(key, vars) {
   let s = (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
