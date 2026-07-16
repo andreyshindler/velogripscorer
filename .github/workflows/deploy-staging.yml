@@ -33,17 +33,50 @@ jobs:
       - name: Pull staging and rebuild the staging stack
         id: deploy
         env:
-          # Separate clone from prod. Override via repo Variable if elsewhere.
+          # Separate clone from prod. Override via repo Variables if elsewhere.
           STAGING_DEPLOY_DIR: ${{ vars.STAGING_DEPLOY_DIR }}
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
         run: |
           set -euo pipefail
-          cd "${STAGING_DEPLOY_DIR:-$HOME/projects/velogripscorer-staging}"
+          STAGING_DIR="${STAGING_DEPLOY_DIR:-$HOME/projects/velogripscorer-staging}"
+          PROD_DIR="${DEPLOY_DIR:-$HOME/projects/velogripscorer}"
+
+          # First run: bootstrap the staging clone from the prod clone (local
+          # clone reuses prod's origin credentials, so private repos work) and
+          # seed .env from prod's — same secrets, but its own port, its own
+          # path prefix, and NO Telegram bot (two pollers on one token clash).
+          if [ ! -d "$STAGING_DIR/.git" ]; then
+            echo "Bootstrapping staging clone in $STAGING_DIR"
+            git clone "$PROD_DIR" "$STAGING_DIR"
+            git -C "$STAGING_DIR" remote set-url origin "$(git -C "$PROD_DIR" remote get-url origin)"
+            if [ -f "$PROD_DIR/.env" ]; then
+              grep -vE '^(HOST_PORT|BASE_PATH|TELEGRAM_BOT_TOKEN|TELEGRAM_ALLOWED_USER_IDS|DOMAIN)=' "$PROD_DIR/.env" > "$STAGING_DIR/.env"
+            fi
+            {
+              echo "HOST_PORT=3001"
+              echo "BASE_PATH=/veloscorer-staging"
+              echo "TELEGRAM_BOT_TOKEN="
+              echo "TELEGRAM_ALLOWED_USER_IDS="
+            } >> "$STAGING_DIR/.env"
+          fi
+
+          cd "$STAGING_DIR"
           echo "Deploying staging in $(pwd)"
           git fetch origin staging
           git reset --hard origin/staging
-          docker compose up -d --build
+          docker compose -p velogrip-staging up -d --build app
           docker image prune -f
-          docker compose ps
+          docker compose -p velogrip-staging ps
+
+          # Smoke check + environment survey (guides how to expose staging).
+          sleep 3
+          curl -fsS "http://127.0.0.1:3001/veloscorer-staging/api/health" && echo " <- staging app healthy"
+          echo "--- listeners on 80/443/3000/3001 ---"
+          (command -v ss >/dev/null && ss -ltn | grep -E ':(80|443|3000|3001)\s' || true)
+          echo "--- running containers ---"
+          docker ps --format '{{.Names}}\t{{.Ports}}'
+          echo "--- host web servers ---"
+          (systemctl is-active nginx 2>/dev/null || true); (systemctl is-active apache2 2>/dev/null || true)
 
       - name: Notify Telegram
         if: always() && env.TG_BOT_TOKEN != ''
