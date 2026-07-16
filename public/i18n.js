@@ -310,7 +310,7 @@ function fmtDate(iso) {
   if (!iso) return '—';
   try {
     return new Date(iso).toLocaleString(LANG === 'he' ? 'he-IL' : 'en-US', {
-      dateStyle: 'medium', timeStyle: 'short',
+      dateStyle: 'medium', timeStyle: 'short', hour12: false, // 24-hour clock
     });
   } catch { return iso; }
 }
