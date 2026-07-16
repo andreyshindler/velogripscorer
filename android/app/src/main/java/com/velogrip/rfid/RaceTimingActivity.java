@@ -232,6 +232,7 @@ public class RaceTimingActivity extends BaseActivity {
         if (waiting != null) {
             store.recordPassing(waiting.epc, now);
             store.deletePending(waiting.id);
+            scrollToBib = waiting.bib; // show the new finish, same as time-then-racer
         } else {
             store.addPendingTime(now);
         }
@@ -601,7 +602,8 @@ public class RaceTimingActivity extends BaseActivity {
             if (p.hasRacer() && !p.hasTime()) {
                 resultsBox.addView(resultRow("—", p.bib, p.name, getString(R.string.tap_time), true,
                         () -> { store.recordPassing(p.epc, System.currentTimeMillis());
-                                store.deletePending(p.id); render(); }, () -> openRacerInfo(p.bib)));
+                                store.deletePending(p.id); scrollToBib = p.bib; render(); },
+                        () -> openRacerInfo(p.bib)));
             }
         }
 
