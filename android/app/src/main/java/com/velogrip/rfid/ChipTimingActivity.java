@@ -76,6 +76,8 @@ public class ChipTimingActivity extends BaseActivity {
         makeScrollable(suppress, R.string.no_detect_after_start);
         makeScrollable(lapGap, R.string.no_redetect_after_lap);
         makeScrollable(rollCall, R.string.rollcall_window_hint);
+        // Chips per racer is 1 or 2 (single chip, or two chips merged by bib).
+        makeNumberScrollable(chipsPerRacer, 1, 2, R.string.chips_per_racer);
         antennaPower.setText(String.valueOf(prefs.antennaPower()));
         chipIdBib.setChecked(prefs.chipIdEqualsBib());
         beepUnknown.setChecked(prefs.beepUnknownChip());
@@ -166,6 +168,31 @@ public class ChipTimingActivity extends BaseActivity {
         field.setFocusable(false);
         field.setClickable(true);
         field.setOnClickListener(v -> showMmssPicker(field, titleRes));
+    }
+
+    /** Turn a whole-number field into a tap-to-open scroll-wheel [min..max]. */
+    private void makeNumberScrollable(EditText field, int min, int max, int titleRes) {
+        field.setFocusable(false);
+        field.setClickable(true);
+        field.setOnClickListener(v -> {
+            float d = getResources().getDisplayMetrics().density;
+            NumberPicker picker = new NumberPicker(this);
+            picker.setMinValue(min);
+            picker.setMaxValue(max);
+            picker.setValue(Math.max(min, Math.min(max, intOf(field.getText().toString(), min))));
+            LinearLayout box = new LinearLayout(this);
+            box.setGravity(Gravity.CENTER);
+            int pad = Math.round(16 * d);
+            box.setPadding(pad, pad, pad, pad);
+            box.addView(picker);
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(titleRes)
+                    .setView(box)
+                    .setPositiveButton(android.R.string.ok,
+                            (dlg, w) -> field.setText(String.valueOf(picker.getValue())))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
     }
 
     private void showMmssPicker(EditText field, int titleRes) {
