@@ -1586,9 +1586,31 @@ async function renderAdminLeagues(box) {
   // ANY league so the attach dropdown only offers races not yet in a league.
   const details = await Promise.all(leagues.map((row) => api(`/leagues/${row.id}`)));
   const attachedAnywhere = new Set(details.flatMap((d) => d.races.map((r) => r.contest_id)));
+  // contest_id -> which league it's in (for the grouped attach picker).
+  const membership = new Map();
+  for (const d of details) for (const r of d.races) {
+    membership.set(r.contest_id, { leagueId: d.league.id, leagueName: d.league.name, round: r.round });
+  }
 
   for (const { league, races } of details) {
     const attachable = allRaces.filter((c) => !attachedAnywhere.has(c.id));
+    // Grouped <select>: free start lists (selectable) first, then a disabled
+    // group per OTHER league showing where each taken race already went.
+    const freeOpts = attachable.length
+      ? attachable.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join('')
+      : `<option value="" disabled>${t('league_no_attachable')}</option>`;
+    const takenByLeague = new Map();
+    for (const [cid, m] of membership) {
+      if (m.leagueId === league.id) continue; // its own races are in the rounds table above
+      const race = allRaces.find((c) => c.id === cid);
+      if (!race) continue;
+      if (!takenByLeague.has(m.leagueName)) takenByLeague.set(m.leagueName, []);
+      takenByLeague.get(m.leagueName).push(
+        `<option value="${cid}" disabled>${esc(race.title)} · R${m.round}</option>`);
+    }
+    const takenGroups = [...takenByLeague.entries()].map(([name, opts]) =>
+      `<optgroup label="${esc(t('league_group_in') + ' ' + name)}">${opts.join('')}</optgroup>`).join('');
+    const contestOptions = `<optgroup label="${esc(t('league_group_free'))}">${freeOpts}</optgroup>${takenGroups}`;
     const s = league.settings;
     const card = document.createElement('div');
     card.className = 'card mt';
@@ -1610,11 +1632,11 @@ async function renderAdminLeagues(box) {
         <td><button class="btn small secondary" data-detach="${r.contest_id}">${t('league_detach')}</button></td></tr>`).join('')
         || `<tr><td colspan="4" class="muted">${t('league_no_races_attached')}</td></tr>`}</tbody></table>
 
-      ${attachable.length ? `<form data-form="attach" class="mt" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select data-f="contest">${attachable.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}</select>
-        <button class="btn small">${t('league_attach')}</button>
+      <form data-form="attach" class="mt" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select data-f="contest">${contestOptions}</select>
+        <button class="btn small" ${attachable.length ? '' : 'disabled'}>${t('league_attach')}</button>
         <span class="muted" style="font-size:12px">${t('league_attach_hint')}</span>
-      </form>` : `<p class="muted mt" style="font-size:13px">${t('league_no_attachable')}</p>`}
+      </form>
 
       <details class="mt"><summary>${t('league_settings')}</summary>
         <form data-form="settings" class="mt" style="display:grid;gap:6px;max-width:460px">
