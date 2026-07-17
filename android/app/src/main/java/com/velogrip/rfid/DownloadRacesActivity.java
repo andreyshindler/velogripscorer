@@ -97,12 +97,24 @@ public class DownloadRacesActivity extends BaseActivity {
         }).start();
     }
 
-    private void showRaces(JSONArray races, String email) {
+    private void showRaces(JSONArray allRaces, String email) {
         LinearLayout box = findViewById(R.id.dlRaces);
         TextView header = findViewById(R.id.dlRacesHeader);
         box.removeAllViews();
-        if (races.length() == 0) {
+        if (allRaces.length() == 0) {
             Toast.makeText(this, R.string.no_races_on_account, Toast.LENGTH_LONG).show();
+            return;
+        }
+        // Only offer start lists still to be timed — hide races already finished
+        // or archived so the picker isn't cluttered with completed events.
+        JSONArray races = new JSONArray();
+        for (int i = 0; i < allRaces.length(); i++) {
+            JSONObject r = allRaces.optJSONObject(i);
+            String status = r == null ? "" : r.optString("status");
+            if (!"finished".equals(status) && !"archived".equals(status)) races.put(r);
+        }
+        if (races.length() == 0) {
+            Toast.makeText(this, R.string.no_unraced_startlists, Toast.LENGTH_LONG).show();
             return;
         }
         header.setText(getString(R.string.races_found, races.length()));

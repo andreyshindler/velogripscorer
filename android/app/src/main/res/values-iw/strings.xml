@@ -331,6 +331,7 @@
     <string name="login_pick_race">התחבר ובחר מרוץ</string>
     <string name="login_needs_fields">הזן תחילה כתובת שרת, אימייל וסיסמה.</string>
     <string name="no_races_on_account">אין מרוצים בחשבון זה — צור מרוץ באתר.</string>
+    <string name="no_unraced_startlists">כל רשימות הזינוק כבר תוזמנו. מרוצים שהסתיימו מוסתרים כאן.</string>
     <string name="choose_race">בחר את המרוץ שלך</string>
     <string name="race_paired">חובר אל \"%1$s\" — רשימת הזינוק וההעלאות מחוברות.</string>
     <string name="label_server_url_manual">חיבור ידני (מתקדם)</string>

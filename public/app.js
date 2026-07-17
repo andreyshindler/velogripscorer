@@ -1582,10 +1582,13 @@ async function renderAdminLeagues(box) {
   const list = document.getElementById('lg-list');
   if (!leagues.length) { list.innerHTML = `<p class="muted mt">${t('league_no_leagues')}</p>`; return; }
 
-  for (const row of leagues) {
-    const { league, races } = await api(`/leagues/${row.id}`);
-    const attachedIds = new Set(races.map((r) => r.contest_id));
-    const attachable = allRaces.filter((c) => !attachedIds.has(c.id));
+  // Fetch every league's races once, and collect the contest ids attached to
+  // ANY league so the attach dropdown only offers races not yet in a league.
+  const details = await Promise.all(leagues.map((row) => api(`/leagues/${row.id}`)));
+  const attachedAnywhere = new Set(details.flatMap((d) => d.races.map((r) => r.contest_id)));
+
+  for (const { league, races } of details) {
+    const attachable = allRaces.filter((c) => !attachedAnywhere.has(c.id));
     const s = league.settings;
     const card = document.createElement('div');
     card.className = 'card mt';

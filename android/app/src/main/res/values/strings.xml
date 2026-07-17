@@ -331,6 +331,7 @@
     <string name="login_pick_race">Log in &amp; choose race</string>
     <string name="login_needs_fields">Enter server URL, email and password first.</string>
     <string name="no_races_on_account">No races on this account yet — create one on the website.</string>
+    <string name="no_unraced_startlists">All start lists have already been timed. Finished races are hidden here.</string>
     <string name="choose_race">Choose your race</string>
     <string name="race_paired">Connected to \"%1$s\" — start list and uploads are wired.</string>
     <string name="label_server_url_manual">Manual pairing (advanced)</string>
