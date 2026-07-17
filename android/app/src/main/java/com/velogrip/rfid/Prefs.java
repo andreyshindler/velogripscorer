@@ -101,6 +101,10 @@ public final class Prefs {
     public boolean beepOnRead() { return sp.getBoolean("beepOnRead", true); }
     public void setBeepOnRead(boolean on) { sp.edit().putBoolean("beepOnRead", on).apply(); }
 
+    /** Start signal: true = one long beep (default), false = three short beeps. */
+    public boolean startBeepLong() { return sp.getBoolean("startBeepLong", true); }
+    public void setStartBeepLong(boolean on) { sp.edit().putBoolean("startBeepLong", on).apply(); }
+
     /** Appearance: "system" (follow the phone), "light", or "dark". Defaults to dark. */
     public String themeMode() { return sp.getString("themeMode", "dark"); }
     public void setThemeMode(String mode) { sp.edit().putString("themeMode", mode).apply(); }

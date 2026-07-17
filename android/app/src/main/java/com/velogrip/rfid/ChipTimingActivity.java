@@ -29,7 +29,7 @@ public class ChipTimingActivity extends BaseActivity {
     private TextView systemValue;
     private EditText readerHost, chipsPerRacer, suppress, lapGap, antennaPower, rollCall;
     private android.widget.Switch rollCallOn;
-    private Switch chipIdBib, beepUnknown;
+    private Switch chipIdBib, beepUnknown, startBeepLong;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +53,7 @@ public class ChipTimingActivity extends BaseActivity {
         antennaPower = findViewById(R.id.antennaPower);
         chipIdBib = findViewById(R.id.swChipIdBib);
         beepUnknown = findViewById(R.id.swBeepUnknown);
+        startBeepLong = findViewById(R.id.swStartBeepLong);
 
         readerHost.setText(prefs.readerHost());
         chipsPerRacer.setText(String.valueOf(prefs.chipsPerRacer()));
@@ -81,6 +82,7 @@ public class ChipTimingActivity extends BaseActivity {
         antennaPower.setText(String.valueOf(prefs.antennaPower()));
         chipIdBib.setChecked(prefs.chipIdEqualsBib());
         beepUnknown.setChecked(prefs.beepUnknownChip());
+        startBeepLong.setChecked(prefs.startBeepLong());
 
         Button scan = findViewById(R.id.scanReader);
         scan.setOnClickListener(v -> {
@@ -154,6 +156,7 @@ public class ChipTimingActivity extends BaseActivity {
                 intOf(antennaPower.getText().toString(), 100),
                 beepUnknown.isChecked(),
                 rollCallOn.isChecked() ? parseMmss(rollCall.getText().toString()) : 0);
+        prefs.setStartBeepLong(startBeepLong.isChecked());
     }
 
     private String protocolLabel(String protocol) {

@@ -122,6 +122,11 @@
             </LinearLayout>
 
             <LinearLayout style="@style/ChipRow">
+                <TextView style="@style/ChipLabel" android:text="@string/long_start_beep" />
+                <Switch android:id="@+id/swStartBeepLong" style="@style/RacerSwitch" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/ChipRow">
                 <TextView style="@style/ChipLabel" android:text="@string/antenna_power" />
                 <EditText
                     android:id="@+id/antennaPower"

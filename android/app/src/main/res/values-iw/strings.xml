@@ -292,6 +292,7 @@
     <string name="chip_start_time">זמן זינוק לפי שבב:</string>
     <string name="chip_checkin">צ׳ק-אין לפי שבב:</string>
     <string name="beep_unknown_chip">צפצוף לשבבים שלא ברשימת הזינוק:</string>
+    <string name="long_start_beep">צפצוף פתיחה אחד ארוך (כבוי = שלושה קצרים):</string>
     <string name="antenna_power">עוצמת אנטנה (%):</string>
     <string name="show_chip_popup">הצג חלונית זיהוי שבב:</string>
     <string name="program_chips">תכנות שבבי RFID:</string>

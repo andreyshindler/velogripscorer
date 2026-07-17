@@ -292,6 +292,7 @@
     <string name="chip_start_time">Chip start time:</string>
     <string name="chip_checkin">Chip check-in:</string>
     <string name="beep_unknown_chip">Audible beep for chips not on start list:</string>
+    <string name="long_start_beep">One long start beep (off = three short):</string>
     <string name="antenna_power">Antenna power (%):</string>
     <string name="show_chip_popup">Show chip detect popup:</string>
     <string name="program_chips">Program RFID chips:</string>
