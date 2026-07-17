@@ -46,8 +46,8 @@
         android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
-    <!-- Bottom bar page A: Search · DNS · Delete · Merge · More -->
-    <LinearLayout
+    <!-- Bottom bar page A: Search · DNS · Delete · Merge · More (swipe to flip) -->
+    <com.velogrip.rfid.SwipeBar
         android:id="@+id/barA"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -75,10 +75,10 @@
             <TextView style="@style/BottomIcon" android:text="•••" />
             <TextView style="@style/BottomText" android:text="@string/more" />
         </LinearLayout>
-    </LinearLayout>
+    </com.velogrip.rfid.SwipeBar>
 
-    <!-- Bottom bar page B: Add · Automate · Sort · Share · More -->
-    <LinearLayout
+    <!-- Bottom bar page B: Add · Automate · Sort · Share · More (swipe to flip) -->
+    <com.velogrip.rfid.SwipeBar
         android:id="@+id/barB"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -107,5 +107,5 @@
             <TextView style="@style/BottomIcon" android:text="•••" />
             <TextView style="@style/BottomText" android:text="@string/more" />
         </LinearLayout>
-    </LinearLayout>
+    </com.velogrip.rfid.SwipeBar>
 </LinearLayout>

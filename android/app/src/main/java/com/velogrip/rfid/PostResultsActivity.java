@@ -219,7 +219,6 @@ public class PostResultsActivity extends BaseActivity {
                     .show();
             return;
         }
-        prefs.setLiveResults(true);
         final android.view.View successCard = findViewById(R.id.successCard);
         successCard.setVisibility(android.view.View.GONE);
         postStatus.setVisibility(android.view.View.VISIBLE);

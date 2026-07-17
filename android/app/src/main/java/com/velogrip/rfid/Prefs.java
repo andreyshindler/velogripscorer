@@ -166,7 +166,7 @@ public final class Prefs {
     public void resetRaceSetup() {
         sp.edit().remove("startType").remove("multiDistance").remove("recordLaps")
                 .remove("reqName").remove("reqBib").remove("bibAlpha")
-                .remove("reqCategory").remove("reqGender")
+                .remove("reqCategory").remove("reqGender").remove("liveResults")
                 .remove("resultsOrder").remove("timingDecimals").remove("categoryResults")
                 .remove("overallByDistance").remove("overallByGender").remove("overallAllDistances")
                 .apply();
