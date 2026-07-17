@@ -231,20 +231,37 @@ async function loadRecentFinished() {
 // ---------- finished races (public results directory) ----------
 
 async function viewFinishedRaces() {
-  main.innerHTML = `<h1>🏁 ${t('nav_finished')}</h1><div class="grid" id="finished-list"></div>`;
+  main.innerHTML = `<h1>🏁 ${t('nav_finished')}</h1><div id="finished-list"></div>`;
   const { contests } = await api('/contests?status=finished');
   const races = (contests || []).filter((c) => c.kind === 'race');
-  document.getElementById('finished-list').innerHTML = races.length
-    ? races.map(finishedCard).join('')
-    : `<p class="muted">${t('no_finished_races')}</p>`;
+  const box = document.getElementById('finished-list');
+  if (!races.length) { box.innerHTML = `<p class="muted">${t('no_finished_races')}</p>`; return; }
+
+  // Group by league: a section per league (sorted by name), then a
+  // "Not in a league" section, each header naming the league.
+  const byLeague = new Map();
+  const noLeague = [];
+  for (const c of races) {
+    const league = String(c.league_names || '').trim();
+    if (!league) { noLeague.push(c); continue; }
+    if (!byLeague.has(league)) byLeague.set(league, []);
+    byLeague.get(league).push(c);
+  }
+  const section = (label, cards) => `<h2 class="league-section">${esc(label)}</h2>
+    <div class="grid">${cards.map(finishedCard).join('')}</div>`;
+  box.innerHTML =
+    [...byLeague.keys()].sort().map((name) => section(name, byLeague.get(name))).join('')
+    + (noLeague.length ? section(t('league_group_free'), noLeague) : '');
 }
 
 function finishedCard(c) {
+  const league = String(c.league_names || '').trim();
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div>
         <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
         <span class="pill finished">${t('status_finished')}</span>
+        ${league ? `<span class="pill tag">🏆 ${esc(league)}</span>` : ''}
       </div>
       <h3>${esc(c.title)}</h3>
       <div class="meta">

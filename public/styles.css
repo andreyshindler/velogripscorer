@@ -191,6 +191,8 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .board.winners .cat-link:hover, .board.winners .live-link:hover { text-decoration: underline; }
 .board.winners tbody tr:nth-child(even) { background: #f4f4f4; }
 .board.winners tr.dist-sep td { background: var(--menu-section-bg); font-weight: 700; text-align: start; padding: 9px 10px; border-top: 2px solid var(--border); }
+.league-section { font-size: 1.15rem; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
+.league-section:first-child { margin-top: 8px; }
 
 /* Live-race summary tiles (Racers / Finished / On course / Not started) */
 .stat-tile { flex: 1; min-width: 88px; text-align: center; padding: 10px; border-radius: 8px; background: #eeeeee; }

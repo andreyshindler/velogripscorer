@@ -109,7 +109,9 @@ router.get('/contests', (req, res) => {
       `SELECT c.*, u.name AS organizer_name,
         (SELECT COUNT(*) FROM entries WHERE contest_id = c.id AND status='visible') AS entry_count,
         (SELECT COUNT(*) FROM votes v JOIN entries e ON e.id = v.entry_id WHERE e.contest_id = c.id) AS vote_count,
-        (SELECT COUNT(*) FROM participants WHERE contest_id = c.id AND status='approved') AS participant_count
+        (SELECT COUNT(*) FROM participants WHERE contest_id = c.id AND status='approved') AS participant_count,
+        (SELECT GROUP_CONCAT(l.name, ', ') FROM league_races lr
+           JOIN leagues l ON l.id = lr.league_id WHERE lr.contest_id = c.id) AS league_names
        FROM contests c JOIN users u ON u.id = c.organizer_id
        WHERE c.status != 'archived'`
     )
