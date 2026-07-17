@@ -101,8 +101,10 @@ public class RaceStartActivity extends BaseActivity {
                     new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, prefs.beepVolume());
             android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
             if (prefs.startBeepLong()) {
-                tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 1000); // one long beep
-                h.postDelayed(tg::release, 1200);
+                // TONE_PROP_BEEP has a short fixed length; use a continuous tone
+                // so it actually sustains for the full ~2 seconds (a "go" horn).
+                tg.startTone(android.media.ToneGenerator.TONE_SUP_DIAL, 2000);
+                h.postDelayed(tg::release, 2200);
             } else {
                 tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180);
                 h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180), 350);

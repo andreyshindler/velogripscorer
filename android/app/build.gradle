@@ -10,8 +10,8 @@ android {
         applicationId 'com.velogrip.rfid'
         minSdk 26
         targetSdk 33
-        versionCode 26
-        versionName '0.6.2'
+        versionCode 27
+        versionName '0.6.3'
     }
 
     // A fixed debug keystore committed at android/debug.keystore so every build
