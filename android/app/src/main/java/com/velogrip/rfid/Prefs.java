@@ -105,6 +105,10 @@ public final class Prefs {
     public boolean startBeepLong() { return sp.getBoolean("startBeepLong", true); }
     public void setStartBeepLong(boolean on) { sp.edit().putBoolean("startBeepLong", on).apply(); }
 
+    /** Beep loudness 0-100, applied to the ToneGenerator (default 100). */
+    public int beepVolume() { return sp.getInt("beepVolume", 100); }
+    public void setBeepVolume(int v) { sp.edit().putInt("beepVolume", Math.max(0, Math.min(100, v))).apply(); }
+
     /** Appearance: "system" (follow the phone), "light", or "dark". Defaults to dark. */
     public String themeMode() { return sp.getString("themeMode", "dark"); }
     public void setThemeMode(String mode) { sp.edit().putString("themeMode", mode).apply(); }

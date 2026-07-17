@@ -84,6 +84,20 @@ public class ChipTimingActivity extends BaseActivity {
         beepUnknown.setChecked(prefs.beepUnknownChip());
         startBeepLong.setChecked(prefs.startBeepLong());
 
+        final android.widget.SeekBar beepVolume = findViewById(R.id.beepVolume);
+        final TextView beepVolumeLabel = findViewById(R.id.beepVolumeLabel);
+        beepVolume.setProgress(prefs.beepVolume());
+        beepVolumeLabel.setText(prefs.beepVolume() + "%");
+        beepVolume.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar sb, int p, boolean fromUser) {
+                beepVolumeLabel.setText(p + "%");
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar sb) { }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {
+                previewBeep(sb.getProgress()); // hear the chosen loudness
+            }
+        });
+
         Button scan = findViewById(R.id.scanReader);
         scan.setOnClickListener(v -> {
             save(); // persist the typed IP/port before scanning
@@ -157,6 +171,18 @@ public class ChipTimingActivity extends BaseActivity {
                 beepUnknown.isChecked(),
                 rollCallOn.isChecked() ? parseMmss(rollCall.getText().toString()) : 0);
         prefs.setStartBeepLong(startBeepLong.isChecked());
+        prefs.setBeepVolume(((android.widget.SeekBar) findViewById(R.id.beepVolume)).getProgress());
+    }
+
+    /** Short beep at the given loudness so the operator can hear the setting. */
+    private void previewBeep(int volume) {
+        prefs.setBeepVolume(volume); // persist so a Back-out keeps the choice
+        try {
+            final android.media.ToneGenerator tg = new android.media.ToneGenerator(
+                    android.media.AudioManager.STREAM_NOTIFICATION, Math.max(1, volume));
+            tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 150);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(tg::release, 300);
+        } catch (RuntimeException ignored) { }
     }
 
     private String protocolLabel(String protocol) {

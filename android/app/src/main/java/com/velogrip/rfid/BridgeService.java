@@ -76,6 +76,7 @@ public class BridgeService extends Service {
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
+    private int toneVolume = -1; // volume the cached ToneGenerator was built with
 
     private Prefs prefs;
     private RaceStore store;
@@ -338,11 +339,13 @@ public class BridgeService extends Service {
     private void beep() {
         if (!prefs.beepOnRead()) return;
         try {
+            int vol = prefs.beepVolume();
             android.media.ToneGenerator t = tone;
-            if (t == null) {
-                t = new android.media.ToneGenerator(
-                        android.media.AudioManager.STREAM_NOTIFICATION, 90);
+            if (t == null || toneVolume != vol) { // rebuild when the volume changed
+                if (t != null) t.release();
+                t = new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, vol);
                 tone = t;
+                toneVolume = vol;
             }
             t.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120);
         } catch (RuntimeException e) {

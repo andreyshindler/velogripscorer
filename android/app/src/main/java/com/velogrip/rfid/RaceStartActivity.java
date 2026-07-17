@@ -98,7 +98,7 @@ public class RaceStartActivity extends BaseActivity {
         if (!prefs.beepOnRead()) return;
         try {
             final android.media.ToneGenerator tg =
-                    new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100);
+                    new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, prefs.beepVolume());
             android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
             if (prefs.startBeepLong()) {
                 tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 1000); // one long beep
