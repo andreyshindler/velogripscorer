@@ -498,7 +498,22 @@ async function viewStartLists() {
 async function loadStartLists() {
   const { races } = await api('/my/races');
   document.getElementById('races-found').textContent = t('races_found', { n: races.length });
+  // Admins can (re)assign a start list to a league right here.
+  const isAdmin = state.user && state.user.role === 'admin';
+  let leagues = [];
+  if (isAdmin) { try { leagues = (await api('/leagues?status=all')).leagues || []; } catch { /* no leagues */ } }
   const body = document.getElementById('lists-body');
+
+  const leagueCell = (r) => {
+    if (!isAdmin || !leagues.length) {
+      return r.league_names ? `<span class="pill tag">🏆 ${esc(r.league_names)}</span>` : '';
+    }
+    return `<select class="assign-league" data-id="${r.id}" data-current="${r.league_id || ''}" style="max-width:180px">
+      <option value="">— ${t('league_group_free')}</option>
+      ${leagues.map((l) => `<option value="${l.id}" ${r.league_id === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+    </select>`;
+  };
+
   const rowHtml = (r) => `
     <tr>
       <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
@@ -507,7 +522,7 @@ async function loadStartLists() {
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
       <td>${esc(r.location || '')}</td>
       <td>${esc(r.sport || '')}</td>
-      <td>${r.league_names ? `<span class="pill tag">🏆 ${esc(r.league_names)}</span>` : ''}</td>
+      <td>${leagueCell(r)}</td>
       <td style="white-space:nowrap">
         <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
         <button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button>
@@ -531,6 +546,19 @@ async function loadStartLists() {
       [...byLeague.keys()].sort().map((name) => sep(name) + byLeague.get(name).map(rowHtml).join('')).join('')
       + (noLeague.length ? sep(t('league_group_free')) + noLeague.map(rowHtml).join('') : '');
   }
+  body.querySelectorAll('.assign-league').forEach((sel) => {
+    sel.onchange = async () => {
+      const raceId = sel.dataset.id;
+      const current = sel.dataset.current; // league id it's in now ('' if none)
+      const next = sel.value;
+      try {
+        if (current && current !== next) await api(`/leagues/${current}/races/${raceId}`, { method: 'DELETE' });
+        if (next && next !== current) await api(`/leagues/${next}/races`, { method: 'POST', body: { contest_id: Number(raceId) } });
+        toast(t('league_saved'));
+        loadStartLists();
+      } catch (err) { toast(err.message, true); loadStartLists(); }
+    };
+  });
   body.querySelectorAll('.list-del').forEach((btn) => {
     btn.onclick = async () => {
       if (!confirm(`${t('delete_race')}: ${btn.dataset.title}?`)) return;
