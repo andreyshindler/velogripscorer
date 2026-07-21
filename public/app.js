@@ -498,7 +498,7 @@ async function viewStartLists() {
   await loadStartLists();
 }
 
-async function loadStartLists() {
+async function loadStartLists(highlightId) {
   const { races } = await api('/my/races');
   document.getElementById('races-found').textContent = t('races_found', { n: races.length });
   // Admins can (re)assign a start list to a league right here.
@@ -518,7 +518,7 @@ async function loadStartLists() {
   };
 
   const rowHtml = (r) => `
-    <tr>
+    <tr data-row-id="${r.id}">
       <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
       <td>${r.racer_count}</td>
       <td>${new Date(r.start_at).toLocaleDateString(LANG === 'he' ? 'he-IL' : 'en-US',
@@ -579,10 +579,20 @@ async function loadStartLists() {
       try {
         const dup = await api(`/contests/${btn.dataset.id}/duplicate`, { method: 'POST', body: { title: title.trim() } });
         toast(t('duplicated_ok'));
-        location.hash = `#/contest/${dup.id}/manage`; // a fresh race with its own id + pairing token
+        await loadStartLists(dup.id); // stay here; point at the new list and blink it
       } catch (err) { toast(err.message, true); }
     };
   });
+
+  // Highlight a just-created list: scroll it into view and blink it twice.
+  if (highlightId != null) {
+    const row = body.querySelector(`tr[data-row-id="${highlightId}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('row-blink');
+      row.addEventListener('animationend', () => row.classList.remove('row-blink'), { once: true });
+    }
+  }
 }
 
 // ---------- contest page ----------

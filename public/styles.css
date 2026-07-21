@@ -191,6 +191,12 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .board.winners .cat-link:hover, .board.winners .live-link:hover { text-decoration: underline; }
 .board.winners tbody tr:nth-child(even) { background: #f4f4f4; }
 .board tr.dist-sep td { background: var(--menu-section-bg); font-weight: 700; text-align: start; padding: 9px 10px; border-top: 2px solid var(--border); }
+/* Blink a just-duplicated start-list row twice to draw the eye to it. */
+@keyframes row-blink {
+  0%, 100% { background: transparent; }
+  50% { background: color-mix(in srgb, var(--ok) 45%, transparent); }
+}
+.board tr.row-blink td { animation: row-blink 0.55s ease-in-out 2; }
 .league-section { font-size: 1.15rem; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
 .league-section:first-child { margin-top: 8px; }
 
