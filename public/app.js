@@ -499,7 +499,7 @@ async function loadStartLists() {
   const { races } = await api('/my/races');
   document.getElementById('races-found').textContent = t('races_found', { n: races.length });
   const body = document.getElementById('lists-body');
-  body.innerHTML = races.map((r) => `
+  const rowHtml = (r) => `
     <tr>
       <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
       <td>${r.racer_count}</td>
@@ -507,12 +507,30 @@ async function loadStartLists() {
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
       <td>${esc(r.location || '')}</td>
       <td>${esc(r.sport || '')}</td>
-      <td>${r.league_names ? `<span class="pill tag">${esc(r.league_names)}</span>` : ''}</td>
+      <td>${r.league_names ? `<span class="pill tag">🏆 ${esc(r.league_names)}</span>` : ''}</td>
       <td style="white-space:nowrap">
         <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
         <button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button>
       </td>
-    </tr>`).join('') || `<tr><td colspan="7" class="muted">${t('no_contests')}</td></tr>`;
+    </tr>`;
+  const sep = (label) => `<tr class="dist-sep"><td colspan="7">🏆 ${esc(label)}</td></tr>`;
+
+  if (!races.length) {
+    body.innerHTML = `<tr><td colspan="7" class="muted">${t('no_contests')}</td></tr>`;
+  } else if (!races.some((r) => String(r.league_names || '').trim())) {
+    body.innerHTML = races.map(rowHtml).join(''); // none in a league -> flat list
+  } else {
+    // Group under a header per league, then a "Not in a league" section.
+    const byLeague = new Map(); const noLeague = [];
+    for (const r of races) {
+      const lg = String(r.league_names || '').trim();
+      if (!lg) noLeague.push(r);
+      else { if (!byLeague.has(lg)) byLeague.set(lg, []); byLeague.get(lg).push(r); }
+    }
+    body.innerHTML =
+      [...byLeague.keys()].sort().map((name) => sep(name) + byLeague.get(name).map(rowHtml).join('')).join('')
+      + (noLeague.length ? sep(t('league_group_free')) + noLeague.map(rowHtml).join('') : '');
+  }
   body.querySelectorAll('.list-del').forEach((btn) => {
     btn.onclick = async () => {
       if (!confirm(`${t('delete_race')}: ${btn.dataset.title}?`)) return;

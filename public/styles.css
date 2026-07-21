@@ -190,7 +190,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .board.winners .cat-link, .board.winners .live-link { color: var(--ok); font-weight: 700; text-decoration: none; }
 .board.winners .cat-link:hover, .board.winners .live-link:hover { text-decoration: underline; }
 .board.winners tbody tr:nth-child(even) { background: #f4f4f4; }
-.board.winners tr.dist-sep td { background: var(--menu-section-bg); font-weight: 700; text-align: start; padding: 9px 10px; border-top: 2px solid var(--border); }
+.board tr.dist-sep td { background: var(--menu-section-bg); font-weight: 700; text-align: start; padding: 9px 10px; border-top: 2px solid var(--border); }
 .league-section { font-size: 1.15rem; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
 .league-section:first-child { margin-top: 8px; }
 
@@ -281,7 +281,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] .pubtab { background: #221d33; color: var(--muted); }
 :root[data-theme="dark"] .pubtab.active { background: var(--ok); color: #0d1f16; }
 :root[data-theme="dark"] .board.winners tbody tr:nth-child(even) { background: #1a1728; }
-:root[data-theme="dark"] .board.winners tr.dist-sep td { background: var(--menu-section-bg); }
+:root[data-theme="dark"] .board tr.dist-sep td { background: var(--menu-section-bg); }
 :root[data-theme="dark"] #toast { background: #2a2440; color: #fff; }
 :root[data-theme="dark"] .stat-tile,
 :root[data-theme="dark"] .stat-tile.notstarted { background: #201b30; }
