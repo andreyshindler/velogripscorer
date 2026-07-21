@@ -53,7 +53,10 @@ async function downloadAuthed(path, filename) {
 function toast(msg, isError) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  // Success uses var(--text) as the pill (dark in light theme, light in dark
+  // theme), so the label must be its opposite to stay readable in both.
   el.style.background = isError ? 'var(--danger)' : 'var(--text)';
+  el.style.color = isError ? '#fff' : 'var(--bg)';
   el.classList.add('show');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
