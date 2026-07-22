@@ -193,7 +193,7 @@ async function route() {
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'leagues') return viewLeagues();
-    if (page === 'league') return viewLeague(Number(arg), sub || 'individual');
+    if (page === 'league') return viewLeague(Number(arg), sub || 'teams');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
     if (page === 'admin') return viewAdmin(arg || 'reports');
@@ -1559,7 +1559,7 @@ async function viewLeague(id, tab) {
   const { league, races, individual, teams } = data;
   const provisional = races.some((r) => r.status !== 'finished');
 
-  const tabs = [['individual', 'league_tab_individual'], ['teams', 'league_tab_teams'], ['races', 'league_tab_races']];
+  const tabs = [['teams', 'league_tab_teams'], ['individual', 'league_tab_individual'], ['races', 'league_tab_races']];
   main.innerHTML = `
     <div class="pubresults">
       <h1 style="text-align:center;margin-bottom:2px">${esc(league.name)}</h1>
