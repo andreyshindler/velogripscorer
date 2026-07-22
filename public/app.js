@@ -1631,15 +1631,30 @@ function leagueTeamsTable(teams, races) {
     <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
 }
 
+// A league race's live status: finished, active (now within the event window),
+// scheduled (before it starts) or awaiting results (window passed, not posted).
+function leagueRaceStatus(r) {
+  if (r.status === 'finished') return { cls: 'finished', label: t('status_finished') };
+  const now = Date.now();
+  const start = new Date(r.start_at).getTime();
+  const end = r.end_at ? new Date(r.end_at).getTime() : start;
+  if (now >= start && now <= end) return { cls: 'live', label: t('league_race_active') };
+  if (now < start) return { cls: 'tag', label: t('league_race_scheduled') };
+  return { cls: 'tag', label: t('league_race_awaiting') };
+}
+
 function leagueRacesTable(races) {
   if (!races.length) return `<p class="muted">${t('league_no_races_attached')}</p>`;
   return `<div style="overflow-x:auto"><table class="board mt"><thead>
     <tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('date_word')}</th><th>${t('status_word')}</th></tr></thead>
-    <tbody>${races.map((r) => `<tr>
+    <tbody>${races.map((r) => {
+      const s = leagueRaceStatus(r);
+      return `<tr>
       <td><strong>R${r.round}</strong></td>
       <td><a href="#/results/${r.contest_id}">${esc(r.title)}</a></td>
       <td>${fmtDate(r.start_at)}</td>
-      <td><span class="pill ${r.status === 'finished' ? 'finished' : 'live'}">${r.status === 'finished' ? t('status_finished') : t('league_provisional')}</span></td></tr>`).join('')}</tbody></table></div>`;
+      <td><span class="pill ${s.cls}">${s.label}</span></td></tr>`;
+    }).join('')}</tbody></table></div>`;
 }
 
 // ---------- admin ----------

@@ -24,7 +24,7 @@ function leagueJson(league) {
 
 function leagueRaces(leagueId) {
   return db.prepare(
-    `SELECT lr.contest_id, lr.round, c.title, c.start_at, c.status, c.visibility
+    `SELECT lr.contest_id, lr.round, c.title, c.start_at, c.end_at, c.status, c.visibility
        FROM league_races lr JOIN contests c ON c.id = lr.contest_id
       WHERE lr.league_id = ? ORDER BY lr.round, datetime(c.start_at)`
   ).all(leagueId);
