@@ -274,6 +274,16 @@ async function viewFinishedRaces() {
   box.innerHTML =
     [...byLeague.keys()].sort().map((name) => section(name, byLeague.get(name))).join('')
     + (noLeague.length ? section(t('league_group_free'), noLeague) : '');
+
+  // The 🏆 league pill sits inside the card's link, so intercept its click and
+  // route to the league page instead of the race results.
+  const openLeague = (el) => { location.hash = `#/league/${el.dataset.league}`; };
+  box.querySelectorAll('.league-link').forEach((el) => {
+    el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openLeague(el); });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLeague(el); }
+    });
+  });
 }
 
 function finishedCard(c) {
@@ -281,7 +291,10 @@ function finishedCard(c) {
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div>
-        ${league ? `<span class="pill tag">🏆 ${esc(league)}</span>` : ''}
+        ${league ? (c.league_id
+          ? `<span class="pill tag league-link" data-league="${c.league_id}" role="link" tabindex="0"
+               title="${t('open_league')}" style="cursor:pointer;text-decoration:underline">🏆 ${esc(league)}</span>`
+          : `<span class="pill tag">🏆 ${esc(league)}</span>`) : ''}
         <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
         <span class="pill finished">${t('status_finished')}</span>
       </div>
