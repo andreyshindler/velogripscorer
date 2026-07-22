@@ -237,6 +237,15 @@ test('attach races: rounds, duplicates, non-race contests', async () => {
   assert.equal(info.body.races.length, 3);
 });
 
+test('duplicating an attached race leaves the copy unassigned to any league', async () => {
+  const before = (await request(app).get(`/api/leagues/${league.id}`)).body.races.length;
+  const dup = (await request(app).post(`/api/contests/${races[0].contest.id}/duplicate`).set(auth(admin))
+    .send({ title: 'Copy of R1' })).body;
+  const after = (await request(app).get(`/api/leagues/${league.id}`)).body.races;
+  assert.equal(after.length, before, 'duplicate does not add itself to the source league');
+  assert.ok(!after.some((r) => r.contest_id === dup.id), 'copy is not in the league');
+});
+
 test('standings: per-race points, best-N totals, bib identity, teams', async () => {
   const res = await request(app).get(`/api/leagues/${league.id}/standings`);
   assert.equal(res.status, 200);

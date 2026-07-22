@@ -383,14 +383,8 @@ router.post('/contests/:id/duplicate', requireAuth, (req, res) => {
       ins.run(newId, a.epc, a.bib, a.participant, a.user_id,
         a.wave_id ? (waveMap.get(a.wave_id) || null) : null, a.category, a.distance, a.team, a.gender);
     }
-    // Carry the source's league membership onto the copy, as the next round —
-    // duplicating last week's list into this week's race in the same league.
-    for (const lr of db.prepare('SELECT league_id FROM league_races WHERE contest_id = ?').all(src.id)) {
-      const nextRound = db.prepare('SELECT COALESCE(MAX(round), 0) + 1 AS r FROM league_races WHERE league_id = ?')
-        .get(lr.league_id).r;
-      db.prepare('INSERT INTO league_races (league_id, contest_id, round) VALUES (?,?,?)')
-        .run(lr.league_id, newId, nextRound);
-    }
+    // The copy starts with NO league assignment — the organizer picks a league
+    // for it explicitly (a duplicated list is often reused for a different event).
     return newId;
   });
   const newId = clone();
