@@ -667,7 +667,10 @@ async function viewContest(id, tab) {
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
-        <h1 style="margin:0 0 4px">${esc(c.title)}</h1>
+        <h1 id="race-title" style="margin:0 0 4px;display:inline-flex;align-items:center;gap:8px">
+          <span>${esc(c.title)}</span>
+          ${c.is_organizer ? `<button id="title-edit" class="ghost" title="${t('edit')}" aria-label="${t('edit')}" style="font-size:0.6em;padding:2px 6px">✏️</button>` : ''}
+        </h1>
         <div class="muted">
           <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
           ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
@@ -694,6 +697,34 @@ async function viewContest(id, tab) {
     await api(`/contests/${id}/follow`, { method: c.is_following ? 'DELETE' : 'POST' });
     viewContest(id, tab);
   };
+
+  // Inline rename: the ✏️ swaps the heading for an input (organizers only).
+  const titleEdit = document.getElementById('title-edit');
+  if (titleEdit) titleEdit.onclick = () => {
+    const h1 = document.getElementById('race-title');
+    h1.innerHTML = `<input id="title-input" value="${esc(c.title)}" maxlength="120"
+        style="font-size:0.85rem;min-width:220px;font-weight:700">
+      <button id="title-save" class="btn small secondary">${t('save')}</button>
+      <button id="title-cancel" class="ghost" aria-label="${t('cancel')}">✕</button>`;
+    const input = document.getElementById('title-input');
+    input.focus(); input.select();
+    const save = async () => {
+      const title = input.value.trim();
+      if (!title) { input.focus(); return; }
+      try {
+        await api(`/contests/${id}`, { method: 'PATCH', body: { title } });
+        toast(t('saved'));
+        viewContest(id, tab); // re-render with the new heading everywhere
+      } catch (err) { toast(err.message, true); }
+    };
+    document.getElementById('title-save').onclick = save;
+    document.getElementById('title-cancel').onclick = () => viewContest(id, tab);
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); save(); }
+      else if (e.key === 'Escape') viewContest(id, tab);
+    };
+  };
+
   const box = document.getElementById('tab-content');
   if (tab === 'results') renderRaceResults(box, c);
   else if (tab === 'startlist') renderStartlist(box, c);
@@ -1237,14 +1268,6 @@ async function renderManage(box, c) {
     </div>
 
     <div class="card mt">
-      <h3 style="margin-top:0">✏️ ${t('race_name')}</h3>
-      <form id="name-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input name="title" value="${esc(c.title)}" required maxlength="120" style="flex:1;min-width:220px">
-        <button class="btn small secondary">${t('save')}</button>
-      </form>
-    </div>
-
-    <div class="card mt">
       <h3 style="margin-top:0">🗓 ${t('race_schedule')}</h3>
       <form id="schedule-form" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
         <label style="margin:0">${t('start_date')}
@@ -1346,17 +1369,6 @@ async function renderManage(box, c) {
       await api(`/contests/${c.id}/reopen`, { method: 'POST' });
       toast(t('reopened_ok'));
       viewContest(c.id, 'manage'); // re-render with the now-active status
-    } catch (err) { toast(err.message, true); }
-  };
-
-  $('#name-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const title = e.target.elements.title.value.trim(); // .title on a form is the attribute, use elements
-    if (!title) return;
-    try {
-      await api(`/contests/${c.id}`, { method: 'PATCH', body: { title } });
-      toast(t('saved'));
-      viewContest(c.id, 'manage'); // re-render so the heading updates
     } catch (err) { toast(err.message, true); }
   };
 
