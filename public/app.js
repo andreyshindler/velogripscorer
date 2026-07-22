@@ -40,6 +40,15 @@ function sportLabel(sport) {
   return key ? t(key) : raw;
 }
 
+// ISO instant -> value for a <input type="datetime-local"> in the viewer's
+// local time (the input has no timezone). new Date(value) reads it back.
+function toLocalInput(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 async function api(path, { method = 'GET', body, form } = {}) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -1228,6 +1237,17 @@ async function renderManage(box, c) {
     </div>
 
     <div class="card mt">
+      <h3 style="margin-top:0">🗓 ${t('race_schedule')}</h3>
+      <form id="schedule-form" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <label style="margin:0">${t('start_date')}
+          <input name="start" type="datetime-local" value="${toLocalInput(c.start_at)}" required style="display:block;margin-top:4px"></label>
+        <label style="margin:0">${t('end_date')}
+          <input name="end" type="datetime-local" value="${toLocalInput(c.end_at)}" required style="display:block;margin-top:4px"></label>
+        <button class="btn small secondary">${t('save_settings')}</button>
+      </form>
+    </div>
+
+    <div class="card mt">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <h3 style="margin:0">${t('tab_startlist')} <span class="muted" style="font-weight:400">(${tags.length} ${t('racers_count')})</span></h3>
         <div>
@@ -1318,6 +1338,20 @@ async function renderManage(box, c) {
       await api(`/contests/${c.id}/reopen`, { method: 'POST' });
       toast(t('reopened_ok'));
       viewContest(c.id, 'manage'); // re-render with the now-active status
+    } catch (err) { toast(err.message, true); }
+  };
+
+  $('#schedule-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const start = new Date(f.start.value), end = new Date(f.end.value);
+    if (isNaN(start) || isNaN(end)) { toast(t('invalid_dates'), true); return; }
+    if (end <= start) { toast(t('end_after_start'), true); return; }
+    try {
+      await api(`/contests/${c.id}`, { method: 'PATCH',
+        body: { start_at: start.toISOString(), end_at: end.toISOString() } });
+      toast(t('saved'));
+      viewContest(c.id, 'manage'); // re-render with the new times
     } catch (err) { toast(err.message, true); }
   };
 

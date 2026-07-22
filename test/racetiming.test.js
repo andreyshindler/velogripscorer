@@ -486,3 +486,29 @@ test('finished status: create + duplicate stay active; finished race can be reop
   assert.equal((await request(app).get(`/api/contests/${pastRace.id}`)).body.status, 'active',
     'sweep leaves an active past-dated race alone');
 });
+
+test('edit schedule: PATCH updates start_at/end_at with validation', async () => {
+  const o = await register('sched-org@test.co', 'Sched Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Schedule me', kind: 'race', start_at: past, end_at: future,
+  })).body;
+  const newStart = new Date(Date.now() + 3600_000).toISOString();
+  const newEnd = new Date(Date.now() + 7200_000).toISOString();
+  const ok = await request(app).patch(`/api/contests/${c.id}`).set(auth(o))
+    .send({ start_at: newStart, end_at: newEnd });
+  assert.equal(ok.status, 200);
+  const got = (await request(app).get(`/api/contests/${c.id}`)).body;
+  assert.equal(new Date(got.start_at).toISOString(), newStart);
+  assert.equal(new Date(got.end_at).toISOString(), newEnd);
+
+  // end must be after start
+  const bad = await request(app).patch(`/api/contests/${c.id}`).set(auth(o))
+    .send({ start_at: newEnd, end_at: newStart });
+  assert.equal(bad.status, 400);
+
+  // organizer only
+  const outsider = await register('sched-out@test.co', 'Out');
+  const denied = await request(app).patch(`/api/contests/${c.id}`).set(auth(outsider))
+    .send({ start_at: newStart, end_at: newEnd });
+  assert.equal(denied.status, 403);
+});
