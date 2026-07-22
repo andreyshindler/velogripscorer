@@ -1683,7 +1683,7 @@ function leagueRaceStatus(r) {
   const end = r.end_at ? new Date(r.end_at).getTime() : start;
   if (now >= start && now <= end) return { cls: 'live', label: t('league_race_active') };
   if (now < start) return { cls: 'tag', label: t('league_race_scheduled') };
-  return { cls: 'tag', label: t('league_race_awaiting') };
+  return { cls: 'awaiting', label: t('league_race_awaiting') };
 }
 
 function leagueRacesTable(races) {

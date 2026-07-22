@@ -86,6 +86,7 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 0.92rem
 .pill.finished { background: #eee; color: var(--muted); }
 .pill.live { background: #e3f6ec; color: var(--ok); }
 .pill.tag { background: #fff1e6; color: #b05c14; }
+.pill.awaiting { background: #d7f3f8; color: #0e7490; }
 
 .searchbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
 .searchbar input[type="search"] { flex: 2; min-width: 220px; }
@@ -278,6 +279,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] .pill.finished { background: #26243a; color: var(--muted); }
 :root[data-theme="dark"] .pill.live { background: #123522; color: #4ade80; }
 :root[data-theme="dark"] .pill.tag { background: #3a2a18; color: #f0a860; }
+:root[data-theme="dark"] .pill.awaiting { background: #0d3540; color: #22d3ee; }
 :root[data-theme="dark"] .notif.unread { background: #221d3a; }
 :root[data-theme="dark"] .avatar { background: #2b2542; }
 :root[data-theme="dark"] table.board tr.top1 td { background: #2e2711; }
