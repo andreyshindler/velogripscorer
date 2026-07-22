@@ -281,9 +281,9 @@ function finishedCard(c) {
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div>
+        ${league ? `<span class="pill tag">🏆 ${esc(league)}</span>` : ''}
         <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
         <span class="pill finished">${t('status_finished')}</span>
-        ${league ? `<span class="pill tag">🏆 ${esc(league)}</span>` : ''}
       </div>
       <h3>${esc(c.title)}</h3>
       <div class="meta">
