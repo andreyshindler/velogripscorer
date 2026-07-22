@@ -1237,6 +1237,14 @@ async function renderManage(box, c) {
     </div>
 
     <div class="card mt">
+      <h3 style="margin-top:0">✏️ ${t('race_name')}</h3>
+      <form id="name-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input name="title" value="${esc(c.title)}" required maxlength="120" style="flex:1;min-width:220px">
+        <button class="btn small secondary">${t('save')}</button>
+      </form>
+    </div>
+
+    <div class="card mt">
       <h3 style="margin-top:0">🗓 ${t('race_schedule')}</h3>
       <form id="schedule-form" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
         <label style="margin:0">${t('start_date')}
@@ -1338,6 +1346,17 @@ async function renderManage(box, c) {
       await api(`/contests/${c.id}/reopen`, { method: 'POST' });
       toast(t('reopened_ok'));
       viewContest(c.id, 'manage'); // re-render with the now-active status
+    } catch (err) { toast(err.message, true); }
+  };
+
+  $('#name-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const title = e.target.elements.title.value.trim(); // .title on a form is the attribute, use elements
+    if (!title) return;
+    try {
+      await api(`/contests/${c.id}`, { method: 'PATCH', body: { title } });
+      toast(t('saved'));
+      viewContest(c.id, 'manage'); // re-render so the heading updates
     } catch (err) { toast(err.message, true); }
   };
 
