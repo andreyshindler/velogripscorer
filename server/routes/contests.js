@@ -405,6 +405,21 @@ router.post('/contests/:id/reopen', requireAuth, (req, res) => {
   res.json({ ok: true, status: 'active' });
 });
 
+// Set a race's status straight from "My start lists" — organizer flips a list
+// between active and finished without opening it. Reopen (above) is the
+// finished->active special case wired into the Manage banner.
+router.patch('/contests/:id/status', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  if (contest.kind !== 'race') return res.status(400).json({ error: 'only races have this status' });
+  const status = req.body?.status;
+  if (!['active', 'finished'].includes(status)) return res.status(400).json({ error: 'invalid status' });
+  db.prepare('UPDATE contests SET status = ? WHERE id = ?').run(status, contest.id);
+  auditLog(req.user.id, 'contest.status', 'contest', contest.id, status);
+  res.json({ ok: true, status });
+});
+
 // ---- Participation (req 3.2) ----
 
 router.post('/contests/:id/join', requireAuth, (req, res) => {

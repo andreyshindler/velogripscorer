@@ -458,4 +458,16 @@ test('finished status: create + duplicate stay active; finished race can be reop
   assert.equal(src2.status, 'active', 'reopened race is active again');
   finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
   assert.ok(!finished.includes(src.id), 'reopened race drops off Finished page');
+
+  // Editable status from "My start lists": flip active <-> finished directly.
+  const bad = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'nope' });
+  assert.equal(bad.status, 400, 'invalid status rejected');
+  const outDenied = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(outsider)).send({ status: 'finished' });
+  assert.equal(outDenied.status, 403, 'non-organizer cannot set status');
+  const toFinished = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'finished' });
+  assert.equal(toFinished.status, 200);
+  assert.equal((await request(app).get(`/api/contests/${src.id}`)).body.status, 'finished');
+  const toActive = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'active' });
+  assert.equal(toActive.status, 200);
+  assert.equal((await request(app).get(`/api/contests/${src.id}`)).body.status, 'active');
 });

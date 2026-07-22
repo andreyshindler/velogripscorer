@@ -444,7 +444,7 @@ async function viewStartLists() {
       <table class="board" style="margin:0">
         <thead><tr>
           <th>${t('contest_title')}</th><th>${t('racers_count')}</th><th>${t('start_date')}</th>
-          <th>${t('location')}</th><th>${t('sport')}</th><th>${t('nav_leagues')}</th><th></th>
+          <th>${t('status')}</th><th>${t('location')}</th><th>${t('sport')}</th><th>${t('nav_leagues')}</th><th></th>
         </tr></thead>
         <tbody id="lists-body"></tbody>
       </table>
@@ -517,12 +517,19 @@ async function loadStartLists(highlightId) {
     </select>`;
   };
 
+  const statusCell = (r) => `
+    <select class="assign-status" data-id="${r.id}" data-current="${r.status}" style="max-width:130px">
+      <option value="active" ${r.status === 'finished' ? '' : 'selected'}>${t('status_active')}</option>
+      <option value="finished" ${r.status === 'finished' ? 'selected' : ''}>${t('status_finished')}</option>
+    </select>`;
+
   const rowHtml = (r) => `
     <tr data-row-id="${r.id}">
       <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
       <td>${r.racer_count}</td>
       <td>${new Date(r.start_at).toLocaleDateString(LANG === 'he' ? 'he-IL' : 'en-US',
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+      <td>${statusCell(r)}</td>
       <td>${esc(r.location || '')}</td>
       <td>${esc(r.sport || '')}</td>
       <td>${leagueCell(r)}</td>
@@ -531,10 +538,10 @@ async function loadStartLists(highlightId) {
         <button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button>
       </td>
     </tr>`;
-  const sep = (label) => `<tr class="dist-sep"><td colspan="7">🏆 ${esc(label)}</td></tr>`;
+  const sep = (label) => `<tr class="dist-sep"><td colspan="8">🏆 ${esc(label)}</td></tr>`;
 
   if (!races.length) {
-    body.innerHTML = `<tr><td colspan="7" class="muted">${t('no_contests')}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="muted">${t('no_contests')}</td></tr>`;
   } else if (!races.some((r) => String(r.league_names || '').trim())) {
     body.innerHTML = races.map(rowHtml).join(''); // none in a league -> flat list
   } else {
@@ -558,6 +565,15 @@ async function loadStartLists(highlightId) {
         if (current && current !== next) await api(`/leagues/${current}/races/${raceId}`, { method: 'DELETE' });
         if (next && next !== current) await api(`/leagues/${next}/races`, { method: 'POST', body: { contest_id: Number(raceId) } });
         toast(t('league_saved'));
+        loadStartLists();
+      } catch (err) { toast(err.message, true); loadStartLists(); }
+    };
+  });
+  body.querySelectorAll('.assign-status').forEach((sel) => {
+    sel.onchange = async () => {
+      try {
+        await api(`/contests/${sel.dataset.id}/status`, { method: 'PATCH', body: { status: sel.value } });
+        toast(t('status_saved'));
         loadStartLists();
       } catch (err) { toast(err.message, true); loadStartLists(); }
     };
