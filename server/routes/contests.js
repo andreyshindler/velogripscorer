@@ -578,10 +578,14 @@ router.post('/contests/:id/finish', requireAuth, (req, res) => {
   res.json({ ok: true, winners: finishContest(contest, req.user.id) });
 });
 
-// Auto-finish contests whose end date has passed (start/end notifications, req 3.6)
+// Auto-finish VOTING contests whose end date has passed: close voting and
+// declare winners (req 3.6). Races are deliberately excluded — a race's end_at
+// is just its scheduled date, and it's finished only when the organizer posts
+// results (or flips the status manually). Sweeping races here would silently
+// re-finish any race the organizer just reopened/set active.
 function sweepEndedContests() {
   const ended = db
-    .prepare(`SELECT * FROM contests WHERE status = 'active' AND end_at < datetime('now')`)
+    .prepare(`SELECT * FROM contests WHERE status = 'active' AND kind = 'voting' AND end_at < datetime('now')`)
     .all();
   for (const contest of ended) {
     try {

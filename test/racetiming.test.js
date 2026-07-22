@@ -470,4 +470,19 @@ test('finished status: create + duplicate stay active; finished race can be reop
   const toActive = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'active' });
   assert.equal(toActive.status, 200);
   assert.equal((await request(app).get(`/api/contests/${src.id}`)).body.status, 'active');
+
+  // The auto-finish sweep must NOT re-finish a past-dated race. Create a race
+  // whose end_at is already in the past, then run the sweep: it should stay
+  // active. Only voting contests are swept; races finish explicitly. (Without
+  // the kind='voting' filter this race would flip back to finished.)
+  const older = new Date(Date.now() - 7200_000).toISOString();
+  const pastEnd = new Date(Date.now() - 60_000).toISOString();
+  const pastRace = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Yesterday race', kind: 'race', start_at: older, end_at: pastEnd,
+  })).body;
+  assert.equal(pastRace.status, 'active');
+  const { sweepEndedContests } = require('../server/routes/contests');
+  sweepEndedContests();
+  assert.equal((await request(app).get(`/api/contests/${pastRace.id}`)).body.status, 'active',
+    'sweep leaves an active past-dated race alone');
 });
