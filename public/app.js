@@ -21,6 +21,25 @@ function esc(s) {
 // Drill-in arrow that points in the reading direction (left in Hebrew RTL).
 function arrow() { return LANG === 'he' ? '◂' : '▸'; }
 
+// Sport is stored as free text (often typed in English, e.g. "Running").
+// Translate the common values so cards read in the UI language; anything
+// unrecognised falls through unchanged.
+const SPORT_KEYS = {
+  running: 'sport_running', run: 'sport_running',
+  cycling: 'sport_cycling', bike: 'sport_cycling', cycle: 'sport_cycling', biking: 'sport_cycling',
+  walking: 'sport_walking', walk: 'sport_walking',
+  swimming: 'sport_swimming', swim: 'sport_swimming',
+  triathlon: 'sport_triathlon', duathlon: 'sport_duathlon',
+  trail: 'sport_trail', 'trail running': 'sport_trail',
+  mtb: 'sport_mtb', marathon: 'sport_marathon',
+};
+function sportLabel(sport) {
+  const raw = String(sport ?? '').trim();
+  if (!raw) return t('race_kind');
+  const key = SPORT_KEYS[raw.toLowerCase()];
+  return key ? t(key) : raw;
+}
+
 async function api(path, { method = 'GET', body, form } = {}) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -219,7 +238,7 @@ async function loadRecentFinished() {
       ? `<h2>${t('recently_finished')}</h2>
          <div class="grid">${list.map((c) => `
            <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
-             <div><span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+             <div><span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
                <span class="pill finished">${t('status_finished')}</span></div>
              <h3>${esc(c.title)}</h3>
              <div class="meta">
@@ -262,7 +281,7 @@ function finishedCard(c) {
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div>
-        <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+        <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
         <span class="pill finished">${t('status_finished')}</span>
         ${league ? `<span class="pill tag">🏆 ${esc(league)}</span>` : ''}
       </div>
@@ -531,7 +550,7 @@ async function loadStartLists(highlightId) {
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
       <td>${statusCell(r)}</td>
       <td>${esc(r.location || '')}</td>
-      <td>${esc(r.sport || '')}</td>
+      <td>${r.sport ? esc(sportLabel(r.sport)) : ''}</td>
       <td>${leagueCell(r)}</td>
       <td style="white-space:nowrap">
         <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
@@ -628,7 +647,7 @@ async function viewContest(id, tab) {
       <div>
         <h1 style="margin:0 0 4px">${esc(c.title)}</h1>
         <div class="muted">
-          <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+          <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
           ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
           <span class="pill ${c.status === 'finished' ? 'finished' : 'live'}">
             ${c.status === 'finished' ? t('status_finished') : '● ' + t('hero_live')}
@@ -833,7 +852,7 @@ function raceInfoPanel(c, results) {
     ? `${esc(c.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(c.location)}" target="_blank" rel="noopener" style="color:var(--brand,#2f8a57);font-weight:600">${t('view_on_map')}</a>`
     : '–';
   const rows = [
-    [t('sport'), esc(c.sport) || t('running')],
+    [t('sport'), esc(sportLabel(c.sport))],
     [t('location'), loc],
     [t('start_type'), startType],
     [t('racers'), results.length],
