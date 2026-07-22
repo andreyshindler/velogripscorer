@@ -1341,7 +1341,16 @@ async function renderManage(box, c) {
     } catch (err) { toast(err.message, true); }
   };
 
-  $('#schedule-form').onsubmit = async (e) => {
+  const schedForm = $('#schedule-form');
+  // Picking a start time defaults the end to start + 1.5h; the user can still
+  // adjust the end afterwards.
+  schedForm.start.addEventListener('change', () => {
+    if (!schedForm.start.value) return;
+    const s = new Date(schedForm.start.value);
+    if (isNaN(s.getTime())) return;
+    schedForm.end.value = toLocalInput(new Date(s.getTime() + 90 * 60 * 1000).toISOString());
+  });
+  schedForm.onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
     const start = new Date(f.start.value), end = new Date(f.end.value);
