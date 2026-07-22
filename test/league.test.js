@@ -242,6 +242,8 @@ test('standings: per-race points, best-N totals, bib identity, teams', async () 
   assert.equal(res.status, 200);
   const { individual, teams, races: raceList } = res.body;
   assert.equal(raceList.length, 3);
+  // Each race carries its full time window so the client can label live status.
+  assert.ok(raceList.every((r) => r.start_at && r.end_at), 'races expose start_at and end_at');
 
   const groupA = individual.find((g) => g.category === 'עד 44');
   assert.ok(groupA, 'category group exists');

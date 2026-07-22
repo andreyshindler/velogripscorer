@@ -59,7 +59,7 @@ router.get('/leagues/:id/standings', (req, res) => {
   const races = attached.map((row) => {
     const contest = db.prepare('SELECT * FROM contests WHERE id = ?').get(row.contest_id);
     return {
-      contest: { id: contest.id, title: contest.title, start_at: contest.start_at, status: contest.status },
+      contest: { id: contest.id, title: contest.title, start_at: contest.start_at, end_at: contest.end_at, status: contest.status },
       round: row.round,
       results: computeRaceResults(contest),
     };
@@ -68,7 +68,7 @@ router.get('/leagues/:id/standings', (req, res) => {
   const { individual, teams } = computeLeagueStandings(races, settings);
   const raceList = races.map((r) => ({
     contest_id: r.contest.id, round: r.round, title: r.contest.title,
-    start_at: r.contest.start_at, status: r.contest.status,
+    start_at: r.contest.start_at, end_at: r.contest.end_at, status: r.contest.status,
   }));
 
   if (req.query.format === 'csv') {
