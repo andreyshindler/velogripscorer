@@ -1160,7 +1160,17 @@ async function renderManage(box, c) {
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
-    <div class="card">
+    ${c.status === 'finished' ? `
+    <div class="card" style="border-inline-start:4px solid var(--accent)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div>
+          <strong>${t('status')}: <span class="pill finished">${t('status_finished')}</span></strong>
+          <div class="muted" style="font-size:.82rem;margin-top:4px">${t('reopen_help')}</div>
+        </div>
+        <button class="btn small secondary" id="reopen-race">↩ ${t('reopen_race')}</button>
+      </div>
+    </div>` : ''}
+    <div class="card${c.status === 'finished' ? ' mt' : ''}">
       <h3 style="margin-top:0">📱 ${t('app_pairing')}</h3>
       <p class="muted" style="margin:4px 0">${t('app_pairing_help')}</p>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1251,6 +1261,16 @@ async function renderManage(box, c) {
   $('#copy-token').onclick = async () => {
     try { await navigator.clipboard.writeText(c.app_token || ''); toast(t('copied')); }
     catch { prompt(t('copy'), c.app_token || ''); }
+  };
+
+  const reopenBtn = $('#reopen-race');
+  if (reopenBtn) reopenBtn.onclick = async () => {
+    if (!confirm(t('reopen_confirm'))) return;
+    try {
+      await api(`/contests/${c.id}/reopen`, { method: 'POST' });
+      toast(t('reopened_ok'));
+      viewContest(c.id, 'manage'); // re-render with the now-active status
+    } catch (err) { toast(err.message, true); }
   };
 
   // ---- CSV start-list import ----

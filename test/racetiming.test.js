@@ -419,3 +419,43 @@ test('xlsx start-list upload: Webscorer format, two chips per racer, delete race
   const tokenDead = await request(app).get('/api/ingest/ping').set('X-Reader-Token', readers[0].token);
   assert.equal(tokenDead.status, 401, 'pairing token dies with the race');
 });
+
+test('finished status: create + duplicate stay active; finished race can be reopened', async () => {
+  const o = await register('reopen-org@test.co', 'Reopen Org');
+  // A freshly created race is NOT finished.
+  const src = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Round 1', kind: 'race', start_at: past, end_at: future,
+  })).body;
+  assert.equal(src.status, 'active', 'new race starts active');
+
+  // Its pairing token (auto-created), used to post results / finish.
+  const token = (await request(app).get('/api/my/races').set(auth(o))).body.races
+    .find((r) => r.id === src.id).app_token;
+
+  // Finish it via the app -> now it shows on the public Finished page.
+  const fin = await request(app).post('/api/ingest/finish').set('X-Reader-Token', token).send({});
+  assert.equal(fin.status, 200);
+  let src2 = (await request(app).get(`/api/contests/${src.id}`)).body;
+  assert.equal(src2.status, 'finished');
+  let finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
+  assert.ok(finished.includes(src.id), 'finished race listed on Finished page');
+
+  // Duplicating a FINISHED race yields an ACTIVE copy (not finished).
+  const dup = (await request(app).post(`/api/contests/${src.id}/duplicate`).set(auth(o))
+    .send({ title: 'Round 2' })).body;
+  const dupFull = (await request(app).get(`/api/contests/${dup.id}`)).body;
+  assert.equal(dupFull.status, 'active', 'duplicated start list is not finished');
+  finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
+  assert.ok(!finished.includes(dup.id), 'duplicate does not appear on Finished page');
+
+  // Reopen: only the organizer, races only, moves it back to active.
+  const outsider = await register('reopen-outsider@test.co', 'Outsider');
+  const denied = await request(app).post(`/api/contests/${src.id}/reopen`).set(auth(outsider));
+  assert.equal(denied.status, 403, 'non-organizer cannot reopen');
+  const reopened = await request(app).post(`/api/contests/${src.id}/reopen`).set(auth(o));
+  assert.equal(reopened.status, 200);
+  src2 = (await request(app).get(`/api/contests/${src.id}`)).body;
+  assert.equal(src2.status, 'active', 'reopened race is active again');
+  finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
+  assert.ok(!finished.includes(src.id), 'reopened race drops off Finished page');
+});

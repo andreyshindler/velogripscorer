@@ -393,6 +393,18 @@ router.post('/contests/:id/duplicate', requireAuth, (req, res) => {
   res.status(201).json(serializeContest(getContest(newId), req.user));
 });
 
+// Reopen a finished race back to active — undo an accidental "Post results"
+// so the start list drops off the public "Finished races" page again.
+router.post('/contests/:id/reopen', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  if (contest.kind !== 'race') return res.status(400).json({ error: 'only races can be reopened' });
+  db.prepare(`UPDATE contests SET status = 'active' WHERE id = ? AND status = 'finished'`).run(contest.id);
+  auditLog(req.user.id, 'contest.reopen', 'contest', contest.id);
+  res.json({ ok: true, status: 'active' });
+});
+
 // ---- Participation (req 3.2) ----
 
 router.post('/contests/:id/join', requireAuth, (req, res) => {
