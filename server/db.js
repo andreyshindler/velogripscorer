@@ -250,6 +250,7 @@ CREATE TABLE IF NOT EXISTS runners (
   chat_id    TEXT PRIMARY KEY,
   tg_user_id TEXT NOT NULL DEFAULT '',
   tg_name    TEXT NOT NULL DEFAULT '',
+  name       TEXT NOT NULL DEFAULT '',
   bib        TEXT NOT NULL DEFAULT '',
   league_id  INTEGER REFERENCES leagues(id) ON DELETE SET NULL,
   status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
@@ -292,6 +293,9 @@ for (const stmt of [
   // Timestamp of the one-time "race is a day away" Telegram reminder, so it
   // fires at most once per race. NULL = not sent yet.
   `ALTER TABLE contests ADD COLUMN reminder_sent_at TEXT`,
+  // Self-declared runner name (typed during onboarding), shown to the admin
+  // for confirmation. Distinct from tg_name (the Telegram profile name).
+  `ALTER TABLE runners ADD COLUMN name TEXT NOT NULL DEFAULT ''`,
 ]) {
   try {
     db.exec(stmt);

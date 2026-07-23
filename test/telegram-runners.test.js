@@ -91,7 +91,7 @@ test('setup: active league with a finished race (bibs 1,2 Aces; 3 Solo)', async 
   assert.equal(attach.status, 201);
 });
 
-test('runner onboarding: /start prompts for bib; sending a bib requests approval', async () => {
+test('runner onboarding: /start -> bib -> name -> approval request', async () => {
   send.reset();
   await text(999, '/start');
   assert.match(send.last(999).text, /החזה/, 'runner is asked for a bib in Hebrew');
@@ -101,15 +101,22 @@ test('runner onboarding: /start prompts for bib; sending a bib requests approval
   assert.match(send.last(999).text, /מספר חזה תקין/, 'non-numeric bib is rejected');
 
   send.reset();
-  await text(999, '1'); // valid bib
-  // runner row is pending with the bib
-  const row = db.prepare('SELECT * FROM runners WHERE chat_id = ?').get('999');
+  await text(999, '1'); // valid bib -> now asks for the name
+  assert.match(send.last(999).text, /השם המלא/, 'runner is asked for their name');
+  let row = db.prepare('SELECT * FROM runners WHERE chat_id = ?').get('999');
   assert.equal(row.status, 'pending');
   assert.equal(row.bib, '1');
-  // the runner is told it's pending, and the admin got an Approve/Reject prompt
+  assert.equal(row.name, '', 'name not captured yet');
+  assert.equal(send.last(ADMIN), undefined, 'admin not notified until the name is given');
+
+  send.reset();
+  await text(999, 'אבי כהן'); // the name -> now the admin is notified
+  row = db.prepare('SELECT * FROM runners WHERE chat_id = ?').get('999');
+  assert.equal(row.name, 'אבי כהן');
   assert.match(send.last(999).text, /לאישור/);
   const adminMsg = send.last(ADMIN);
   assert.ok(adminMsg, 'admin was notified');
+  assert.match(adminMsg.text, /אבי כהן/, 'admin sees the declared name');
   const buttons = JSON.stringify(adminMsg.extra.reply_markup);
   assert.match(buttons, /rappr:999/);
   assert.match(buttons, /rrej:999/);
@@ -168,8 +175,9 @@ test('approval is idempotent; reject path tells the runner and blocks the menu',
   await tap(ADMIN, `rappr:999:${league.id}`);
   assert.match(send.last(ADMIN).text, /Already approved/);
 
-  // a second runner gets rejected
+  // a second runner completes onboarding then gets rejected
   await text(888, '2');
+  await text(888, 'בוב'); // name step
   assert.equal(db.prepare('SELECT status FROM runners WHERE chat_id = ?').get('888').status, 'pending');
   send.reset();
   await tap(ADMIN, 'rrej:888');
@@ -203,8 +211,11 @@ test('cross-bot: bib on the runner bot pings admins on the operator bot; approve
   const rHandle = (userId, t) => runnerCore.handleUpdate({ update_id: ++uid, message: { from: { id: userId, first_name: `U${userId}` }, chat: { id: userId }, text: t } });
   const oTap = (userId, data) => operatorCore.handleUpdate({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: userId }, message: { chat: { id: userId } }, data } });
 
-  // Runner 777 (bib 1) submits on the runner bot.
+  // Runner 777 (bib 1, then name) submits on the runner bot.
   await rHandle(777, '1');
+  assert.match(rnSend.last(777).text, /השם המלא/, 'runner bot asks for the name');
+  assert.equal(opSend.calls.length, 0, 'admin not pinged before the name');
+  await rHandle(777, 'דן');
   // The runner is answered on the RUNNER bot...
   assert.match(rnSend.last(777).text, /לאישור/);
   // ...and the Approve/Reject prompt lands on the OPERATOR bot, to admin 42.

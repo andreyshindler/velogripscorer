@@ -70,8 +70,9 @@ that has talked to the bot (the allowlisted organizers), so nobody forgets to
 set up timing. Set `PUBLIC_BASE_URL` to include a results link in the message.
 
 **Runner self-service (approval-gated).** Anyone can DM the bot: it asks for
-their **bib number**, records the request, and pings the allowlisted admins with
-Approve / Reject buttons. Once an admin approves (and the bib is in an active
+their **bib number** and **name**, records the request, and pings the allowlisted
+admins with Approve / Reject buttons (showing the declared name so they can
+confirm identity). Once an admin approves (and the bib is in an active
 league), the runner gets a Hebrew menu with three buttons — **my ranking** (in
 the league's most-recent finished race), **all races**, and **my team's**
 standing. Runners are stored in their own `runners` table (separate from the

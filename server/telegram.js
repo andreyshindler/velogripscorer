@@ -81,16 +81,16 @@ function getRunner(chatId) {
   return db.prepare('SELECT * FROM runners WHERE chat_id = ?').get(String(chatId)) || null;
 }
 function upsertRunner(chatId, fields) {
-  const cur = getRunner(chatId) || { tg_user_id: '', tg_name: '', bib: '', league_id: null, status: 'pending' };
+  const cur = getRunner(chatId) || { tg_user_id: '', tg_name: '', name: '', bib: '', league_id: null, status: 'pending' };
   const next = { ...cur, ...fields };
   db.prepare(
-    `INSERT INTO runners (chat_id, tg_user_id, tg_name, bib, league_id, status)
-     VALUES (@chat_id, @tg_user_id, @tg_name, @bib, @league_id, @status)
+    `INSERT INTO runners (chat_id, tg_user_id, tg_name, name, bib, league_id, status)
+     VALUES (@chat_id, @tg_user_id, @tg_name, @name, @bib, @league_id, @status)
      ON CONFLICT(chat_id) DO UPDATE SET tg_user_id=excluded.tg_user_id, tg_name=excluded.tg_name,
-       bib=excluded.bib, league_id=excluded.league_id, status=excluded.status`
+       name=excluded.name, bib=excluded.bib, league_id=excluded.league_id, status=excluded.status`
   ).run({
     chat_id: String(chatId), tg_user_id: next.tg_user_id || '', tg_name: next.tg_name || '',
-    bib: next.bib || '', league_id: next.league_id ?? null, status: next.status || 'pending',
+    name: next.name || '', bib: next.bib || '', league_id: next.league_id ?? null, status: next.status || 'pending',
   });
   return getRunner(chatId);
 }
@@ -164,7 +164,9 @@ function runnerKeyboard() {
 const R_MSG = {
   askBib: 'שלום! 👋\nכדי לצפות בתוצאות ובדירוג שלך, שלח/י את מספר החזה (Bib) שלך:',
   badBib: 'שלח/י מספר חזה תקין (ספרות בלבד).',
-  sent: (bib) => `✅ קיבלנו את מספר החזה שלך (#${esc(bib)}).\n⏳ הבקשה נשלחה למארגן לאישור — תקבל/י הודעה כשהיא תאושר.`,
+  askName: 'מה השם המלא שלך? (כדי שהמארגן יזהה אותך)',
+  badName: 'שלח/י את שמך המלא (טקסט).',
+  sent: (bib, name) => `✅ תודה, ${esc(name)} (מספר חזה #${esc(bib)}).\n⏳ הבקשה נשלחה למארגן לאישור — תקבל/י הודעה כשהיא תאושר.`,
   waiting: '⏳ בקשתך ממתינה לאישור המארגן.',
   declined: '❌ הבקשה שלך לא אושרה. אפשר לפנות למארגן.',
   approved: '🎉 אושרת! בחר/י פעולה מהתפריט שבתחתית המסך:',
@@ -696,13 +698,14 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
 
   // ---- runner self-service flow (non-allowlisted users) ----
 
-  async function notifyAdminsOfRunner(runnerChatId, name, bib, cands) {
+  async function notifyAdminsOfRunner(runnerChatId, name, tgName, bib, cands) {
     const admins = adminChatIds();
     if (!admins.length) return;
     const leagueLine = cands.length === 0 ? 'League: — (bib not in any active league)'
       : cands.length === 1 ? `League: ${esc(cands[0].name)}`
         : `Leagues: ${cands.map((c) => esc(c.name)).join(', ')}`;
-    const text = ['🏃 <b>Runner access request</b>', `Name: ${esc(name)}`, `Bib: <b>${esc(bib)}</b>`, leagueLine].join('\n');
+    const text = ['🏃 <b>Runner access request</b>', `Name: <b>${esc(name)}</b>`,
+      `Telegram: ${esc(tgName)}`, `Bib: <b>${esc(bib)}</b>`, leagueLine].join('\n');
     let rows;
     if (cands.length <= 1) {
       rows = [[btn('✅ Approve', `rappr:${runnerChatId}:${cands[0] ? cands[0].id : ''}`), btn('❌ Reject', `rrej:${runnerChatId}`)]];
@@ -724,7 +727,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (!lid) { const cands = activeLeagueIdsForBib(runner.bib); lid = cands.length ? cands[0].id : null; }
     setRunnerDecision(runnerChatId, 'approved', lid, adminFrom.id);
     auditLog(null, 'runner.approve', 'runner', null, `chat ${runner.chat_id} bib ${runner.bib} league ${lid || '-'} by tg ${adminFrom.id}`);
-    await send.message(adminChatId, `✅ Approved ${esc(runner.tg_name)} (bib ${esc(runner.bib)}).`);
+    await send.message(adminChatId, `✅ Approved ${esc(runner.name || runner.tg_name)} (bib ${esc(runner.bib)}).`);
     try { await runnerBotSend().message(runner.chat_id, R_MSG.approved, { reply_markup: runnerKeyboard() }); } catch { /* ignore */ }
     return undefined;
   }
@@ -735,7 +738,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (runner.status !== 'pending') return send.message(adminChatId, `Already ${runner.status}.`);
     setRunnerDecision(runnerChatId, 'rejected', runner.league_id || null, adminFrom.id);
     auditLog(null, 'runner.reject', 'runner', null, `chat ${runner.chat_id} bib ${runner.bib} by tg ${adminFrom.id}`);
-    await send.message(adminChatId, `❌ Rejected ${esc(runner.tg_name)}.`);
+    await send.message(adminChatId, `❌ Rejected ${esc(runner.name || runner.tg_name)}.`);
     try { await runnerBotSend().message(runner.chat_id, R_MSG.declined); } catch { /* ignore */ }
     return undefined;
   }
@@ -811,24 +814,36 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     }
     if (runner && runner.status === 'rejected') return send.message(chatId, R_MSG.declined);
 
-    // Awaiting the bib (brand new, or pending with no bib yet).
+    // Onboarding step 1 — the bib (brand new, or pending with no bib yet).
     if (!runner || runner.bib === '') {
       if (!runner) runner = upsertRunner(chatId, { tg_user_id: String(from.id), tg_name: displayName(from), status: 'pending', bib: '' });
       if (cmd === '/start' || cmd === '/help') return send.message(chatId, R_MSG.askBib);
       const bib = text.trim();
       if (!/^\d{1,10}$/.test(bib)) return send.message(chatId, R_MSG.badBib);
-      const cands = activeLeagueIdsForBib(bib);
       upsertRunner(chatId, {
         tg_user_id: String(from.id), tg_name: displayName(from), bib,
-        league_id: cands.length === 1 ? cands[0].id : null, status: 'pending',
+        league_id: cands0(bib), status: 'pending',
       });
-      await notifyAdminsOfRunner(chatId, displayName(from), bib, cands);
-      return send.message(chatId, R_MSG.sent(bib));
+      return send.message(chatId, R_MSG.askName); // step 2: the name
     }
 
-    // Pending with a bib -> waiting on the admin.
+    // Onboarding step 2 — the self-declared name; then notify the admin.
+    if (runner.name === '') {
+      if (cmd === '/start' || cmd === '/help') return send.message(chatId, R_MSG.askName);
+      const name = text.trim().slice(0, 80);
+      if (!name) return send.message(chatId, R_MSG.badName);
+      upsertRunner(chatId, { name });
+      const cands = activeLeagueIdsForBib(runner.bib);
+      await notifyAdminsOfRunner(chatId, name, displayName(from), runner.bib, cands);
+      return send.message(chatId, R_MSG.sent(runner.bib, name));
+    }
+
+    // Bib + name captured -> waiting on the admin.
     return send.message(chatId, R_MSG.waiting);
   }
+
+  // Provisional league for a bib at bib-entry time (single active league or none).
+  function cands0(bib) { const c = activeLeagueIdsForBib(bib); return c.length === 1 ? c[0].id : null; }
 
   async function handleUpdate(update) {
     const msg = update.message || update.edited_message;
