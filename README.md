@@ -79,6 +79,17 @@ operator sessions), so opening the bot to runners never exposes admin actions or
 sends them operator-only messages. With an empty allowlist the bot stays fully
 silent (no operators means nobody can approve).
 
+**Optional second (runner) bot.** Set `TELEGRAM_RUNNER_BOT_TOKEN` to a *different*
+@BotFather bot and the server runs a second poller that serves **only** the
+runner flow to everyone who DMs it — approvals still happen on the operator bot.
+This lets one person test the whole flow from a single account (DM the runner
+bot as a runner; approve on the operator bot), and doubles as a public
+runner-facing bot separate from the private operator bot. With no runner token
+set, the single operator bot serves both roles exactly as before. To try it on
+staging, edit `~/projects/velogripscorer-staging/.env` to set `TELEGRAM_BOT_TOKEN`
+(operator), `TELEGRAM_ALLOWED_USER_IDS` (your id), and `TELEGRAM_RUNNER_BOT_TOKEN`
+(runner), then `docker compose -p velogrip-staging up -d --build app`.
+
 ## Continuous integration
 
 Two path-filtered GitHub Actions workflows so each change only runs what it

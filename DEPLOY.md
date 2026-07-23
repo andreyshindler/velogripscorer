@@ -123,6 +123,15 @@ the commands. It needs only outbound access to `api.telegram.org` (long
 polling), so it works behind the reverse proxy and the `BASE_PATH` prefix with
 no extra ports or webhook URL.
 
+**Runners + an optional second bot.** Anyone who DMs the operator bot can request
+runner access by sending their bib; you approve from the operator bot. To let one
+person test both roles from a single account, set `TELEGRAM_RUNNER_BOT_TOKEN` to a
+*second* @BotFather bot — the server then runs a runner-only bot alongside the
+operator bot (they share the same database; approvals still land on the operator
+bot). Useful on staging: set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`
+(your id) and `TELEGRAM_RUNNER_BOT_TOKEN` in the staging `.env`, then
+`docker compose -p velogrip-staging up -d --build app`.
+
 ## Auto-deploy on merge to `main` (self-hosted runner)
 
 `.github/workflows/deploy.yml` redeploys the VPS on every push to `main`. It runs

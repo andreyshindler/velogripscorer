@@ -10,6 +10,11 @@ services:
       # Optional Telegram start-list bot (leave empty to keep it off).
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:-}
+      # Optional second bot that serves ONLY the runner self-service flow
+      # (regular users DM it; approvals still happen on the operator bot above).
+      TELEGRAM_RUNNER_BOT_TOKEN: ${TELEGRAM_RUNNER_BOT_TOKEN:-}
+      # Optional public site URL; used for the results link in bot messages.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
     volumes:
       - vgs_data:/data
     # Published on localhost only: your reverse proxy (nginx/Caddy/Apache)

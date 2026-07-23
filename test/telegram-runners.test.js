@@ -180,3 +180,49 @@ test('approval is idempotent; reject path tells the runner and blocks the menu',
   await text(888, '🏆 הקבוצה שלי');
   assert.match(send.last(888).text, /לא אושרה/, 'a rejected runner cannot use the menu');
 });
+
+// ---- second (runner) bot: role routing + cross-bot delivery ----
+
+test('a runner-role bot treats EVERY sender as a runner (even an operator id)', async () => {
+  const opSend = makeSend();
+  const rnSend = makeSend();
+  const runnerCore = createBotCore({ api, send: rnSend, role: 'runner', crossSend: { operator: opSend, runner: rnSend } });
+  // The allowlisted operator (42) messaging the runner bot gets the bib prompt,
+  // not the admin flow.
+  await runnerCore.handleUpdate({ update_id: 1, message: { from: { id: 42, first_name: 'Op' }, chat: { id: 42 }, text: '/start' } });
+  assert.match(rnSend.last(42).text, /החזה/);
+  assert.equal(opSend.calls.length, 0, 'operator bot said nothing');
+});
+
+test('cross-bot: bib on the runner bot pings admins on the operator bot; approve welcomes on the runner bot', async () => {
+  const opSend = makeSend();
+  const rnSend = makeSend();
+  const cross = { operator: opSend, runner: rnSend };
+  const operatorCore = createBotCore({ api, send: opSend, role: 'operator', crossSend: cross });
+  const runnerCore = createBotCore({ api, send: rnSend, role: 'runner', crossSend: cross });
+  const rHandle = (userId, t) => runnerCore.handleUpdate({ update_id: ++uid, message: { from: { id: userId, first_name: `U${userId}` }, chat: { id: userId }, text: t } });
+  const oTap = (userId, data) => operatorCore.handleUpdate({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: userId }, message: { chat: { id: userId } }, data } });
+
+  // Runner 777 (bib 1) submits on the runner bot.
+  await rHandle(777, '1');
+  // The runner is answered on the RUNNER bot...
+  assert.match(rnSend.last(777).text, /לאישור/);
+  // ...and the Approve/Reject prompt lands on the OPERATOR bot, to admin 42.
+  const adminPrompt = opSend.last(42);
+  assert.ok(adminPrompt, 'admin prompted on the operator bot');
+  assert.match(JSON.stringify(adminPrompt.extra.reply_markup), /rappr:777/);
+
+  // Admin approves on the operator bot.
+  opSend.reset(); rnSend.reset();
+  await oTap(42, `rappr:777:${league.id}`);
+  assert.match(opSend.last(42).text, /Approved/, 'admin ack on the operator bot');
+  // The welcome + menu reach the runner on the RUNNER bot.
+  const welcome = rnSend.last(777);
+  assert.match(welcome.text, /אושרת/);
+  assert.ok(welcome.extra.reply_markup.keyboard, 'runner keyboard delivered via the runner bot');
+
+  // Approved runner uses the menu on the runner bot.
+  rnSend.reset();
+  await rHandle(777, '🏁 הדירוג שלי');
+  assert.match(rnSend.last(777).text, /מקום כללי/);
+});

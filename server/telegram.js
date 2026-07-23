@@ -274,7 +274,19 @@ const HELP = [
 
 // ---------- core (IO injected) ----------
 
-function createBotCore({ api, send }) {
+// When both an operator bot and a runner bot run in one process, cross-bot
+// messages must land on the right one: the runner's Approve/Reject prompt goes
+// to admins on the OPERATOR bot; the approval welcome goes to the runner on the
+// RUNNER bot. startBot registers each bot's sender here. In a single-bot
+// deployment the missing side is null and callers fall back to their own send.
+const botSenders = { operator: null, runner: null };
+
+// `role` = 'operator' (the full admin bot, also serves runners) or 'runner'
+// (a second bot that serves ONLY the runner flow to everyone). `crossSend`
+// overrides the registry in tests.
+function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
+  const adminSend = () => (crossSend && crossSend.operator) || botSenders.operator || send;
+  const runnerBotSend = () => (crossSend && crossSend.runner) || botSenders.runner || send;
   const token = () => {
     const u = actingUser();
     return u ? signToken(u) : null;
@@ -698,8 +710,9 @@ function createBotCore({ api, send }) {
       rows = cands.map((c) => [btn(`✅ Approve — ${c.name}`.slice(0, 60), `rappr:${runnerChatId}:${c.id}`)]);
       rows.push([btn('❌ Reject', `rrej:${runnerChatId}`)]);
     }
+    const asend = adminSend(); // admins get the prompt on the operator bot
     for (const admin of admins) {
-      try { await send.message(admin, text, { reply_markup: kb(rows) }); } catch { /* admin hasn't opened the bot */ }
+      try { await asend.message(admin, text, { reply_markup: kb(rows) }); } catch { /* admin hasn't opened the bot */ }
     }
   }
 
@@ -712,7 +725,7 @@ function createBotCore({ api, send }) {
     setRunnerDecision(runnerChatId, 'approved', lid, adminFrom.id);
     auditLog(null, 'runner.approve', 'runner', null, `chat ${runner.chat_id} bib ${runner.bib} league ${lid || '-'} by tg ${adminFrom.id}`);
     await send.message(adminChatId, `✅ Approved ${esc(runner.tg_name)} (bib ${esc(runner.bib)}).`);
-    try { await send.message(runner.chat_id, R_MSG.approved, { reply_markup: runnerKeyboard() }); } catch { /* ignore */ }
+    try { await runnerBotSend().message(runner.chat_id, R_MSG.approved, { reply_markup: runnerKeyboard() }); } catch { /* ignore */ }
     return undefined;
   }
 
@@ -723,7 +736,7 @@ function createBotCore({ api, send }) {
     setRunnerDecision(runnerChatId, 'rejected', runner.league_id || null, adminFrom.id);
     auditLog(null, 'runner.reject', 'runner', null, `chat ${runner.chat_id} bib ${runner.bib} by tg ${adminFrom.id}`);
     await send.message(adminChatId, `❌ Rejected ${esc(runner.tg_name)}.`);
-    try { await send.message(runner.chat_id, R_MSG.declined); } catch { /* ignore */ }
+    try { await runnerBotSend().message(runner.chat_id, R_MSG.declined); } catch { /* ignore */ }
     return undefined;
   }
 
@@ -829,8 +842,12 @@ function createBotCore({ api, send }) {
     if (allowedIds().size === 0) return;
     const chatId = chat.id;
     try {
-      if (isAllowed(from.id)) {
-        // Trusted operator: the existing admin flow.
+      // The runner bot serves ONLY the runner flow, to everyone — even an
+      // allowlisted operator messaging it is treated as a runner. It never
+      // handles admin actions or approval callbacks.
+      const asRunner = role === 'runner' || !isAllowed(from.id);
+      if (!asRunner) {
+        // Operator bot, trusted user: the existing admin flow.
         if (cq) return await handleCallback(chatId, cq);
         if (!msg.text) return;
         const t = msg.text.trim();
@@ -839,7 +856,7 @@ function createBotCore({ api, send }) {
         }
         return await handleText(chatId, t);
       }
-      // Everyone else: self-service runner flow (approval-gated).
+      // Runner self-service flow (approval-gated).
       if (cq) { await send.answerCallback(cq.id); return undefined; } // runners have no inline buttons
       if (!msg || !msg.text) return undefined;
       const t = msg.text.trim();
@@ -900,55 +917,74 @@ function localApi(apiBase) {
   };
 }
 
-let started = false;
-function startBot({ port, basePath } = {}) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken || started) return;
-  started = true;
-  if (allowedIds().size === 0) {
-    console.warn('Telegram bot: TELEGRAM_ALLOWED_USER_IDS is empty — the bot will ignore every message until it is set.');
-  }
-  const apiBase = `http://127.0.0.1:${port || process.env.PORT || 3000}${basePath || ''}/api`;
-  const send = tgSender(botToken);
-  const core = createBotCore({ api: localApi(apiBase), send });
+const OPERATOR_COMMANDS = [
+  { command: 'races', description: 'Pick a race to manage' },
+  { command: 'list', description: 'Show racers' },
+  { command: 'add', description: 'Add a racer' },
+  { command: 'edit', description: 'Edit a racer: /edit <bib>' },
+  { command: 'del', description: 'Delete a racer: /del <bib>' },
+  { command: 'csv', description: 'Download the results CSV' },
+  { command: 'league', description: 'Season league standings' },
+  { command: 'whoami', description: 'Show your Telegram id' },
+  { command: 'help', description: 'Show help' },
+];
+const RUNNER_COMMANDS = [
+  { command: 'start', description: 'Start / show my results menu' },
+  { command: 'help', description: 'How this works' },
+];
 
-  // Race-day reminders: check hourly (and shortly after boot) for races a day out.
-  const runReminders = () => sendRaceReminders({ send, now: new Date() })
-    .then((r) => { if (r.races) console.log(`Race-day reminders: ${r.races} race(s), ${r.messages} message(s).`); })
-    .catch((err) => console.error('race reminder sweep failed:', err.message));
-  setInterval(runReminders, 60 * 60 * 1000).unref();
-  setTimeout(runReminders, 10_000).unref();
-
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  (async function poll() {
-    await send.call('deleteWebhook', { drop_pending_updates: false }).catch(() => {});
-    await send.call('setMyCommands', {
-      commands: [
-        { command: 'races', description: 'Pick a race to manage' },
-        { command: 'list', description: 'Show racers' },
-        { command: 'add', description: 'Add a racer' },
-        { command: 'edit', description: 'Edit a racer: /edit <bib>' },
-        { command: 'del', description: 'Delete a racer: /del <bib>' },
-        { command: 'csv', description: 'Download the results CSV' },
-        { command: 'league', description: 'Season league standings' },
-        { command: 'whoami', description: 'Show your Telegram id' },
-        { command: 'help', description: 'Show help' },
-      ],
-    }).catch(() => {});
-    console.log('Telegram start-list bot started (long polling).');
-    let offset = 0;
-    for (;;) {
-      try {
-        const r = await send.call('getUpdates', { offset, timeout: 30 });
-        for (const u of (r && r.result) || []) {
-          offset = u.update_id + 1;
-          core.handleUpdate(u).catch((e) => console.error('telegram update error:', e));
-        }
-      } catch (err) {
-        await sleep(3000); // network hiccup; back off and retry
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function pollLoop(label, send, core, commands) {
+  await send.call('deleteWebhook', { drop_pending_updates: false }).catch(() => {});
+  await send.call('setMyCommands', { commands }).catch(() => {});
+  console.log(`Telegram ${label} bot started (long polling).`);
+  let offset = 0;
+  for (;;) {
+    try {
+      const r = await send.call('getUpdates', { offset, timeout: 30 });
+      for (const u of (r && r.result) || []) {
+        offset = u.update_id + 1;
+        core.handleUpdate(u).catch((e) => console.error(`telegram ${label} update error:`, e));
       }
+    } catch {
+      await sleep(3000); // network hiccup; back off and retry
     }
-  })();
+  }
+}
+
+const startedRoles = new Set();
+function startBot({ port, basePath } = {}) {
+  const apiBase = `http://127.0.0.1:${port || process.env.PORT || 3000}${basePath || ''}/api`;
+  const api = localApi(apiBase);
+  const operatorToken = process.env.TELEGRAM_BOT_TOKEN;
+  const runnerToken = process.env.TELEGRAM_RUNNER_BOT_TOKEN;
+
+  // Operator bot: full admin flow (and serves runners too when no runner bot).
+  if (operatorToken && !startedRoles.has('operator')) {
+    startedRoles.add('operator');
+    if (allowedIds().size === 0) {
+      console.warn('Telegram bot: TELEGRAM_ALLOWED_USER_IDS is empty — the bot will ignore every message until it is set.');
+    }
+    const send = tgSender(operatorToken);
+    botSenders.operator = send;
+    const core = createBotCore({ api, send, role: 'operator' });
+    // Race-day reminders run once, on the operator bot only.
+    const runReminders = () => sendRaceReminders({ send, now: new Date() })
+      .then((r) => { if (r.races) console.log(`Race-day reminders: ${r.races} race(s), ${r.messages} message(s).`); })
+      .catch((err) => console.error('race reminder sweep failed:', err.message));
+    setInterval(runReminders, 60 * 60 * 1000).unref();
+    setTimeout(runReminders, 10_000).unref();
+    pollLoop('operator', send, core, OPERATOR_COMMANDS);
+  }
+
+  // Runner bot: a second bot that serves ONLY the runner flow, to everyone.
+  if (runnerToken && runnerToken !== operatorToken && !startedRoles.has('runner')) {
+    startedRoles.add('runner');
+    const send = tgSender(runnerToken);
+    botSenders.runner = send;
+    const core = createBotCore({ api, send, role: 'runner' });
+    pollLoop('runner', send, core, RUNNER_COMMANDS);
+  }
 }
 
 // ---------- race-day reminders ----------
