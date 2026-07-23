@@ -179,6 +179,15 @@ const R_MSG = {
 };
 const STATUS_HE = { DNS: 'לא זינק (DNS)', DNF: 'לא סיים (DNF)', DSQ: 'נפסל (DSQ)', on_course: 'על המסלול', not_started: 'טרם זינק' };
 
+// Right-to-Left Mark. Runner messages often start a line with an emoji (a
+// neutral char), which makes Telegram left-align the whole Hebrew message.
+// Prefixing each line with a strong RTL character forces right alignment.
+const RLM = '‏';
+const rtl = (s) => String(s).split('\n').map((l) => RLM + l).join('\n');
+// Right-align every fixed Hebrew string once (functions like `sent` are wrapped
+// at their call site).
+for (const k of Object.keys(R_MSG)) if (typeof R_MSG[k] === 'string') R_MSG[k] = rtl(R_MSG[k]);
+
 // ---------- small helpers ----------
 
 function esc(s) {
@@ -771,7 +780,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       if (text.length + b.length + 2 > 3500) { text += '\n\n…'; break; }
       text += '\n\n' + b;
     }
-    return send.message(chatId, text, { reply_markup: runnerKeyboard() });
+    return send.message(chatId, rtl(text), { reply_markup: runnerKeyboard() });
   }
 
   // Full detail of the runner's most recent finished race.
@@ -807,7 +816,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     } else {
       lines.push(`סטטוס: ${esc(STATUS_HE[mine.status] || mine.status)}`);
     }
-    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+    return send.message(chatId, rtl(lines.join('\n')), { reply_markup: runnerKeyboard() });
   }
 
   async function runnerAllRaces(chatId, runner) {
@@ -826,7 +835,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       const line = `R${x.round} · ${esc(x.title)} · ${esc(fmtDate(x.start_at))} · ${esc(raceStatusLabel(x))}`;
       lines.push(x.contest_id === nextId ? `➡️ <b>${line}</b>` : line);
     }
-    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+    return send.message(chatId, rtl(lines.join('\n')), { reply_markup: runnerKeyboard() });
   }
 
   async function runnerMyTeam(chatId, runner) {
@@ -857,7 +866,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       if (text.length + line.length + 1 > 3500) { text += '\n…'; break; }
       text += (text ? '\n' : '') + line;
     }
-    return send.message(chatId, text, { reply_markup: runnerKeyboard() });
+    return send.message(chatId, rtl(text), { reply_markup: runnerKeyboard() });
   }
 
   async function handleRunner(chatId, from, text) {
@@ -896,7 +905,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       upsertRunner(chatId, { name });
       const cands = activeLeagueIdsForBib(runner.bib);
       await notifyAdminsOfRunner(chatId, name, displayName(from), runner.bib, cands);
-      return send.message(chatId, R_MSG.sent(runner.bib, name));
+      return send.message(chatId, rtl(R_MSG.sent(runner.bib, name)));
     }
 
     // Bib + name captured -> waiting on the admin.
