@@ -113,14 +113,6 @@ function runnerLeagueId(runner) {
   const cands = activeLeagueIdsForBib(runner.bib);
   return cands.length ? cands[0].id : null;
 }
-// The most recent FINISHED race of a league (the runner's "current race").
-function latestFinishedRace(leagueId) {
-  return db.prepare(
-    `SELECT c.* FROM league_races lr JOIN contests c ON c.id = lr.contest_id
-      WHERE lr.league_id = ? AND c.status = 'finished'
-      ORDER BY lr.round DESC, datetime(c.start_at) DESC LIMIT 1`
-  ).get(leagueId) || null;
-}
 function leagueRaceRows(leagueId) {
   return db.prepare(
     `SELECT lr.round, c.id AS contest_id, c.title, c.start_at, c.end_at, c.status
@@ -179,6 +171,7 @@ const R_MSG = {
   noTeamHint: 'ℹ️ הקבוצה שלך לא זוהתה לפי מספר החזה — מוצג דירוג כל הקבוצות.',
   loadFail: '⚠️ לא ניתן לטעון את הנתונים כרגע.',
 };
+const STATUS_HE = { DNS: 'לא זינק (DNS)', DNF: 'לא סיים (DNF)', DSQ: 'נפסל (DSQ)', on_course: 'על המסלול', not_started: 'טרם זינק' };
 
 // ---------- small helpers ----------
 
@@ -747,23 +740,32 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
   async function runnerMyRanking(chatId, runner) {
     const lid = runnerLeagueId(runner);
     if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
-    const contest = latestFinishedRace(lid);
-    if (!contest) return send.message(chatId, R_MSG.noResults, { reply_markup: runnerKeyboard() });
-    const results = computeRaceResults(contest);
-    const mine = results.find((x) => String(x.bib).trim() === String(runner.bib).trim());
-    if (!mine) return send.message(chatId, R_MSG.noRow(runner.bib), { reply_markup: runnerKeyboard() });
-    const lines = [`🏁 <b>${esc(contest.title)}</b>`, `🗓 ${esc(fmtWhen(contest.start_at))}`, '',
-      `<b>${esc(mine.participant || ('#' + runner.bib))}</b> — #${esc(mine.bib)}`];
-    if (mine.status === 'finished') {
-      lines.push(`🏅 מקום כללי: <b>${mine.rank}</b>`);
-      if (mine.category) lines.push(`📊 מקום בקטגוריה ${esc(mine.category)}: <b>${mine.category_rank}</b>`);
-      lines.push(`⏱ זמן: <b>${esc(mine.elapsed)}</b>`);
-      if (mine.behind) lines.push(`⛳ פער מהמוביל: ${esc(mine.behind)}`);
-    } else {
-      const st = { DNS: 'לא זינק (DNS)', DNF: 'לא סיים (DNF)', DSQ: 'נפסל (DSQ)', on_course: 'על המסלול', not_started: 'טרם זינק' }[mine.status] || mine.status;
-      lines.push(`סטטוס: ${esc(st)}`);
+    const finished = leagueRaceRows(lid).filter((r) => r.status === 'finished');
+    if (!finished.length) return send.message(chatId, R_MSG.noResults, { reply_markup: runnerKeyboard() });
+    const bib = String(runner.bib).trim();
+    const blocks = [];
+    for (const r of finished) {
+      const contest = getContest(r.contest_id);
+      if (!contest) continue;
+      const mine = computeRaceResults(contest).find((x) => String(x.bib).trim() === bib);
+      if (!mine) continue; // the runner wasn't in this race's start list
+      const head = `<b>R${r.round} · ${esc(contest.title)}</b> <i>(${esc(fmtDate(contest.start_at))})</i>`;
+      if (mine.status === 'finished') {
+        const cat = mine.category ? ` · ${esc(mine.category)} #${mine.category_rank}` : '';
+        blocks.push(`${head}\n🏅 מקום ${mine.rank}${cat} · ⏱ ${esc(mine.elapsed)}`);
+      } else {
+        blocks.push(`${head}\n${esc(STATUS_HE[mine.status] || mine.status)}`);
+      }
     }
-    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+    if (!blocks.length) return send.message(chatId, R_MSG.noRow(runner.bib), { reply_markup: runnerKeyboard() });
+    const header = `🏁 <b>הדירוג שלי — ${esc(leagueName(lid))}</b> · ${blocks.length} מרוצים`;
+    // Stay under Telegram's 4096-char cap by trimming whole race blocks.
+    let text = header;
+    for (const b of blocks) {
+      if (text.length + b.length + 2 > 3500) { text += '\n\n…'; break; }
+      text += '\n\n' + b;
+    }
+    return send.message(chatId, text, { reply_markup: runnerKeyboard() });
   }
 
   async function runnerAllRaces(chatId, runner) {

@@ -142,13 +142,14 @@ test('admin approves -> runner is welcomed with the menu', async () => {
   assert.ok(welcome.extra.reply_markup.keyboard, 'runner gets the reply keyboard');
 });
 
-test('approved runner: my ranking shows their finished-race result', async () => {
+test('approved runner: my ranking lists every finished race they completed', async () => {
   send.reset();
   await text(999, '🏁 הדירוג שלי');
   const t = send.last(999).text;
-  assert.match(t, /Round 1/);
-  assert.match(t, /מקום כללי/);
-  assert.match(t, /Alice/);
+  assert.match(t, /הדירוג שלי/);
+  assert.match(t, /R1 · Round 1/);
+  assert.match(t, /מקום 1/);      // Alice (bib 1) won Round 1
+  assert.match(t, /1 מרוצים/);    // one finished race so far
 });
 
 test('approved runner: all races lists the league races', async () => {
@@ -238,5 +239,5 @@ test('cross-bot: bib on the runner bot pings admins on the operator bot; approve
   // Approved runner uses the menu on the runner bot.
   rnSend.reset();
   await rHandle(777, '🏁 הדירוג שלי');
-  assert.match(rnSend.last(777).text, /מקום כללי/);
+  assert.match(rnSend.last(777).text, /R1 · Round 1/);
 });
