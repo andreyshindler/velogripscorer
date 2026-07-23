@@ -184,7 +184,7 @@ test('approved runner: last race shows the detailed most-recent result', async (
 
 test('approved runner: my team shows the full teams ranking with their team bold', async () => {
   send.reset();
-  await text(999, '🏆 הקבוצה שלי');
+  await text(999, '🏆 דירוג קבוצתי');
   const t = send.last(999).text;
   assert.match(t, /דירוג קבוצות/, 'teams ranking header');
   assert.match(t, /Aces/);
@@ -210,7 +210,7 @@ test('approval is idempotent; reject path tells the runner and blocks the menu',
   assert.match(send.last(888).text, /לא אושרה/);
 
   send.reset();
-  await text(888, '🏆 הקבוצה שלי');
+  await text(888, '🏆 דירוג קבוצתי');
   assert.match(send.last(888).text, /לא אושרה/, 'a rejected runner cannot use the menu');
 });
 

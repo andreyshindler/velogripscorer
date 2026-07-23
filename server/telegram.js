@@ -148,13 +148,13 @@ function raceStatusLabel(r) {
 // Runner-facing UI (Hebrew).
 const RUNNER_LABELS = {
   '🏁 הדירוג שלי': 'ranking', '🎽 המרוץ האחרון': 'last',
-  '📋 כל המרוצים': 'races', '🏆 הקבוצה שלי': 'team',
+  '📋 כל המרוצים': 'races', '🏆 דירוג קבוצתי': 'team',
 };
 function runnerKeyboard() {
   return {
     keyboard: [
       [{ text: '🏁 הדירוג שלי' }, { text: '🎽 המרוץ האחרון' }],
-      [{ text: '📋 כל המרוצים' }, { text: '🏆 הקבוצה שלי' }],
+      [{ text: '📋 כל המרוצים' }, { text: '🏆 דירוג קבוצתי' }],
     ],
     resize_keyboard: true, is_persistent: true,
   };
