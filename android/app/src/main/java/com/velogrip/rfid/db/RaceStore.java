@@ -151,13 +151,13 @@ public final class RaceStore extends SQLiteOpenHelper {
     public List<Passing> pendingUpload(int limit) {
         List<Passing> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT id, epc, rssi, antenna, read_at FROM passings WHERE uploaded = 0 ORDER BY id LIMIT ?",
+                "SELECT id, epc, rssi, antenna, read_at, manual FROM passings WHERE uploaded = 0 ORDER BY id LIMIT ?",
                 new String[]{String.valueOf(limit)});
         try {
             while (c.moveToNext()) {
                 out.add(new Passing(c.getLong(0), c.getString(1),
                         c.isNull(2) ? null : c.getDouble(2),
-                        c.isNull(3) ? null : c.getInt(3), c.getLong(4)));
+                        c.isNull(3) ? null : c.getInt(3), c.getLong(4), c.getInt(5) != 0));
             }
         } finally {
             c.close();

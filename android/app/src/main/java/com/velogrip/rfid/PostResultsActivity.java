@@ -88,6 +88,13 @@ public class PostResultsActivity extends BaseActivity {
                 Toast.makeText(this, R.string.no_browser, Toast.LENGTH_LONG).show();
             }
         });
+        findViewById(R.id.viewResults).setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(prefs.publicResultsUrl())));
+            } catch (Exception e) {
+                Toast.makeText(this, R.string.no_browser, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     @Override
@@ -212,10 +219,13 @@ public class PostResultsActivity extends BaseActivity {
                     .show();
             return;
         }
-        prefs.setLiveResults(true);
+        final android.view.View successCard = findViewById(R.id.successCard);
+        successCard.setVisibility(android.view.View.GONE);
+        postStatus.setVisibility(android.view.View.VISIBLE);
         postStatus.setText(R.string.posting);
         new Thread(() -> {
-            String result;
+            String error = null;
+            int uploaded = 0;
             try {
                 Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
                 // Re-send every gun time (force) so the web clock matches the app,
@@ -224,21 +234,36 @@ public class PostResultsActivity extends BaseActivity {
                     if (wave.name.isEmpty() || wave.startedAtMs == null) continue;
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) store.markWaveSynced(wave.name);
                 }
-                int sent = 0;
                 List<RaceStore.Passing> batch;
                 while (!(batch = store.pendingUpload(200)).isEmpty()) {
                     if (!uploader.upload(batch)) break;
                     store.markUploaded(batch.get(batch.size() - 1).id);
-                    sent += batch.size();
+                    uploaded += batch.size();
                 }
+                uploader.uploadStatuses(store.startListEntries()); // DNS/DNF/DSQ declared on the phone
                 if (photoDataUrl != null) uploader.uploadPhoto(photoDataUrl); // publish the race photo
-                uploader.finishRace(); // list it under the web's Finished races
-                result = getString(R.string.posted_ok, sent);
+                uploader.finishRace(prefs.recordLaps()); // list it under the web's Finished races
             } catch (Exception e) {
-                result = getString(R.string.post_failed, e.getMessage() == null ? "" : e.getMessage());
+                error = getString(R.string.post_failed, e.getMessage() == null ? "" : e.getMessage());
             }
-            final String msg = result;
-            ui.post(() -> postStatus.setText(msg));
+            final String failure = error;
+            final int sent = uploaded;
+            ui.post(() -> {
+                if (failure != null) {
+                    postStatus.setText(failure);
+                    return;
+                }
+                // Success: swap the plain status line for the green card. When
+                // live sync already pushed every crossing, say so instead of the
+                // confusing "0 crossings uploaded".
+                postStatus.setVisibility(android.view.View.GONE);
+                String liveAt = getString(R.string.post_success_live,
+                        prefs.publicResultsUrl().replaceFirst("^https?://", ""));
+                ((TextView) findViewById(R.id.successDetail)).setText(liveAt + "\n"
+                        + (sent > 0 ? getString(R.string.post_success_sent, sent)
+                                    : getString(R.string.post_success_synced)));
+                successCard.setVisibility(android.view.View.VISIBLE);
+            });
         }).start();
     }
 }

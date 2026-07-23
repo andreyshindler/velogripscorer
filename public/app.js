@@ -18,6 +18,37 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Drill-in arrow that points in the reading direction (left in Hebrew RTL).
+function arrow() { return LANG === 'he' ? '◂' : '▸'; }
+
+// Sport is stored as free text (often typed in English, e.g. "Running").
+// Translate the common values so cards read in the UI language; anything
+// unrecognised falls through unchanged.
+const SPORT_KEYS = {
+  running: 'sport_running', run: 'sport_running',
+  cycling: 'sport_cycling', bike: 'sport_cycling', cycle: 'sport_cycling', biking: 'sport_cycling',
+  walking: 'sport_walking', walk: 'sport_walking',
+  swimming: 'sport_swimming', swim: 'sport_swimming',
+  triathlon: 'sport_triathlon', duathlon: 'sport_duathlon',
+  trail: 'sport_trail', 'trail running': 'sport_trail',
+  mtb: 'sport_mtb', marathon: 'sport_marathon',
+};
+function sportLabel(sport) {
+  const raw = String(sport ?? '').trim();
+  if (!raw) return t('race_kind');
+  const key = SPORT_KEYS[raw.toLowerCase()];
+  return key ? t(key) : raw;
+}
+
+// ISO instant -> value for a <input type="datetime-local"> in the viewer's
+// local time (the input has no timezone). new Date(value) reads it back.
+function toLocalInput(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 async function api(path, { method = 'GET', body, form } = {}) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -50,7 +81,10 @@ async function downloadAuthed(path, filename) {
 function toast(msg, isError) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  // Success uses var(--text) as the pill (dark in light theme, light in dark
+  // theme), so the label must be its opposite to stay readable in both.
   el.style.background = isError ? 'var(--danger)' : 'var(--text)';
+  el.style.color = isError ? '#fff' : 'var(--bg)';
   el.classList.add('show');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
@@ -167,6 +201,8 @@ async function route() {
     if (page === 'finished') return viewFinishedRaces();
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
+    if (page === 'leagues') return viewLeagues();
+    if (page === 'league') return viewLeague(Number(arg), sub || 'teams');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
     if (page === 'admin') return viewAdmin(arg || 'reports');
@@ -211,7 +247,7 @@ async function loadRecentFinished() {
       ? `<h2>${t('recently_finished')}</h2>
          <div class="grid">${list.map((c) => `
            <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
-             <div><span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+             <div><span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
                <span class="pill finished">${t('status_finished')}</span></div>
              <h3>${esc(c.title)}</h3>
              <div class="meta">
@@ -226,19 +262,49 @@ async function loadRecentFinished() {
 // ---------- finished races (public results directory) ----------
 
 async function viewFinishedRaces() {
-  main.innerHTML = `<h1>🏁 ${t('nav_finished')}</h1><div class="grid" id="finished-list"></div>`;
+  main.innerHTML = `<h1>🏁 ${t('nav_finished')}</h1><div id="finished-list"></div>`;
   const { contests } = await api('/contests?status=finished');
   const races = (contests || []).filter((c) => c.kind === 'race');
-  document.getElementById('finished-list').innerHTML = races.length
-    ? races.map(finishedCard).join('')
-    : `<p class="muted">${t('no_finished_races')}</p>`;
+  const box = document.getElementById('finished-list');
+  if (!races.length) { box.innerHTML = `<p class="muted">${t('no_finished_races')}</p>`; return; }
+
+  // Group by league: a section per league (sorted by name), then a
+  // "Not in a league" section, each header naming the league.
+  const byLeague = new Map();
+  const noLeague = [];
+  for (const c of races) {
+    const league = String(c.league_names || '').trim();
+    if (!league) { noLeague.push(c); continue; }
+    if (!byLeague.has(league)) byLeague.set(league, []);
+    byLeague.get(league).push(c);
+  }
+  const section = (label, cards) => `<h2 class="league-section">${esc(label)}</h2>
+    <div class="grid">${cards.map(finishedCard).join('')}</div>`;
+  box.innerHTML =
+    [...byLeague.keys()].sort().map((name) => section(name, byLeague.get(name))).join('')
+    + (noLeague.length ? section(t('league_group_free'), noLeague) : '');
+
+  // The 🏆 league pill sits inside the card's link, so intercept its click and
+  // route to the league page instead of the race results.
+  const openLeague = (el) => { location.hash = `#/league/${el.dataset.league}`; };
+  box.querySelectorAll('.league-link').forEach((el) => {
+    el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openLeague(el); });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLeague(el); }
+    });
+  });
 }
 
 function finishedCard(c) {
+  const league = String(c.league_names || '').trim();
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div>
-        <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+        ${league ? (c.league_id
+          ? `<span class="pill tag league-link" data-league="${c.league_id}" role="link" tabindex="0"
+               title="${t('open_league')}" style="cursor:pointer;text-decoration:underline">🏆 ${esc(league)}</span>`
+          : `<span class="pill tag">🏆 ${esc(league)}</span>`) : ''}
+        <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
         <span class="pill finished">${t('status_finished')}</span>
       </div>
       <h3>${esc(c.title)}</h3>
@@ -419,7 +485,7 @@ async function viewStartLists() {
       <table class="board" style="margin:0">
         <thead><tr>
           <th>${t('contest_title')}</th><th>${t('racers_count')}</th><th>${t('start_date')}</th>
-          <th>${t('location')}</th><th>${t('sport')}</th><th></th>
+          <th>${t('status')}</th><th>${t('location')}</th><th>${t('sport')}</th><th>${t('nav_leagues')}</th><th></th>
         </tr></thead>
         <tbody id="lists-body"></tbody>
       </table>
@@ -473,23 +539,86 @@ async function viewStartLists() {
   await loadStartLists();
 }
 
-async function loadStartLists() {
+async function loadStartLists(highlightId) {
   const { races } = await api('/my/races');
   document.getElementById('races-found').textContent = t('races_found', { n: races.length });
+  // Admins can (re)assign a start list to a league right here.
+  const isAdmin = state.user && state.user.role === 'admin';
+  let leagues = [];
+  if (isAdmin) { try { leagues = (await api('/leagues?status=all')).leagues || []; } catch { /* no leagues */ } }
   const body = document.getElementById('lists-body');
-  body.innerHTML = races.map((r) => `
-    <tr>
+
+  const leagueCell = (r) => {
+    if (!isAdmin || !leagues.length) {
+      return r.league_names ? `<span class="pill tag">🏆 ${esc(r.league_names)}</span>` : '';
+    }
+    return `<select class="assign-league" data-id="${r.id}" data-current="${r.league_id || ''}" style="max-width:180px">
+      <option value="">— ${t('league_group_free')}</option>
+      ${leagues.map((l) => `<option value="${l.id}" ${r.league_id === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+    </select>`;
+  };
+
+  const statusCell = (r) => `
+    <select class="assign-status" data-id="${r.id}" data-current="${r.status}" style="max-width:130px">
+      <option value="active" ${r.status === 'finished' ? '' : 'selected'}>${t('status_active')}</option>
+      <option value="finished" ${r.status === 'finished' ? 'selected' : ''}>${t('status_finished')}</option>
+    </select>`;
+
+  const rowHtml = (r) => `
+    <tr data-row-id="${r.id}">
       <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
       <td>${r.racer_count}</td>
       <td>${new Date(r.start_at).toLocaleDateString(LANG === 'he' ? 'he-IL' : 'en-US',
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+      <td>${statusCell(r)}</td>
       <td>${esc(r.location || '')}</td>
-      <td>${esc(r.sport || '')}</td>
+      <td>${r.sport ? esc(sportLabel(r.sport)) : ''}</td>
+      <td>${leagueCell(r)}</td>
       <td style="white-space:nowrap">
         <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
         <button class="ghost list-del" data-id="${r.id}" data-title="${esc(r.title)}" aria-label="${t('delete')}">✕</button>
       </td>
-    </tr>`).join('') || `<tr><td colspan="6" class="muted">${t('no_contests')}</td></tr>`;
+    </tr>`;
+  const sep = (label) => `<tr class="dist-sep"><td colspan="8">🏆 ${esc(label)}</td></tr>`;
+
+  if (!races.length) {
+    body.innerHTML = `<tr><td colspan="8" class="muted">${t('no_contests')}</td></tr>`;
+  } else if (!races.some((r) => String(r.league_names || '').trim())) {
+    body.innerHTML = races.map(rowHtml).join(''); // none in a league -> flat list
+  } else {
+    // Group under a header per league, then a "Not in a league" section.
+    const byLeague = new Map(); const noLeague = [];
+    for (const r of races) {
+      const lg = String(r.league_names || '').trim();
+      if (!lg) noLeague.push(r);
+      else { if (!byLeague.has(lg)) byLeague.set(lg, []); byLeague.get(lg).push(r); }
+    }
+    body.innerHTML =
+      [...byLeague.keys()].sort().map((name) => sep(name) + byLeague.get(name).map(rowHtml).join('')).join('')
+      + (noLeague.length ? sep(t('league_group_free')) + noLeague.map(rowHtml).join('') : '');
+  }
+  body.querySelectorAll('.assign-league').forEach((sel) => {
+    sel.onchange = async () => {
+      const raceId = sel.dataset.id;
+      const current = sel.dataset.current; // league id it's in now ('' if none)
+      const next = sel.value;
+      try {
+        if (current && current !== next) await api(`/leagues/${current}/races/${raceId}`, { method: 'DELETE' });
+        if (next && next !== current) await api(`/leagues/${next}/races`, { method: 'POST', body: { contest_id: Number(raceId) } });
+        toast(t('league_saved'));
+        loadStartLists();
+      } catch (err) { toast(err.message, true); loadStartLists(); }
+    };
+  });
+  body.querySelectorAll('.assign-status').forEach((sel) => {
+    sel.onchange = async () => {
+      try {
+        await api(`/contests/${sel.dataset.id}/status`, { method: 'PATCH', body: { status: sel.value } });
+        toast(t('status_saved'));
+        loadStartLists();
+      } catch (err) { toast(err.message, true); loadStartLists(); }
+    };
+  });
   body.querySelectorAll('.list-del').forEach((btn) => {
     btn.onclick = async () => {
       if (!confirm(`${t('delete_race')}: ${btn.dataset.title}?`)) return;
@@ -507,10 +636,20 @@ async function loadStartLists() {
       try {
         const dup = await api(`/contests/${btn.dataset.id}/duplicate`, { method: 'POST', body: { title: title.trim() } });
         toast(t('duplicated_ok'));
-        location.hash = `#/contest/${dup.id}/manage`; // a fresh race with its own id + pairing token
+        await loadStartLists(dup.id); // stay here; point at the new list and blink it
       } catch (err) { toast(err.message, true); }
     };
   });
+
+  // Highlight a just-created list: scroll it into view and blink it twice.
+  if (highlightId != null) {
+    const row = body.querySelector(`tr[data-row-id="${highlightId}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('row-blink');
+      row.addEventListener('animationend', () => row.classList.remove('row-blink'), { once: true });
+    }
+  }
 }
 
 // ---------- contest page ----------
@@ -528,9 +667,12 @@ async function viewContest(id, tab) {
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
       <div>
-        <h1 style="margin:0 0 4px">${esc(c.title)}</h1>
+        <h1 id="race-title" style="margin:0 0 4px;display:inline-flex;align-items:center;gap:8px">
+          <span>${esc(c.title)}</span>
+          ${c.is_organizer ? `<button id="title-edit" class="ghost" title="${t('edit')}" aria-label="${t('edit')}" style="font-size:0.6em;padding:2px 6px">✏️</button>` : ''}
+        </h1>
         <div class="muted">
-          <span class="pill">🏁 ${esc(c.sport) || t('race_kind')}</span>
+          <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
           ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
           <span class="pill ${c.status === 'finished' ? 'finished' : 'live'}">
             ${c.status === 'finished' ? t('status_finished') : '● ' + t('hero_live')}
@@ -555,6 +697,34 @@ async function viewContest(id, tab) {
     await api(`/contests/${id}/follow`, { method: c.is_following ? 'DELETE' : 'POST' });
     viewContest(id, tab);
   };
+
+  // Inline rename: the ✏️ swaps the heading for an input (organizers only).
+  const titleEdit = document.getElementById('title-edit');
+  if (titleEdit) titleEdit.onclick = () => {
+    const h1 = document.getElementById('race-title');
+    h1.innerHTML = `<input id="title-input" value="${esc(c.title)}" maxlength="120"
+        style="font-size:0.85rem;min-width:220px;font-weight:700">
+      <button id="title-save" class="btn small secondary">${t('save')}</button>
+      <button id="title-cancel" class="ghost" aria-label="${t('cancel')}">✕</button>`;
+    const input = document.getElementById('title-input');
+    input.focus(); input.select();
+    const save = async () => {
+      const title = input.value.trim();
+      if (!title) { input.focus(); return; }
+      try {
+        await api(`/contests/${id}`, { method: 'PATCH', body: { title } });
+        toast(t('saved'));
+        viewContest(id, tab); // re-render with the new heading everywhere
+      } catch (err) { toast(err.message, true); }
+    };
+    document.getElementById('title-save').onclick = save;
+    document.getElementById('title-cancel').onclick = () => viewContest(id, tab);
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); save(); }
+      else if (e.key === 'Escape') viewContest(id, tab);
+    };
+  };
+
   const box = document.getElementById('tab-content');
   if (tab === 'results') renderRaceResults(box, c);
   else if (tab === 'startlist') renderStartlist(box, c);
@@ -688,7 +858,7 @@ async function viewPublicResults(id, tab) {
   main.innerHTML = `
     <div class="pubresults">
       <h1 style="text-align:center;margin-bottom:2px">${esc(c.title)}</h1>
-      <p style="text-align:center;margin:0 0 12px;color:var(--muted)">${esc(new Date(c.start_at).toLocaleString())} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
+      <p style="text-align:center;margin:0 0 12px;color:var(--muted)">${esc(fmtDate(c.start_at))} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
       ${raceInfoPanel(c, data.results)}
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
@@ -735,7 +905,7 @@ function raceInfoPanel(c, results) {
     ? `${esc(c.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(c.location)}" target="_blank" rel="noopener" style="color:var(--brand,#2f8a57);font-weight:600">${t('view_on_map')}</a>`
     : '–';
   const rows = [
-    [t('sport'), esc(c.sport) || t('running')],
+    [t('sport'), esc(sportLabel(c.sport))],
     [t('location'), loc],
     [t('start_type'), startType],
     [t('racers'), results.length],
@@ -831,6 +1001,9 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
   const finished = scope.filter((r) => r.status === 'finished').sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
   const onCourse = scope.filter((r) => r.status === 'on_course');
   const notStarted = scope.filter((r) => r.status === 'not_started');
+  const dns = scope.filter((r) => r.status === 'DNS');
+  const dnf = scope.filter((r) => r.status === 'DNF');
+  const dsq = scope.filter((r) => r.status === 'DSQ');
   const leader = finished[0] || null;
   const genderCrumb = gender === 'Male' ? t('male') + ' ' : gender === 'Female' ? t('female') + ' ' : '';
   const crumb = `${esc(dist || t('overall'))} ${genderCrumb}- ${cat ? esc(cat) : t('overall')}`;
@@ -845,11 +1018,12 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
       <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td></tr>`;
   }).join('') || `<tr><td colspan="5" class="muted">${t('no_results_yet')}</td></tr>`;
-  const onCourseHtml = onCourse.length
-    ? `<h3 style="margin:16px 0 6px">${t('status_on_course')} <span class="muted">(${onCourse.length})</span></h3>
-       <div style="display:flex;flex-wrap:wrap;gap:6px">${onCourse
-      .sort((a, b) => bibNumW(a.bib) - bibNumW(b.bib))
+  const pillList = (label, rows) => rows.length
+    ? `<h3 style="margin:16px 0 6px">${label} <span class="muted">(${rows.length})</span></h3>
+       <div style="display:flex;flex-wrap:wrap;gap:6px">${rows
+      .slice().sort((a, b) => bibNumW(a.bib) - bibNumW(b.bib))
       .map((r) => `<span class="pill">${esc(r.bib || '')} · ${esc(r.participant)}</span>`).join('')}</div>` : '';
+  const onCourseHtml = pillList(t('status_on_course'), onCourse) + pillList('DNS', dns);
   return `
     <p style="margin:12px 0 8px"><a href="#/results/${id}/winners" style="color:var(--brand,#2f8a57);font-weight:700">${t('race_winners')}</a>
       <span class="muted"> » ${crumb} — ${raceDone ? t('results_word') : t('live_race')}</span></p>
@@ -857,7 +1031,10 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       ${stat(scope.length, t('racers'), 'total')}
       ${stat(finished.length, t('status_finished_r'), 'finished')}
       ${stat(onCourse.length, t('status_on_course'), 'oncourse')}
-      ${stat(notStarted.length, t('status_not_started'), 'notstarted')}
+      ${stat(dns.length, 'DNS', 'dns')}
+      ${notStarted.length ? stat(notStarted.length, t('status_not_started'), 'notstarted') : ''}
+      ${dnf.length ? stat(dnf.length, 'DNF', 'dns') : ''}
+      ${dsq.length ? stat(dsq.length, 'DSQ', 'dns') : ''}
     </div>
     <div style="overflow-x:auto"><table class="board"><thead><tr>
       <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>
@@ -909,38 +1086,47 @@ function filteredResultsTable(results, id, dist, cat, gender) {
 function raceWinnersTables(id, results, raceDone) {
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
-  return `<p class="muted" style="margin:8px 0">▸ ${t('click_green_category')}</p>` + dists.map((d) => {
-    const rows = byDist.get(d);
-    const multiLap = rows.some((r) => (r.laps || 0) > 1);
-    const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
-    const seg = (view, catFilter, gender) => `#/results/${id}/${view}?dist=${encodeURIComponent(d)}`
+  // One shared table (a distance separator row per distance) so every column
+  // aligns across all distances/categories — the leader and time columns size
+  // to the longest name across the whole result set, not per distance.
+  const multiLap = results.some((r) => (r.laps || 0) > 1);
+  const colCount = multiLap ? 6 : 5;
+
+  const line = (d, label, scope, indent, catFilter, gender) => {
+    const seg = (view) => `#/results/${id}/${view}?dist=${encodeURIComponent(d)}`
       + `&cat=${encodeURIComponent(catFilter || '')}&gender=${encodeURIComponent(gender || '')}`;
-    const line = (label, scope, indent, catFilter, gender) => {
-      const leader = leaderOf(scope);
-      return `<tr>
-        <td style="padding-left:${indent}px"><a href="${seg('winners', catFilter, gender)}" class="cat-link">▸ ${esc(label)}</a></td>
-        <td>${leader ? esc(leader.participant) : '–'}</td>
-        <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
-        <td><strong>${scope.length}</strong></td>
-        <td><a href="${seg('live', catFilter, gender)}" class="live-link">▸ ${raceDone ? t('results_word') : t('live_race')}</a></td>
-        ${multiLap ? `<td><a href="#/results/${id}/laps">▸ ${t('lap_times')}</a></td>` : ''}
-      </tr>`;
-    };
-    return `
-      <table class="board winners mt">
-        <thead><tr>
-          <th>${esc(d || t('overall'))}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
-          <th>${t('total_racers')}</th><th>${raceDone ? t('results_word') : t('progress_view')}</th>
-          ${multiLap ? `<th>${t('lap_times')}</th>` : ''}
-        </tr></thead>
-        <tbody>
-          ${line(t('overall'), rows, 0, '', '')}
-          ${rows.some((r) => isFemaleW(r.gender)) ? line(t('female'), rows.filter((r) => isFemaleW(r.gender)), 20, '', 'Female') : ''}
-          ${rows.some((r) => isMaleW(r.gender)) ? line(t('male'), rows.filter((r) => isMaleW(r.gender)), 20, '', 'Male') : ''}
-          ${cats.map((cat) => line(cat, rows.filter((r) => r.category === cat), 20, cat, '')).join('')}
-        </tbody>
-      </table>`;
+    const leader = leaderOf(scope);
+    return `<tr>
+      <td style="padding-left:${indent}px"><a href="${seg('winners')}" class="cat-link">${arrow()} ${esc(label)}</a></td>
+      <td>${leader ? esc(leader.participant) : '–'}</td>
+      <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
+      <td><strong>${scope.length}</strong></td>
+      <td>${raceDone ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('results_word')}</a>`
+        : scope.some((r) => r.wave_started_at) ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('live_race')}</a>`
+        : `<span class="muted">${t('not_started_yet')}</span>`}</td>
+      ${multiLap ? `<td><a href="#/results/${id}/laps">${arrow()} ${t('lap_times')}</a></td>` : ''}
+    </tr>`;
+  };
+
+  const body = dists.map((d) => {
+    const rows = byDist.get(d);
+    const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+    return `<tr class="dist-sep"><td colspan="${colCount}">${esc(d || t('overall'))}</td></tr>
+      ${line(d, t('overall'), rows, 0, '', '')}
+      ${rows.some((r) => isFemaleW(r.gender)) ? line(d, t('female'), rows.filter((r) => isFemaleW(r.gender)), 20, '', 'Female') : ''}
+      ${rows.some((r) => isMaleW(r.gender)) ? line(d, t('male'), rows.filter((r) => isMaleW(r.gender)), 20, '', 'Male') : ''}
+      ${cats.map((cat) => line(d, cat, rows.filter((r) => r.category === cat), 20, cat, '')).join('')}`;
   }).join('');
+
+  return `<p class="muted" style="margin:8px 0">${arrow()} ${t('click_green_category')}</p>
+    <div style="overflow-x:auto"><table class="board winners mt">
+      <thead><tr>
+        <th>${t('category')}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
+        <th>${t('total_racers')}</th><th>${raceDone ? t('results_word') : t('progress_view')}</th>
+        ${multiLap ? `<th>${t('lap_times')}</th>` : ''}
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
 }
 
 function topFinishersTables(results, n) {
@@ -1062,13 +1248,34 @@ async function renderManage(box, c) {
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
-    <div class="card">
+    ${c.status === 'finished' ? `
+    <div class="card" style="border-inline-start:4px solid var(--accent)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div>
+          <strong>${t('status')}: <span class="pill finished">${t('status_finished')}</span></strong>
+          <div class="muted" style="font-size:.82rem;margin-top:4px">${t('reopen_help')}</div>
+        </div>
+        <button class="btn small secondary" id="reopen-race">↩ ${t('reopen_race')}</button>
+      </div>
+    </div>` : ''}
+    <div class="card${c.status === 'finished' ? ' mt' : ''}">
       <h3 style="margin-top:0">📱 ${t('app_pairing')}</h3>
       <p class="muted" style="margin:4px 0">${t('app_pairing_help')}</p>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <code style="font-size:0.8rem;overflow-wrap:anywhere">${esc(c.app_token || '')}</code>
         <button class="btn small secondary" id="copy-token">${t('copy')}</button>
       </div>
+    </div>
+
+    <div class="card mt">
+      <h3 style="margin-top:0">🗓 ${t('race_schedule')}</h3>
+      <form id="schedule-form" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <label style="margin:0">${t('start_date')}
+          <input name="start" type="datetime-local" value="${toLocalInput(c.start_at)}" required style="display:block;margin-top:4px"></label>
+        <label style="margin:0">${t('end_date')}
+          <input name="end" type="datetime-local" value="${toLocalInput(c.end_at)}" required style="display:block;margin-top:4px"></label>
+        <button class="btn small secondary">${t('save_settings')}</button>
+      </form>
     </div>
 
     <div class="card mt">
@@ -1094,14 +1301,15 @@ async function renderManage(box, c) {
       </form>
       <div id="tags-list" class="mt" style="max-height:420px;overflow:auto">
         ${tags.map((a, i) => `
-          <div class="comment" id="racer-row-${i}" style="display:flex;gap:8px;align-items:center">
-            <strong>#${esc(a.bib || '—')}</strong> ${esc(a.participant)}
-            ${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}
-            ${a.distance ? `<span class="pill">${esc(a.distance)}</span>` : ''}
-            ${a.team ? `<span class="muted" style="font-size:.8rem">${esc(a.team)}</span>` : ''}
-            ${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}
+          <div class="comment racer-grid" id="racer-row-${i}">
+            <strong>#${esc(a.bib || '—')}</strong>
+            <span>${esc(a.participant)}</span>
+            <span>${a.category ? `<span class="pill tag">${esc(a.category)}</span>` : ''}</span>
+            <span>${a.distance ? `<span class="pill">${esc(a.distance)}</span>` : ''}</span>
+            <span class="muted" style="font-size:.8rem">${esc(a.team || '')}</span>
+            <span>${a.wave_name ? `<span class="pill">${esc(a.wave_name)}</span>` : ''}</span>
             <code style="font-size:0.7rem;overflow-wrap:anywhere" class="muted">${esc((a.epcs || [a.epc]).join(' + '))}</code>
-            <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;margin-inline-start:auto;padding:2px 6px">
+            <select class="tag-status" data-idx="${i}" aria-label="${t('racer_status')}" style="width:auto;padding:2px 6px">
               ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${a.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
             </select>
             <button class="ghost tag-edit" data-idx="${i}" title="${t('edit')}" aria-label="${t('edit')}">✏️</button>
@@ -1118,6 +1326,8 @@ async function renderManage(box, c) {
           <input name="suppress" type="number" min="0" value="${wavesData.suppress_secs}" style="width:70px">
           <label style="margin:0;font-weight:400">${t('lap_gap')}</label>
           <input name="lapgap" type="number" min="0" value="${wavesData.min_lap_gap_secs}" style="width:70px">
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px">
+            <input name="recordlaps" type="checkbox" ${c.record_laps === 0 ? '' : 'checked'} style="width:auto">${t('record_laps_label')}</label>
           <button class="btn small secondary">${t('save_settings')}</button>
         </form>
       </div>
@@ -1150,6 +1360,39 @@ async function renderManage(box, c) {
   $('#copy-token').onclick = async () => {
     try { await navigator.clipboard.writeText(c.app_token || ''); toast(t('copied')); }
     catch { prompt(t('copy'), c.app_token || ''); }
+  };
+
+  const reopenBtn = $('#reopen-race');
+  if (reopenBtn) reopenBtn.onclick = async () => {
+    if (!confirm(t('reopen_confirm'))) return;
+    try {
+      await api(`/contests/${c.id}/reopen`, { method: 'POST' });
+      toast(t('reopened_ok'));
+      viewContest(c.id, 'manage'); // re-render with the now-active status
+    } catch (err) { toast(err.message, true); }
+  };
+
+  const schedForm = $('#schedule-form');
+  // Picking a start time defaults the end to start + 1.5h; the user can still
+  // adjust the end afterwards.
+  schedForm.start.addEventListener('change', () => {
+    if (!schedForm.start.value) return;
+    const s = new Date(schedForm.start.value);
+    if (isNaN(s.getTime())) return;
+    schedForm.end.value = toLocalInput(new Date(s.getTime() + 90 * 60 * 1000).toISOString());
+  });
+  schedForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const start = new Date(f.start.value), end = new Date(f.end.value);
+    if (isNaN(start) || isNaN(end)) { toast(t('invalid_dates'), true); return; }
+    if (end <= start) { toast(t('end_after_start'), true); return; }
+    try {
+      await api(`/contests/${c.id}`, { method: 'PATCH',
+        body: { start_at: start.toISOString(), end_at: end.toISOString() } });
+      toast(t('saved'));
+      viewContest(c.id, 'manage'); // re-render with the new times
+    } catch (err) { toast(err.message, true); }
   };
 
   // ---- CSV start-list import ----
@@ -1208,6 +1451,7 @@ async function renderManage(box, c) {
     btn.onclick = () => {
       const a = tags[Number(btn.dataset.idx)];
       const row = box.querySelector(`#racer-row-${btn.dataset.idx}`);
+      row.classList.remove('racer-grid'); // the edit form lays itself out
       row.innerHTML = racerEditForm(a, waves);
       const f = row.querySelector('.racer-edit');
       row.querySelector('.racer-cancel').onclick = () => viewContest(c.id, 'manage');
@@ -1267,6 +1511,7 @@ async function renderManage(box, c) {
     try {
       await api(`/contests/${c.id}/timing-settings`, { method: 'PATCH', body: {
         suppress_secs: Number(e.target.suppress.value), min_lap_gap_secs: Number(e.target.lapgap.value),
+        record_laps: e.target.recordlaps.checked,
       }});
       toast('✓');
     } catch (err) { toast(err.message, true); }
@@ -1368,13 +1613,131 @@ async function viewProfile(id) {
   };
 }
 
+// ---------- league standings ----------
+
+async function viewLeagues() {
+  const { leagues } = await api('/leagues');
+  main.innerHTML = `
+    <h1>${t('leagues_title')}</h1>
+    ${leagues.length ? `<div class="grid">${leagues.map((l) => `
+      <a class="card contest-card" href="#/league/${l.id}">
+        <h3>${esc(l.name)}</h3>
+        <p class="muted">${l.season ? esc(l.season) + ' · ' : ''}${t('league_rounds_count', { n: l.race_count })}</p>
+        <span class="pill ${l.status === 'finished' ? 'finished' : 'live'}">${l.status === 'finished' ? t('status_finished') : t('status_active')}</span>
+      </a>`).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
+}
+
+async function viewLeague(id, tab) {
+  const data = await api(`/leagues/${id}/standings`).catch(() => null);
+  if (!data) { main.innerHTML = `<div class="card">${t('league_not_found')}</div>`; return; }
+  const { league, races, individual, teams } = data;
+  const provisional = races.some((r) => r.status !== 'finished');
+
+  const tabs = [['teams', 'league_tab_teams'], ['individual', 'league_tab_individual'], ['races', 'league_tab_races']];
+  main.innerHTML = `
+    <div class="pubresults">
+      <h1 style="text-align:center;margin-bottom:2px">${esc(league.name)}</h1>
+      <p style="text-align:center;margin:0 0 12px;color:var(--muted)">
+        ${league.season ? esc(league.season) + ' — ' : ''}${t('league_rounds_count', { n: races.length })}
+        ${provisional ? ` · ${t('league_provisional')}` : ''}</p>
+      <div class="pubtabs">
+        ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/league/${id}/${k}">${t(key)}</a>`).join('')}
+      </div>
+      <div style="text-align:center;margin:8px 0">
+        <button class="btn small secondary" id="lg-csv-ind">⬇ ${t('export_individual_csv')}</button>
+        <button class="btn small secondary" id="lg-csv-team">⬇ ${t('export_team_csv')}</button>
+      </div>
+      <div id="lgbody"></div>
+    </div>`;
+  document.getElementById('lg-csv-ind').onclick = () =>
+    downloadAuthed(`/leagues/${id}/standings?format=csv&table=individual`, `league-${id}-individual.csv`);
+  document.getElementById('lg-csv-team').onclick = () =>
+    downloadAuthed(`/leagues/${id}/standings?format=csv&table=team`, `league-${id}-team.csv`);
+
+  const body = document.getElementById('lgbody');
+  if (tab === 'teams') body.innerHTML = leagueTeamsTable(teams, races);
+  else if (tab === 'races') body.innerHTML = leagueRacesTable(races);
+  else body.innerHTML = leagueIndividualTables(individual, races);
+}
+
+// Per-race columns shared by the individual and team standings tables. Cells
+// whose score is dropped (not among the best-N counted) render muted.
+function leagueRoundHeads(races) {
+  return races.map((r) => `<th title="${esc(r.title)}"><a href="#/results/${r.contest_id}" style="color:inherit">R${r.round}</a></th>`).join('');
+}
+function leaguePointCells(row, races) {
+  return races.map((r) => {
+    const pts = row.per_race[r.contest_id];
+    if (pts === undefined) return '<td class="muted">–</td>';
+    const counted = row.counted_ids.includes(r.contest_id);
+    return `<td style="font-variant-numeric:tabular-nums${counted ? '' : ';opacity:.45;text-decoration:line-through'}">${pts}</td>`;
+  }).join('');
+}
+
+function leagueIndividualTables(individual, races) {
+  if (!individual.length) return `<p class="muted">${t('league_no_scores')}</p>`;
+  let html = '';
+  for (const g of individual) {
+    const title = [g.distance, g.gender && t(g.gender === 'Female' ? 'female' : 'male'), g.category]
+      .filter(Boolean).join(' — ') || t('overall');
+    html += `<div style="overflow-x:auto"><table class="board winners mt"><thead>
+      <tr><th colspan="${4 + races.length + 1}">${esc(title)}</th></tr>
+      <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('team')}</th>
+        ${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
+      <tbody>${g.rows.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
+        <td><strong>${i + 1}</strong></td><td><strong>${esc(row.bib)}</strong></td>
+        <td>${esc(row.name || '')}</td><td>${esc(row.team || '')}</td>
+        ${leaguePointCells(row, races)}
+        <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  html += `<p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
+  return html;
+}
+
+function leagueTeamsTable(teams, races) {
+  if (!teams.length) return `<p class="muted">${t('league_no_scores')}</p>`;
+  return `<div style="overflow-x:auto"><table class="board winners mt"><thead>
+    <tr><th>${t('place')}</th><th>${t('team')}</th>${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
+    <tbody>${teams.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
+      <td><strong>${i + 1}</strong></td><td>${esc(row.team)}</td>
+      ${leaguePointCells(row, races)}
+      <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>
+    <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
+}
+
+// A league race's live status: finished, active (now within the event window),
+// scheduled (before it starts) or awaiting results (window passed, not posted).
+function leagueRaceStatus(r) {
+  if (r.status === 'finished') return { cls: 'finished', label: t('status_finished') };
+  const now = Date.now();
+  const start = new Date(r.start_at).getTime();
+  const end = r.end_at ? new Date(r.end_at).getTime() : start;
+  if (now >= start && now <= end) return { cls: 'live', label: t('league_race_active') };
+  if (now < start) return { cls: 'tag', label: t('league_race_scheduled') };
+  return { cls: 'awaiting', label: t('league_race_awaiting') };
+}
+
+function leagueRacesTable(races) {
+  if (!races.length) return `<p class="muted">${t('league_no_races_attached')}</p>`;
+  return `<div style="overflow-x:auto"><table class="board mt"><thead>
+    <tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('date_word')}</th><th>${t('status_word')}</th></tr></thead>
+    <tbody>${races.map((r) => {
+      const s = leagueRaceStatus(r);
+      return `<tr>
+      <td><strong>R${r.round}</strong></td>
+      <td><a href="#/results/${r.contest_id}">${esc(r.title)}</a></td>
+      <td>${fmtDate(r.start_at)}</td>
+      <td><span class="pill ${s.cls}">${s.label}</span></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
 // ---------- admin ----------
 
 async function viewAdmin(section) {
   if (!state.user || state.user.role !== 'admin') { main.innerHTML = `<div class="card">${t('need_login')}</div>`; return; }
   main.innerHTML = `
     <div class="tabs" role="tablist">
-      ${['reports', 'users', 'audit'].map((s) => `<button role="tab" aria-selected="${s === section}" data-s="${s}">${t('admin_' + (s === 'audit' ? 'audit' : s))}</button>`).join('')}
+      ${['reports', 'users', 'leagues', 'audit'].map((s) => `<button role="tab" aria-selected="${s === section}" data-s="${s}">${t('admin_' + s)}</button>`).join('')}
     </div>
     <div id="admin-box"></div>`;
   main.querySelectorAll('[data-s]').forEach((b) => (b.onclick = () => { location.hash = `#/admin/${b.dataset.s}`; }));
@@ -1413,6 +1776,8 @@ async function viewAdmin(section) {
         viewAdmin('users');
       };
     });
+  } else if (section === 'leagues') {
+    await renderAdminLeagues(box);
   } else {
     const { audit_log } = await api('/admin/audit-log');
     box.innerHTML = `<div class="card mt" style="overflow-x:auto"><table class="board">
@@ -1420,6 +1785,162 @@ async function viewAdmin(section) {
       <tbody>${audit_log.map((a) => `
         <tr><td>${a.id}</td><td>${esc(a.user_name || '—')}</td><td><code>${esc(a.action)}</code></td>
         <td>${esc(a.target_type)} ${a.target_id ?? ''}</td><td>${esc(a.details)}</td><td class="muted">${fmtDate(a.created_at)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+}
+
+// Admin > Leagues: create leagues, attach races as rounds, tune scoring rules.
+async function renderAdminLeagues(box) {
+  const [{ leagues }, { contests }] = await Promise.all([
+    api('/leagues?status=all'), // admin sees archived leagues too
+    api('/contests'),
+  ]);
+  const allRaces = (contests || []).filter((c) => c.kind === 'race');
+
+  box.innerHTML = `
+    <div class="card mt form-narrow">
+      <h3>${t('league_create')}</h3>
+      <form id="lg-new">
+        <label>${t('league_name')}<input id="lg-name" required></label>
+        <label>${t('league_season')}<input id="lg-season" placeholder="2026"></label>
+        <button class="btn">${t('league_create')}</button>
+      </form>
+    </div>
+    <div id="lg-list"></div>`;
+
+  document.getElementById('lg-new').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api('/leagues', { method: 'POST', body: {
+        name: document.getElementById('lg-name').value,
+        season: document.getElementById('lg-season').value,
+      }});
+      toast(t('league_saved'));
+      viewAdmin('leagues');
+    } catch (err) { toast(err.message, true); }
+  };
+
+  const list = document.getElementById('lg-list');
+  if (!leagues.length) { list.innerHTML = `<p class="muted mt">${t('league_no_leagues')}</p>`; return; }
+
+  // Fetch every league's races once, and collect the contest ids attached to
+  // ANY league so the attach dropdown only offers races not yet in a league.
+  const details = await Promise.all(leagues.map((row) => api(`/leagues/${row.id}`)));
+  const attachedAnywhere = new Set(details.flatMap((d) => d.races.map((r) => r.contest_id)));
+  // contest_id -> which league it's in (for the grouped attach picker).
+  const membership = new Map();
+  for (const d of details) for (const r of d.races) {
+    membership.set(r.contest_id, { leagueId: d.league.id, leagueName: d.league.name, round: r.round });
+  }
+
+  for (const { league, races } of details) {
+    const attachable = allRaces.filter((c) => !attachedAnywhere.has(c.id));
+    // Grouped <select>: free start lists (selectable) first, then a disabled
+    // group per OTHER league showing where each taken race already went.
+    const freeOpts = attachable.length
+      ? attachable.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join('')
+      : `<option value="" disabled>${t('league_no_attachable')}</option>`;
+    const takenByLeague = new Map();
+    for (const [cid, m] of membership) {
+      if (m.leagueId === league.id) continue; // its own races are in the rounds table above
+      const race = allRaces.find((c) => c.id === cid);
+      if (!race) continue;
+      if (!takenByLeague.has(m.leagueName)) takenByLeague.set(m.leagueName, []);
+      takenByLeague.get(m.leagueName).push(
+        `<option value="${cid}" disabled>${esc(race.title)} · R${m.round}</option>`);
+    }
+    const takenGroups = [...takenByLeague.entries()].map(([name, opts]) =>
+      `<optgroup label="${esc(t('league_group_in') + ' ' + name)}">${opts.join('')}</optgroup>`).join('');
+    const contestOptions = `<optgroup label="${esc(t('league_group_free'))}">${freeOpts}</optgroup>${takenGroups}`;
+    const s = league.settings;
+    const card = document.createElement('div');
+    card.className = 'card mt';
+    card.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <h3 style="margin:0"><a href="#/league/${league.id}">${esc(league.name)}</a></h3>
+        <span class="muted">${esc(league.season || '')}</span>
+        <select data-f="status">
+          ${['active', 'finished', 'archived'].map((st) => `<option value="${st}" ${league.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+        </select>
+        <button class="btn small danger" data-act="delete" style="margin-inline-start:auto">${t('delete')}</button>
+      </div>
+
+      <table class="board mt"><thead><tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('status_word')}</th><th></th></tr></thead>
+      <tbody>${races.map((r) => `<tr>
+        <td><input type="number" min="1" value="${r.round}" data-round="${r.contest_id}" style="width:60px"></td>
+        <td>${esc(r.title)}${r.visibility !== 'public' ? ` <span class="pill tag">${t('visibility_private')}</span>` : ''}</td>
+        <td>${r.status}</td>
+        <td><button class="btn small secondary" data-detach="${r.contest_id}">${t('league_detach')}</button></td></tr>`).join('')
+        || `<tr><td colspan="4" class="muted">${t('league_no_races_attached')}</td></tr>`}</tbody></table>
+
+      <form data-form="attach" class="mt" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select data-f="contest">${contestOptions}</select>
+        <button class="btn small" ${attachable.length ? '' : 'disabled'}>${t('league_attach')}</button>
+        <span class="muted" style="font-size:12px">${t('league_attach_hint')}</span>
+      </form>
+
+      <details class="mt"><summary>${t('league_settings')}</summary>
+        <form data-form="settings" class="mt" style="display:grid;gap:6px;max-width:460px">
+          <label>${t('league_ind_points')}<input data-f="individual_points" value="${s.individual_points.join(', ')}"></label>
+          <label>${t('league_ind_other_points')}<input data-f="individual_other_points" type="number" min="0" value="${s.individual_other_points}"></label>
+          <label>${t('league_ind_best_n')}<input data-f="individual_best_n" type="number" min="1" value="${s.individual_best_n}"></label>
+          <label>${t('league_team_points')}<input data-f="team_points" value="${s.team_points.join(', ')}"></label>
+          <label>${t('league_team_other_points')}<input data-f="team_other_points" type="number" min="0" value="${s.team_other_points}"></label>
+          <label>${t('league_team_top_runners')}<input data-f="team_top_runners" type="number" min="1" value="${s.team_top_runners}"></label>
+          <label>${t('league_team_best_n')}<input data-f="team_best_n" type="number" min="1" value="${s.team_best_n}"></label>
+          <button class="btn small">${t('save')}</button>
+        </form>
+      </details>`;
+
+    card.querySelector('[data-f="status"]').onchange = async (e) => {
+      try { await api(`/leagues/${league.id}`, { method: 'PATCH', body: { status: e.target.value } }); toast(t('league_saved')); }
+      catch (err) { toast(err.message, true); }
+    };
+    card.querySelector('[data-act="delete"]').onclick = async () => {
+      if (!confirm(t('league_confirm_delete', { name: league.name }))) return;
+      try { await api(`/leagues/${league.id}`, { method: 'DELETE' }); toast(t('league_deleted')); viewAdmin('leagues'); }
+      catch (err) { toast(err.message, true); }
+    };
+    card.querySelectorAll('[data-detach]').forEach((btn) => {
+      btn.onclick = async () => {
+        try { await api(`/leagues/${league.id}/races/${btn.dataset.detach}`, { method: 'DELETE' }); viewAdmin('leagues'); }
+        catch (err) { toast(err.message, true); }
+      };
+    });
+    card.querySelectorAll('[data-round]').forEach((inp) => {
+      inp.onchange = async () => {
+        try {
+          await api(`/leagues/${league.id}/races/${inp.dataset.round}`, { method: 'PATCH', body: { round: Number(inp.value) } });
+          toast(t('league_saved'));
+        } catch (err) { toast(err.message, true); }
+      };
+    });
+    const attachForm = card.querySelector('[data-form="attach"]');
+    if (attachForm) attachForm.onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api(`/leagues/${league.id}/races`, { method: 'POST',
+          body: { contest_id: Number(attachForm.querySelector('[data-f="contest"]').value) } });
+        viewAdmin('leagues');
+      } catch (err) { toast(err.message, true); }
+    };
+    card.querySelector('[data-form="settings"]').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = (name) => e.target.querySelector(`[data-f="${name}"]`).value;
+      const nums = (v) => v.split(',').map((x) => Number(x.trim())).filter((x) => !Number.isNaN(x));
+      try {
+        await api(`/leagues/${league.id}`, { method: 'PATCH', body: { settings: {
+          individual_points: nums(f('individual_points')),
+          individual_other_points: Number(f('individual_other_points')),
+          individual_best_n: Number(f('individual_best_n')),
+          team_points: nums(f('team_points')),
+          team_other_points: Number(f('team_other_points')),
+          team_top_runners: Number(f('team_top_runners')),
+          team_best_n: Number(f('team_best_n')),
+        }}});
+        toast(t('league_saved'));
+      } catch (err) { toast(err.message, true); }
+    };
+    list.appendChild(card);
   }
 }
 

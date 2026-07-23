@@ -8,6 +8,7 @@ const { sseBroadcast } = require('../events');
 const multer = require('multer');
 const { parseXlsx } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
+const { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('../race-results');
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -88,7 +89,7 @@ router.post('/ingest/reads', (req, res) => {
 
   const accepted = [];
   const insert = db.prepare(
-    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, read_at) VALUES (?,?,?,?,?,?)'
+    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, manual, read_at) VALUES (?,?,?,?,?,?,?)'
   );
   const tx = db.transaction(() => {
     for (const r of reads) {
@@ -97,7 +98,7 @@ router.post('/ingest/reads', (req, res) => {
       const readAt = r.read_at && !Number.isNaN(Date.parse(r.read_at)) ? new Date(r.read_at).toISOString() : new Date().toISOString();
       const rssi = Number.isFinite(Number(r.rssi)) ? Number(r.rssi) : null;
       const antenna = r.antenna != null && Number.isInteger(Number(r.antenna)) ? Number(r.antenna) : null;
-      const info = insert.run(reader.id, reader.contest_id, epc, rssi, antenna, readAt);
+      const info = insert.run(reader.id, reader.contest_id, epc, rssi, antenna, r.manual ? 1 : 0, readAt);
       accepted.push({ id: info.lastInsertRowid, epc, rssi, read_at: readAt, ...(assignments.get(epc) || {}) });
     }
     db.prepare(`UPDATE readers SET last_seen = datetime('now') WHERE id = ?`).run(reader.id);
@@ -174,7 +175,36 @@ router.post('/ingest/finish', (req, res) => {
   const reader = readerFromToken(req);
   if (!reader) return res.status(401).json({ error: 'unknown reader token' });
   db.prepare(`UPDATE contests SET status = 'finished' WHERE id = ? AND status = 'active'`).run(reader.contest_id);
+  // The app is authoritative for its race setup: adopt its lap mode so a
+  // single-crossing race never shows phantom "lap times" from double reads.
+  if (typeof req.body?.record_laps === 'boolean') {
+    db.prepare('UPDATE contests SET record_laps = ? WHERE id = ?')
+      .run(req.body.record_laps ? 1 : 0, reader.contest_id);
+  }
   res.json({ ok: true });
+});
+
+// Racer statuses declared on the phone (DNS/DNF/DSQ, '' = racing). Without
+// this sync a racer who never crossed would show "On course" on the web
+// forever, because web results are recomputed from reads alone.
+router.post('/ingest/racer-statuses', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const statuses = Array.isArray(req.body?.statuses) ? req.body.statuses.slice(0, MAX_BATCH) : null;
+  if (!statuses) return res.status(400).json({ error: 'statuses array required' });
+
+  const update = db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND bib = ?');
+  let applied = 0;
+  db.transaction(() => {
+    for (const s of statuses) {
+      const bib = String(s?.bib || '').trim();
+      const status = String(s?.status || '').trim().toUpperCase();
+      if (!bib || !['', 'DNS', 'DNF', 'DSQ'].includes(status)) continue;
+      if (update.run(status, reader.contest_id, bib).changes > 0) applied++;
+    }
+  })();
+  if (applied) sseBroadcast(reader.contest_id, 'tag_reads', { statuses: applied });
+  res.json({ ok: true, applied });
 });
 
 // Race photo pushed from the app's Post Results screen (reader-token auth).
@@ -551,115 +581,22 @@ router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
   if (!contest) return;
   const suppress = Number(req.body?.suppress_secs);
   const lapGap = Number(req.body?.min_lap_gap_secs);
-  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ? WHERE id = ?').run(
+  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ?, record_laps = ? WHERE id = ?').run(
     Number.isFinite(suppress) && suppress >= 0 ? Math.round(suppress) : contest.suppress_secs,
     Number.isFinite(lapGap) && lapGap >= 0 ? Math.round(lapGap) : contest.min_lap_gap_secs,
+    typeof req.body?.record_laps === 'boolean' ? (req.body.record_laps ? 1 : 0) : contest.record_laps,
     contest.id
   );
   res.json({ ok: true });
 });
 
 // ---- Race results: elapsed = first read after wave start + suppression ----
-//
-// For every assigned tag whose wave has started:
-//   - reads inside the suppression window (start .. start+suppress_secs) are
-//     ignored (racers crossing the start-line antenna at the gun);
-//   - the first valid read is the finish (single-crossing race) and each
-//     subsequent read spaced >= min_lap_gap_secs starts a new lap;
-//   - no valid reads => still on course (or DNS).
+// The computation lives in server/race-results.js (shared with league standings).
 router.get('/contests/:id/race-results', (req, res) => {
   const contest = viewableContest(req, res);
   if (!contest) return;
 
-  const waves = new Map(db.prepare('SELECT * FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));
-  const assignments = db
-    .prepare('SELECT * FROM tag_assignments WHERE contest_id = ? ORDER BY bib, epc')
-    .all(contest.id)
-    .filter((a) => !req.query.category || a.category === req.query.category);
-  const allReads = db
-    .prepare('SELECT epc, read_at FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
-    .all(contest.id);
-  const readsByEpc = new Map();
-  for (const r of allReads) {
-    if (!readsByEpc.has(r.epc)) readsByEpc.set(r.epc, []);
-    readsByEpc.get(r.epc).push(Date.parse(r.read_at));
-  }
-
-  const suppressMs = contest.suppress_secs * 1000;
-  const lapGapMs = contest.min_lap_gap_secs * 1000;
-
-  // Racers can carry two chips (Chip ID + Chip ID2): assignments sharing a
-  // non-empty bib are merged, and a read from either chip counts.
-  const groups = new Map();
-  for (const a of assignments) {
-    const key = a.bib ? `bib:${a.bib}` : `epc:${a.epc}`;
-    if (!groups.has(key)) groups.set(key, { ...a, epcs: [a.epc] });
-    else {
-      const g = groups.get(key);
-      g.epcs.push(a.epc);
-      if (!g.racer_status && a.racer_status) g.racer_status = a.racer_status;
-    }
-  }
-
-  const results = [...groups.values()].map((a) => {
-    const wave = a.wave_id ? waves.get(a.wave_id) : null;
-    const base = {
-      epc: a.epc, epcs: a.epcs.slice(), bib: a.bib, participant: a.participant, category: a.category,
-      distance: a.distance || '', team: a.team || '', gender: a.gender || '',
-      wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
-    };
-    // organizer-declared statuses override everything (Webscorer-style)
-    if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
-    if (!wave || !wave.started_at) return { ...base, status: 'not_started', laps: 0 };
-    const startMs = Date.parse(wave.started_at);
-    const valid = a.epcs
-      .flatMap((epc) => readsByEpc.get(epc) || [])
-      .sort((x, y) => x - y)
-      .filter((t) => t >= startMs + suppressMs);
-    if (!valid.length) return { ...base, status: 'on_course', laps: 0 };
-
-    const crossings = [];
-    for (const t of valid) {
-      if (!crossings.length || t - crossings[crossings.length - 1] >= lapGapMs) crossings.push(t);
-    }
-    const lastMs = crossings[crossings.length - 1];
-    return {
-      ...base,
-      status: 'finished',
-      laps: crossings.length,
-      first_crossing_at: new Date(crossings[0]).toISOString(),
-      last_crossing_at: new Date(lastMs).toISOString(),
-      elapsed_ms: lastMs - startMs,
-      elapsed: formatElapsed(lastMs - startMs),
-      // elapsed of each counted crossing, for the per-lap view
-      lap_splits: crossings.map((t) => formatElapsed(t - startMs)),
-      lap_ms: crossings.map((t) => t - startMs),
-    };
-  });
-
-  // Fastest time first (Webscorer default); more laps beats fewer for lap
-  // races; DNS/DNF/DSQ and non-finishers sink to the bottom.
-  const statusOrder = { finished: 0, on_course: 1, not_started: 2, DNF: 3, DSQ: 4, DNS: 5 };
-  results.sort((x, y) => {
-    const sx = statusOrder[x.status] ?? 9, sy = statusOrder[y.status] ?? 9;
-    if (sx !== sy) return sx - sy;
-    if (x.status !== 'finished') return 0;
-    return y.laps - x.laps || x.elapsed_ms - y.elapsed_ms;
-  });
-  // overall rank + gap behind the leader + place within category
-  const categoryPlace = new Map();
-  let leader = null;
-  results.forEach((r, i) => {
-    if (r.status !== 'finished') return;
-    r.rank = i + 1;
-    if (!leader) leader = r;
-    r.behind = r.rank === 1 ? '' : (r.laps < leader.laps
-      ? `-${leader.laps - r.laps} lap${leader.laps - r.laps > 1 ? 's' : ''}`
-      : '+' + formatElapsed(r.elapsed_ms - leader.elapsed_ms));
-    const place = (categoryPlace.get(r.category) || 0) + 1;
-    categoryPlace.set(r.category, place);
-    r.category_rank = place;
-  });
+  const results = computeRaceResults(contest, { category: req.query.category });
 
   if (req.query.format === 'csv') {
     // CSV export is organizer-only; the public page still reads the JSON results.
@@ -670,19 +607,6 @@ router.get('/contests/:id/race-results', (req, res) => {
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
-
-function formatElapsed(ms) {
-  const tenths = Math.round(ms / 100);
-  const h = Math.floor(tenths / 36000);
-  const m = Math.floor((tenths % 36000) / 600);
-  const s = Math.floor((tenths % 600) / 10);
-  const t = tenths % 10;
-  return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}.${t}`;
-}
-
-const isFemaleG = (g) => ['f', 'female', 'נקבה', 'אישה'].includes(String(g || '').trim().toLowerCase());
-const isMaleG = (g) => ['m', 'male', 'זכר', 'גבר'].includes(String(g || '').trim().toLowerCase());
-const genderLabelG = (g) => (isMaleG(g) ? 'Male' : isFemaleG(g) ? 'Female' : '');
 
 /**
  * Webscorer-style sectioned results CSV: for each distance an Overall / Female
@@ -915,7 +839,7 @@ router.post('/contests/:id/manual-read', requireAuth, (req, res) => {
   const at = req.body?.at && !Number.isNaN(Date.parse(req.body.at))
     ? new Date(req.body.at).toISOString()
     : new Date().toISOString();
-  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, read_at) VALUES (?,?,?,?,?)')
+  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, manual, read_at) VALUES (?,?,?,?,1,?)')
     .run(manual.id, contest.id, assignment.epc, null, at);
   auditLog(req.user.id, 'read.manual', 'contest', contest.id, `bib ${bib} @ ${at}`);
   sseBroadcast(contest.id, 'tag_reads', {

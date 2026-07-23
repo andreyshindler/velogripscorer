@@ -292,6 +292,8 @@
     <string name="chip_start_time">Chip start time:</string>
     <string name="chip_checkin">Chip check-in:</string>
     <string name="beep_unknown_chip">Audible beep for chips not on start list:</string>
+    <string name="long_start_beep">One long start beep (off = three short):</string>
+    <string name="beep_volume">Beep volume</string>
     <string name="antenna_power">Antenna power (%):</string>
     <string name="show_chip_popup">Show chip detect popup:</string>
     <string name="program_chips">Program RFID chips:</string>
@@ -331,6 +333,8 @@
     <string name="login_pick_race">Log in &amp; choose race</string>
     <string name="login_needs_fields">Enter server URL, email and password first.</string>
     <string name="no_races_on_account">No races on this account yet — create one on the website.</string>
+    <string name="no_unraced_startlists">All start lists have already been timed. Finished races are hidden here.</string>
+    <string name="no_league_group">Not in a league</string>
     <string name="choose_race">Choose your race</string>
     <string name="race_paired">Connected to \"%1$s\" — start list and uploads are wired.</string>
     <string name="label_server_url_manual">Manual pairing (advanced)</string>
@@ -489,7 +493,11 @@
     <string name="post_to_web_hint">Publish to srv1515969.hstgr.cloud/veloscorer</string>
     <string name="post_results_hint">Results are published to your VeloGripScorer site</string>
     <string name="posting">Posting results…</string>
-    <string name="posted_ok">Posted to the web — %1$d crossings uploaded</string>
+    <string name="post_success_title">Results published!</string>
+    <string name="post_success_live">Live at %1$s</string>
+    <string name="post_success_sent">%1$d crossings uploaded</string>
+    <string name="post_success_synced">Everything already synced — results are live.</string>
+    <string name="view_results_page">🌐 View results page</string>
     <string name="post_failed">Post failed: %1$s</string>
     <string name="results_header">Results</string>
     <string name="segment_footer">%1$s | %2$d racers</string>

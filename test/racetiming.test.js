@@ -126,6 +126,76 @@ test('manual bib entry records a passing, synthesizing assignments when needed',
   assert.equal(rider103.elapsed, '3:20.0');
 });
 
+test('manual taps count even inside the start-suppression window', async () => {
+  // A racer tapped manually 5s after the gun (suppress window is 10s).
+  const tagged = await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0104', bib: '104', participant: 'Early Tap', wave_id: wave1.id });
+  assert.equal(tagged.status, 201);
+
+  // An RFID read at +5s is suppressed (start-line noise)...
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
+    reads: [{ epc: 'AAAA0104', read_at: atOffset(5) }],
+  });
+  let res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '104').status, 'on_course',
+    'RFID read inside the window stays suppressed');
+
+  // ...but the same moment tapped by the operator is a deliberate finish.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
+    reads: [{ epc: 'AAAA0104', read_at: atOffset(5), manual: true }],
+  });
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const rider = res.body.results.find((r) => r.bib === '104');
+  assert.equal(rider.status, 'finished');
+  assert.equal(rider.elapsed, '0:05.0');
+
+  // The web Manual-entry endpoint is manual too, even inside the window.
+  await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0105', bib: '105', participant: 'Web Tap', wave_id: wave1.id });
+  const tap = await request(app).post(`/api/contests/${contest.id}/manual-read`).set(auth(org))
+    .send({ bib: '105', at: atOffset(6) });
+  assert.equal(tap.status, 201);
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '105').status, 'finished');
+});
+
+test('racer statuses sync from the app and record_laps disables lap counting', async () => {
+  // no-read racer marked DNS on the phone -> synced -> web shows DNS
+  await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0106', bib: '106', participant: 'No Show', wave_id: wave1.id });
+  const noToken = await request(app).post('/api/ingest/racer-statuses').send({ statuses: [] });
+  assert.equal(noToken.status, 401);
+
+  const sync = await request(app).post('/api/ingest/racer-statuses').set('X-Reader-Token', reader.token)
+    .send({ statuses: [{ bib: '106', status: 'dns' }, { bib: 'nope', status: 'DNF' }, { bib: '106', status: 'XX' }] });
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.applied, 1, 'only the valid known-bib status applies');
+  let res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '106').status, 'DNS');
+
+  // clearing the status puts the racer back on course
+  await request(app).post('/api/ingest/racer-statuses').set('X-Reader-Token', reader.token)
+    .send({ statuses: [{ bib: '106', status: '' }] });
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  assert.equal(res.body.results.find((r) => r.bib === '106').status, 'on_course');
+
+  // record_laps off: rider 100's two crossings collapse to a single finish
+  // at the FIRST crossing (+65s), instead of 2 laps ending at +125s.
+  await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
+    .send({ record_laps: false });
+  res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r100 = res.body.results.find((r) => r.bib === '100');
+  assert.equal(r100.laps, 1);
+  assert.equal(r100.elapsed, '1:05.0');
+
+  // the app pushes its lap mode when finishing the race
+  const fin = await request(app).post('/api/ingest/finish').set('X-Reader-Token', reader.token)
+    .send({ record_laps: true });
+  assert.equal(fin.status, 200);
+  const c = await request(app).get(`/api/contests/${contest.id}`).set(auth(org));
+  assert.equal(c.body.record_laps, 1, 'finish restored lap recording');
+});
+
 test('timing settings are adjustable and affect results', async () => {
   const patch = await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
     .send({ suppress_secs: 100, min_lap_gap_secs: 30 });
@@ -348,4 +418,97 @@ test('xlsx start-list upload: Webscorer format, two chips per racer, delete race
   assert.equal(gone.status, 404);
   const tokenDead = await request(app).get('/api/ingest/ping').set('X-Reader-Token', readers[0].token);
   assert.equal(tokenDead.status, 401, 'pairing token dies with the race');
+});
+
+test('finished status: create + duplicate stay active; finished race can be reopened', async () => {
+  const o = await register('reopen-org@test.co', 'Reopen Org');
+  // A freshly created race is NOT finished.
+  const src = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Round 1', kind: 'race', start_at: past, end_at: future,
+  })).body;
+  assert.equal(src.status, 'active', 'new race starts active');
+
+  // Its pairing token (auto-created), used to post results / finish.
+  const token = (await request(app).get('/api/my/races').set(auth(o))).body.races
+    .find((r) => r.id === src.id).app_token;
+
+  // Finish it via the app -> now it shows on the public Finished page.
+  const fin = await request(app).post('/api/ingest/finish').set('X-Reader-Token', token).send({});
+  assert.equal(fin.status, 200);
+  let src2 = (await request(app).get(`/api/contests/${src.id}`)).body;
+  assert.equal(src2.status, 'finished');
+  let finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
+  assert.ok(finished.includes(src.id), 'finished race listed on Finished page');
+
+  // Duplicating a FINISHED race yields an ACTIVE copy (not finished).
+  const dup = (await request(app).post(`/api/contests/${src.id}/duplicate`).set(auth(o))
+    .send({ title: 'Round 2' })).body;
+  const dupFull = (await request(app).get(`/api/contests/${dup.id}`)).body;
+  assert.equal(dupFull.status, 'active', 'duplicated start list is not finished');
+  finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
+  assert.ok(!finished.includes(dup.id), 'duplicate does not appear on Finished page');
+
+  // Reopen: only the organizer, races only, moves it back to active.
+  const outsider = await register('reopen-outsider@test.co', 'Outsider');
+  const denied = await request(app).post(`/api/contests/${src.id}/reopen`).set(auth(outsider));
+  assert.equal(denied.status, 403, 'non-organizer cannot reopen');
+  const reopened = await request(app).post(`/api/contests/${src.id}/reopen`).set(auth(o));
+  assert.equal(reopened.status, 200);
+  src2 = (await request(app).get(`/api/contests/${src.id}`)).body;
+  assert.equal(src2.status, 'active', 'reopened race is active again');
+  finished = (await request(app).get('/api/contests?status=finished')).body.contests.map((c) => c.id);
+  assert.ok(!finished.includes(src.id), 'reopened race drops off Finished page');
+
+  // Editable status from "My start lists": flip active <-> finished directly.
+  const bad = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'nope' });
+  assert.equal(bad.status, 400, 'invalid status rejected');
+  const outDenied = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(outsider)).send({ status: 'finished' });
+  assert.equal(outDenied.status, 403, 'non-organizer cannot set status');
+  const toFinished = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'finished' });
+  assert.equal(toFinished.status, 200);
+  assert.equal((await request(app).get(`/api/contests/${src.id}`)).body.status, 'finished');
+  const toActive = await request(app).patch(`/api/contests/${src.id}/status`).set(auth(o)).send({ status: 'active' });
+  assert.equal(toActive.status, 200);
+  assert.equal((await request(app).get(`/api/contests/${src.id}`)).body.status, 'active');
+
+  // The auto-finish sweep must NOT re-finish a past-dated race. Create a race
+  // whose end_at is already in the past, then run the sweep: it should stay
+  // active. Only voting contests are swept; races finish explicitly. (Without
+  // the kind='voting' filter this race would flip back to finished.)
+  const older = new Date(Date.now() - 7200_000).toISOString();
+  const pastEnd = new Date(Date.now() - 60_000).toISOString();
+  const pastRace = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Yesterday race', kind: 'race', start_at: older, end_at: pastEnd,
+  })).body;
+  assert.equal(pastRace.status, 'active');
+  const { sweepEndedContests } = require('../server/routes/contests');
+  sweepEndedContests();
+  assert.equal((await request(app).get(`/api/contests/${pastRace.id}`)).body.status, 'active',
+    'sweep leaves an active past-dated race alone');
+});
+
+test('edit schedule: PATCH updates start_at/end_at with validation', async () => {
+  const o = await register('sched-org@test.co', 'Sched Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Schedule me', kind: 'race', start_at: past, end_at: future,
+  })).body;
+  const newStart = new Date(Date.now() + 3600_000).toISOString();
+  const newEnd = new Date(Date.now() + 7200_000).toISOString();
+  const ok = await request(app).patch(`/api/contests/${c.id}`).set(auth(o))
+    .send({ start_at: newStart, end_at: newEnd });
+  assert.equal(ok.status, 200);
+  const got = (await request(app).get(`/api/contests/${c.id}`)).body;
+  assert.equal(new Date(got.start_at).toISOString(), newStart);
+  assert.equal(new Date(got.end_at).toISOString(), newEnd);
+
+  // end must be after start
+  const bad = await request(app).patch(`/api/contests/${c.id}`).set(auth(o))
+    .send({ start_at: newEnd, end_at: newStart });
+  assert.equal(bad.status, 400);
+
+  // organizer only
+  const outsider = await register('sched-out@test.co', 'Out');
+  const denied = await request(app).patch(`/api/contests/${c.id}`).set(auth(outsider))
+    .send({ start_at: newStart, end_at: newEnd });
+  assert.equal(denied.status, 403);
 });

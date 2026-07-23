@@ -192,6 +192,41 @@ test('/csv sends a document with a UTF-8 BOM', async () => {
   assert.ok(doc.content.startsWith('﻿'), 'CSV starts with the Excel BOM');
 });
 
+test('/league lists leagues, shows standings, and sends CSVs', async () => {
+  // an admin creates a league and attaches the race
+  const admin = (await request(app).post('/api/auth/login')
+    .send({ email: 'admin@velogripscorer.local', password: 'change-me-please' })).body;
+  const league = (await request(app).post('/api/leagues')
+    .set({ Authorization: `Bearer ${admin.token}` })
+    .send({ name: 'Bot League', season: '2026' })).body.league;
+  await request(app).post(`/api/leagues/${league.id}/races`)
+    .set({ Authorization: `Bearer ${admin.token}` })
+    .send({ contest_id: contestId });
+
+  // single league -> straight to the standings summary with CSV buttons
+  send.reset();
+  await text(ALLOWED, '/league');
+  const msg = send.last('message');
+  assert.ok(msg, 'a standings message was sent');
+  assert.match(msg.text, /Bot League/);
+  const btns = msg.extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.includes(`lgcsv:${league.id}:individual`));
+  assert.ok(btns.includes(`lgcsv:${league.id}:team`));
+
+  // CSV button taps send documents
+  send.reset();
+  await tap(ALLOWED, `lgcsv:${league.id}:individual`);
+  let doc = send.last('document');
+  assert.ok(doc, 'individual CSV sent');
+  assert.equal(doc.filename, `league-${league.id}-individual.csv`);
+  assert.ok(doc.content.startsWith('﻿'), 'CSV starts with the Excel BOM');
+
+  send.reset();
+  await tap(ALLOWED, `lgcsv:${league.id}:team`);
+  doc = send.last('document');
+  assert.equal(doc.filename, `league-${league.id}-team.csv`);
+});
+
 test('empty allowlist serves nobody (fail-safe)', async () => {
   const saved = process.env.TELEGRAM_ALLOWED_USER_IDS;
   process.env.TELEGRAM_ALLOWED_USER_IDS = '';

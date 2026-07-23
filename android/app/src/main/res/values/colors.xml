@@ -22,4 +22,8 @@
     <color name="tile_idle_bg">#EDEDED</color>
     <color name="tile_idle_text">#9AA0A6</color>
     <color name="on_accent">#FFFFFF</color>
+    <!-- Finish counter pill + publish-success card -->
+    <color name="counter_bg">#E8F5E9</color>
+    <color name="counter_text">#2E7D32</color>
+    <color name="counter_stroke">#7BC67E</color>
 </resources>

@@ -82,14 +82,14 @@ function btn(text, data) { return { text, callback_data: data }; }
 // The labels map back to their slash commands in handleText.
 const COMMAND_LABELS = {
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add',
-  '📄 CSV': '/csv', '❓ Help': '/help',
+  '📄 CSV': '/csv', '🏆 League': '/league', '❓ Help': '/help',
 };
 function mainKeyboard() {
   return {
     keyboard: [
       [{ text: '🏁 Races' }, { text: '📋 List' }],
       [{ text: '➕ Add' }, { text: '📄 CSV' }],
-      [{ text: '❓ Help' }],
+      [{ text: '🏆 League' }, { text: '❓ Help' }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -160,6 +160,7 @@ const HELP = [
   '   <code>/edit 101 name=New Name cat=M45 wave=Sport epc=E280A1</code>',
   '/del &lt;bib&gt; — remove a racer',
   '/csv — download the results CSV',
+  '/league — season league standings + CSV',
   '/whoami — show your Telegram id',
   '/cancel — abort the current step',
 ].join('\n');
@@ -386,6 +387,54 @@ function createBotCore({ api, send }) {
     await send.document(chatId, `race-results-${c.id}.csv`, res.text, `${c.title} — results`);
   }
 
+  // ---- league standings ----
+
+  async function cmdLeague(chatId) {
+    const rows = db.prepare(
+      "SELECT id, name, season FROM leagues WHERE status != 'archived' ORDER BY created_at DESC LIMIT 20").all();
+    if (!rows.length) { await send.message(chatId, 'No leagues yet — create one in the web admin.'); return; }
+    if (rows.length === 1) return showLeague(chatId, rows[0].id);
+    const buttons = rows.map((l) => [btn(`${l.name}${l.season ? ` (${l.season})` : ''}`.slice(0, 60), `lg:${l.id}`)]);
+    await send.message(chatId, 'Pick a league:', { reply_markup: kb(buttons) });
+  }
+
+  async function showLeague(chatId, id) {
+    const res = await A('GET', `/leagues/${id}/standings`);
+    if (res.status >= 400 || !res.json) { await send.message(chatId, '⚠️ League not found.'); return; }
+    const { league, races, individual, teams } = res.json;
+    const medals = ['🥇', '🥈', '🥉'];
+
+    const lines = [`<b>${esc(league.name)}</b>${league.season ? ` — ${esc(league.season)}` : ''}`,
+      `${races.length} race(s)${races.some((r) => r.status !== 'finished') ? ' · provisional' : ''}`, ''];
+    for (const g of individual) {
+      const title = [g.distance, g.gender, g.category].filter(Boolean).join(' · ') || 'Overall';
+      lines.push(`<b>${esc(title)}</b>`);
+      g.rows.slice(0, 3).forEach((r, i) =>
+        lines.push(`${medals[i]} ${esc(r.name || '')}${r.team ? ` (${esc(r.team)})` : ''} — ${r.total}`));
+      lines.push('');
+    }
+    if (teams.length) {
+      lines.push('<b>🏆 Teams</b>');
+      teams.slice(0, 3).forEach((r, i) => lines.push(`${medals[i]} ${esc(r.team)} — ${r.total}`));
+    }
+    // Telegram caps messages at 4096 chars; trim whole lines to stay under it.
+    let text = '';
+    for (const line of lines) {
+      if (text.length + line.length + 1 > 3500) { text += '\n…'; break; }
+      text += (text ? '\n' : '') + line;
+    }
+    await send.message(chatId, text || 'No scores yet.', {
+      reply_markup: kb([[btn('📄 Individual CSV', `lgcsv:${id}:individual`), btn('📄 Team CSV', `lgcsv:${id}:team`)]]),
+    });
+  }
+
+  async function leagueCsv(chatId, id, table) {
+    const which = table === 'team' ? 'team' : 'individual';
+    const res = await A('GET', `/leagues/${id}/standings?format=csv&table=${which}`);
+    if (res.status >= 400) { await send.message(chatId, '⚠️ Could not build the CSV.'); return; }
+    await send.document(chatId, `league-${id}-${which}.csv`, res.text, `League standings — ${which}`);
+  }
+
   // ---- wizard (guided /add) ----
 
   const ADD_STEPS = ['bib', 'participant', 'category', 'distance', 'gender', 'team', 'wave', 'epc'];
@@ -461,6 +510,7 @@ function createBotCore({ api, send }) {
       case '/del':
       case '/delete': return cmdDel(chatId, rest);
       case '/csv': return cmdCsv(chatId);
+      case '/league': return cmdLeague(chatId);
       default:
         return send.message(chatId, 'Unknown command. /help for the list.');
     }
@@ -471,6 +521,8 @@ function createBotCore({ api, send }) {
     await send.answerCallback(cq.id);
     const [tag, a, b] = data.split(':');
     if (tag === 'use') return useRace(chatId, a);
+    if (tag === 'lg') return showLeague(chatId, a);
+    if (tag === 'lgcsv') return leagueCsv(chatId, a, b);
     if (tag === 'edit') return cmdEdit(chatId, a);
     if (tag === 'del') return cmdDel(chatId, a);
     if (tag === 'delyes') return doDelete(chatId, a);
@@ -613,6 +665,7 @@ function startBot({ port, basePath } = {}) {
         { command: 'edit', description: 'Edit a racer: /edit <bib>' },
         { command: 'del', description: 'Delete a racer: /del <bib>' },
         { command: 'csv', description: 'Download the results CSV' },
+        { command: 'league', description: 'Season league standings' },
         { command: 'whoami', description: 'Show your Telegram id' },
         { command: 'help', description: 'Show help' },
       ],

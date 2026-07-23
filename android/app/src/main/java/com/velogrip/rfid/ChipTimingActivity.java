@@ -29,7 +29,7 @@ public class ChipTimingActivity extends BaseActivity {
     private TextView systemValue;
     private EditText readerHost, chipsPerRacer, suppress, lapGap, antennaPower, rollCall;
     private android.widget.Switch rollCallOn;
-    private Switch chipIdBib, beepUnknown;
+    private Switch chipIdBib, beepUnknown, startBeepLong;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +53,7 @@ public class ChipTimingActivity extends BaseActivity {
         antennaPower = findViewById(R.id.antennaPower);
         chipIdBib = findViewById(R.id.swChipIdBib);
         beepUnknown = findViewById(R.id.swBeepUnknown);
+        startBeepLong = findViewById(R.id.swStartBeepLong);
 
         readerHost.setText(prefs.readerHost());
         chipsPerRacer.setText(String.valueOf(prefs.chipsPerRacer()));
@@ -76,9 +77,26 @@ public class ChipTimingActivity extends BaseActivity {
         makeScrollable(suppress, R.string.no_detect_after_start);
         makeScrollable(lapGap, R.string.no_redetect_after_lap);
         makeScrollable(rollCall, R.string.rollcall_window_hint);
+        // Chips per racer is 1 or 2 (single chip, or two chips merged by bib).
+        makeNumberScrollable(chipsPerRacer, 1, 2, R.string.chips_per_racer);
         antennaPower.setText(String.valueOf(prefs.antennaPower()));
         chipIdBib.setChecked(prefs.chipIdEqualsBib());
         beepUnknown.setChecked(prefs.beepUnknownChip());
+        startBeepLong.setChecked(prefs.startBeepLong());
+
+        final android.widget.SeekBar beepVolume = findViewById(R.id.beepVolume);
+        final TextView beepVolumeLabel = findViewById(R.id.beepVolumeLabel);
+        beepVolume.setProgress(prefs.beepVolume());
+        beepVolumeLabel.setText(prefs.beepVolume() + "%");
+        beepVolume.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar sb, int p, boolean fromUser) {
+                beepVolumeLabel.setText(p + "%");
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar sb) { }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {
+                previewBeep(sb.getProgress()); // hear the chosen loudness
+            }
+        });
 
         Button scan = findViewById(R.id.scanReader);
         scan.setOnClickListener(v -> {
@@ -152,6 +170,19 @@ public class ChipTimingActivity extends BaseActivity {
                 intOf(antennaPower.getText().toString(), 100),
                 beepUnknown.isChecked(),
                 rollCallOn.isChecked() ? parseMmss(rollCall.getText().toString()) : 0);
+        prefs.setStartBeepLong(startBeepLong.isChecked());
+        prefs.setBeepVolume(((android.widget.SeekBar) findViewById(R.id.beepVolume)).getProgress());
+    }
+
+    /** Short beep at the given loudness so the operator can hear the setting. */
+    private void previewBeep(int volume) {
+        prefs.setBeepVolume(volume); // persist so a Back-out keeps the choice
+        try {
+            final android.media.ToneGenerator tg = new android.media.ToneGenerator(
+                    android.media.AudioManager.STREAM_NOTIFICATION, Math.max(1, volume));
+            tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 150);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(tg::release, 300);
+        } catch (RuntimeException ignored) { }
     }
 
     private String protocolLabel(String protocol) {
@@ -166,6 +197,31 @@ public class ChipTimingActivity extends BaseActivity {
         field.setFocusable(false);
         field.setClickable(true);
         field.setOnClickListener(v -> showMmssPicker(field, titleRes));
+    }
+
+    /** Turn a whole-number field into a tap-to-open scroll-wheel [min..max]. */
+    private void makeNumberScrollable(EditText field, int min, int max, int titleRes) {
+        field.setFocusable(false);
+        field.setClickable(true);
+        field.setOnClickListener(v -> {
+            float d = getResources().getDisplayMetrics().density;
+            NumberPicker picker = new NumberPicker(this);
+            picker.setMinValue(min);
+            picker.setMaxValue(max);
+            picker.setValue(Math.max(min, Math.min(max, intOf(field.getText().toString(), min))));
+            LinearLayout box = new LinearLayout(this);
+            box.setGravity(Gravity.CENTER);
+            int pad = Math.round(16 * d);
+            box.setPadding(pad, pad, pad, pad);
+            box.addView(picker);
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(titleRes)
+                    .setView(box)
+                    .setPositiveButton(android.R.string.ok,
+                            (dlg, w) -> field.setText(String.valueOf(picker.getValue())))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
     }
 
     private void showMmssPicker(EditText field, int titleRes) {

@@ -67,6 +67,9 @@ public class StartListActivity extends BaseActivity {
         findViewById(R.id.bSort).setOnClickListener(v -> { sortByName = !sortByName; render(); });
         findViewById(R.id.bShare).setOnClickListener(v -> shareStartList());
         findViewById(R.id.bMore).setOnClickListener(v -> togglePage(false));
+        // Swipe the bottom bar sideways to flip between its two pages.
+        ((SwipeBar) findViewById(R.id.barA)).setOnSwipe(() -> togglePage(true));
+        ((SwipeBar) findViewById(R.id.barB)).setOnSwipe(() -> togglePage(false));
     }
 
     @Override

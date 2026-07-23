@@ -46,6 +46,8 @@ public final class Uploader {
             json.append("{\"epc\":\"").append(row.epc).append('"');
             if (row.rssi != null) json.append(",\"rssi\":").append(row.rssi);
             if (row.antenna != null) json.append(",\"antenna\":").append(row.antenna);
+            // Operator taps count even inside the start-suppression window.
+            if (row.manual) json.append(",\"manual\":true");
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
         json.append("]}");
@@ -73,11 +75,34 @@ public final class Uploader {
         return code >= 200 && code < 300;
     }
 
-    /** Marks the race finished so it appears under the web's "Finished races". */
-    public boolean finishRace() throws IOException {
-        int code = post("/api/ingest/finish", "{}");
+    /** Marks the race finished so it appears under the web's "Finished races".
+     *  Sends the app's lap mode so the web computes single-crossing races the
+     *  same way (no phantom laps from double reads). */
+    public boolean finishRace(boolean recordLaps) throws IOException {
+        int code = post("/api/ingest/finish", "{\"record_laps\":" + recordLaps + "}");
         if (code == 401) throw new IOException("server rejected reader token (401)");
         return code >= 200 && code < 300;
+    }
+
+    /** Uploads every racer's declared status (DNS/DNF/DSQ, empty = racing) so
+     *  the web stops showing no-show racers as "On course". */
+    public boolean uploadStatuses(List<RaceStore.Racer> racers) throws IOException {
+        boolean ok = true;
+        for (int from = 0; from < racers.size(); from += 200) {
+            StringBuilder json = new StringBuilder("{\"statuses\":[");
+            int to = Math.min(racers.size(), from + 200);
+            for (int i = from; i < to; i++) {
+                RaceStore.Racer r = racers.get(i);
+                if (i > from) json.append(',');
+                json.append("{\"bib\":").append(jsonString(r.bib))
+                        .append(",\"status\":").append(jsonString(r.status)).append('}');
+            }
+            json.append("]}");
+            int code = post("/api/ingest/racer-statuses", json.toString());
+            if (code == 401) throw new IOException("server rejected reader token (401)");
+            ok &= code >= 200 && code < 300;
+        }
+        return ok;
     }
 
     /** Downloads the start list JSON (racers, waves, timing settings). */

@@ -397,3 +397,49 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
       requestBody: { content: { application/json: { schema: { type: object, required: [bib], properties: { bib: { type: string }, at: { type: string, format: date-time } } } } } }
       responses: { '201': { description: Recorded } }
+  /leagues:
+    get:
+      summary: List leagues (default hides archived; `?status=<x>` filters, `?status=all` shows everything)
+      responses: { '200': { description: OK } }
+    post:
+      summary: Create a league (admin). Settings merge over the rulebook defaults (points tables, best-N counts)
+      requestBody: { content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string }, season: { type: string }, settings: { type: object } } } } } }
+      responses: { '201': { description: Created }, '400': { description: Invalid name or settings } }
+  /leagues/{id}:
+    get:
+      summary: League details with its attached races (round, title, date, status)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: OK }, '404': { description: Not found } }
+    patch:
+      summary: Update name / season / status / scoring settings (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string }, season: { type: string }, status: { type: string, enum: [active, finished, archived] }, settings: { type: object } } } } } }
+      responses: { '200': { description: Updated }, '400': { description: Invalid } }
+    delete:
+      summary: Delete a league (admin); attached races themselves are kept
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Deleted } }
+  /leagues/{id}/races:
+    post:
+      summary: Attach a race (kind=race) as a round (admin); round defaults to MAX+1
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [contest_id], properties: { contest_id: { type: integer }, round: { type: integer } } } } } }
+      responses: { '201': { description: Attached }, '400': { description: Not a race }, '409': { description: Already attached } }
+  /leagues/{id}/races/{contestId}:
+    patch:
+      summary: Renumber a round (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: contestId, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [round], properties: { round: { type: integer } } } } } }
+      responses: { '200': { description: Updated } }
+    delete:
+      summary: Detach a race from the league (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: contestId, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Detached } }
+  /leagues/{id}/standings:
+    get:
+      summary: 'Season standings, recomputed live from every attached race: individual points grouped by distance+gender+category (best-N races count) and team points (top runners per race, best-N races). `?format=csv&table=individual|team` exports'
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - { name: table, in: query, schema: { type: string, enum: [individual, team] } }
+      responses: { '200': { description: OK }, '404': { description: Not found } }

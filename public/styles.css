@@ -86,6 +86,7 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 0.92rem
 .pill.finished { background: #eee; color: var(--muted); }
 .pill.live { background: #e3f6ec; color: var(--ok); }
 .pill.tag { background: #fff1e6; color: #b05c14; }
+.pill.awaiting { background: #d7f3f8; color: #0e7490; }
 
 .searchbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
 .searchbar input[type="search"] { flex: 2; min-width: 220px; }
@@ -190,12 +191,22 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .board.winners .cat-link, .board.winners .live-link { color: var(--ok); font-weight: 700; text-decoration: none; }
 .board.winners .cat-link:hover, .board.winners .live-link:hover { text-decoration: underline; }
 .board.winners tbody tr:nth-child(even) { background: #f4f4f4; }
+.board tr.dist-sep td { background: var(--menu-section-bg); font-weight: 700; text-align: start; padding: 9px 10px; border-top: 2px solid var(--border); }
+/* Blink a just-duplicated start-list row twice to draw the eye to it. */
+@keyframes row-blink {
+  0%, 100% { background: transparent; }
+  50% { background: color-mix(in srgb, var(--ok) 45%, transparent); }
+}
+.board tr.row-blink td { animation: row-blink 0.55s ease-in-out 2; }
+.league-section { font-size: 1.15rem; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
+.league-section:first-child { margin-top: 8px; }
 
 /* Live-race summary tiles (Racers / Finished / On course / Not started) */
 .stat-tile { flex: 1; min-width: 88px; text-align: center; padding: 10px; border-radius: 8px; background: #eeeeee; }
 .stat-tile.finished { background: #e6f2da; }
 .stat-tile.oncourse { background: #fdf3d0; }
 .stat-tile.notstarted { background: #f0f0f0; }
+.stat-tile.dns { background: #f7e3e3; }
 .stat-num { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 0.8rem; }
 
@@ -228,6 +239,33 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 }
 :root[data-theme="dark"] input::placeholder,
 :root[data-theme="dark"] textarea::placeholder { color: var(--muted); }
+
+/* Manage-tab start list: fixed columns so bib / name / category / distance /
+   team / wave / chip line up down the list instead of trailing each name. */
+.racer-grid {
+  display: grid;
+  grid-template-columns: 52px minmax(110px, 1.3fr) 68px 46px minmax(70px, 0.9fr) 64px minmax(150px, 1.6fr) auto auto auto;
+  gap: 6px 8px;
+  align-items: center;
+}
+.racer-grid > * { min-width: 0; justify-self: start; }
+.racer-grid > select.tag-status { justify-self: end; }
+@media (max-width: 760px) {
+  .racer-grid { grid-template-columns: 46px 1fr 60px 42px auto auto auto; }
+  .racer-grid > :nth-child(5), .racer-grid > :nth-child(6), .racer-grid > code { display: none; }
+}
+/* Chrome paints autofilled fields with its own light-blue background, which
+   glares in dark mode. The inset box-shadow trick overrides it. */
+:root[data-theme="dark"] input:-webkit-autofill,
+:root[data-theme="dark"] input:-webkit-autofill:hover,
+:root[data-theme="dark"] input:-webkit-autofill:focus,
+:root[data-theme="dark"] textarea:-webkit-autofill,
+:root[data-theme="dark"] select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
 :root[data-theme="dark"] .btn {
   background: linear-gradient(135deg, #7d5cff 0%, #b84dff 100%);
   color: #fff;
@@ -241,6 +279,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] .pill.finished { background: #26243a; color: var(--muted); }
 :root[data-theme="dark"] .pill.live { background: #123522; color: #4ade80; }
 :root[data-theme="dark"] .pill.tag { background: #3a2a18; color: #f0a860; }
+:root[data-theme="dark"] .pill.awaiting { background: #0d3540; color: #22d3ee; }
 :root[data-theme="dark"] .notif.unread { background: #221d3a; }
 :root[data-theme="dark"] .avatar { background: #2b2542; }
 :root[data-theme="dark"] table.board tr.top1 td { background: #2e2711; }
@@ -250,8 +289,9 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] .pubtab { background: #221d33; color: var(--muted); }
 :root[data-theme="dark"] .pubtab.active { background: var(--ok); color: #0d1f16; }
 :root[data-theme="dark"] .board.winners tbody tr:nth-child(even) { background: #1a1728; }
-:root[data-theme="dark"] #toast { background: #2a2440; color: #fff; }
+:root[data-theme="dark"] .board tr.dist-sep td { background: var(--menu-section-bg); }
 :root[data-theme="dark"] .stat-tile,
 :root[data-theme="dark"] .stat-tile.notstarted { background: #201b30; }
 :root[data-theme="dark"] .stat-tile.finished { background: #16301c; }
 :root[data-theme="dark"] .stat-tile.oncourse { background: #322912; }
+:root[data-theme="dark"] .stat-tile.dns { background: #331b1f; }

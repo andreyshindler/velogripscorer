@@ -7,11 +7,15 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>">
   <script>
-    // Apply the saved (or system) theme before first paint to avoid a flash.
+    // Apply the saved (or system) theme, and the saved (or default Hebrew)
+    // language + direction, before first paint to avoid a flash.
     (function () {
       var t = localStorage.getItem('theme');
       if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', t);
+      var lang = localStorage.getItem('lang') || 'he';
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
     })();
   </script>
 </head>
@@ -22,6 +26,7 @@
     <nav class="topnav" aria-label="Main">
       <a href="#/" data-i18n="nav_home">Home</a>
       <a href="#/finished" data-i18n="nav_finished">Finished races</a>
+      <a href="#/leagues" data-i18n="nav_leagues">League</a>
       <a href="#/startlists" id="nav-startlists" data-i18n="nav_startlists" hidden>Start lists</a>
       <a href="#/admin" id="nav-admin" hidden data-i18n="nav_admin">Admin</a>
     </nav>

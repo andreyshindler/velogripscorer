@@ -109,7 +109,10 @@ router.get('/contests', (req, res) => {
       `SELECT c.*, u.name AS organizer_name,
         (SELECT COUNT(*) FROM entries WHERE contest_id = c.id AND status='visible') AS entry_count,
         (SELECT COUNT(*) FROM votes v JOIN entries e ON e.id = v.entry_id WHERE e.contest_id = c.id) AS vote_count,
-        (SELECT COUNT(*) FROM participants WHERE contest_id = c.id AND status='approved') AS participant_count
+        (SELECT COUNT(*) FROM participants WHERE contest_id = c.id AND status='approved') AS participant_count,
+        (SELECT GROUP_CONCAT(l.name, ', ') FROM league_races lr
+           JOIN leagues l ON l.id = lr.league_id WHERE lr.contest_id = c.id) AS league_names,
+        (SELECT lr.league_id FROM league_races lr WHERE lr.contest_id = c.id LIMIT 1) AS league_id
        FROM contests c JOIN users u ON u.id = c.organizer_id
        WHERE c.status != 'archived'`
     )
@@ -173,7 +176,10 @@ router.get('/my/races', requireAuth, (req, res) => {
       `SELECT c.id, c.title, c.sport, c.location, c.start_at, c.end_at, c.status,
         (SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END)
            FROM tag_assignments a WHERE a.contest_id = c.id) AS racer_count,
-        (SELECT token FROM readers r WHERE r.contest_id = c.id ORDER BY r.id LIMIT 1) AS app_token
+        (SELECT token FROM readers r WHERE r.contest_id = c.id ORDER BY r.id LIMIT 1) AS app_token,
+        (SELECT GROUP_CONCAT(l.name, ', ') FROM league_races lr
+           JOIN leagues l ON l.id = lr.league_id WHERE lr.contest_id = c.id) AS league_names,
+        (SELECT lr.league_id FROM league_races lr WHERE lr.contest_id = c.id LIMIT 1) AS league_id
        FROM contests c WHERE c.organizer_id = ? AND c.kind = 'race'
        ORDER BY c.start_at DESC LIMIT 100`
     )
@@ -310,6 +316,7 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
     title: b.title !== undefined ? String(b.title).trim() : contest.title,
     description: b.description !== undefined ? String(b.description) : contest.description,
     tags: b.tags !== undefined ? JSON.stringify(b.tags.map(String)) : contest.tags,
+    start_at: b.start_at || contest.start_at,
     end_at: b.end_at || contest.end_at,
     voting_start_at: b.voting_start_at !== undefined ? b.voting_start_at : contest.voting_start_at,
     voting_end_at: b.voting_end_at !== undefined ? b.voting_end_at : contest.voting_end_at,
@@ -319,11 +326,14 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
       ? (typeof b.photo_url === 'string' && (b.photo_url === '' || b.photo_url.startsWith('data:image/')) ? b.photo_url : contest.photo_url)
       : contest.photo_url,
   };
+  if (new Date(fields.end_at) <= new Date(fields.start_at)) {
+    return res.status(400).json({ error: 'end_at must be after start_at' });
+  }
   db.prepare(
-    `UPDATE contests SET title=?, description=?, tags=?, end_at=?, voting_start_at=?, voting_end_at=?,
+    `UPDATE contests SET title=?, description=?, tags=?, start_at=?, end_at=?, voting_start_at=?, voting_end_at=?,
      blind_voting=?, participant_cap=?, photo_url=? WHERE id = ?`
   ).run(
-    fields.title, fields.description, fields.tags, fields.end_at, fields.voting_start_at,
+    fields.title, fields.description, fields.tags, fields.start_at, fields.end_at, fields.voting_start_at,
     fields.voting_end_at, fields.blind_voting, fields.participant_cap, fields.photo_url, contest.id
   );
   auditLog(req.user.id, 'contest.update', 'contest', contest.id);
@@ -373,11 +383,40 @@ router.post('/contests/:id/duplicate', requireAuth, (req, res) => {
       ins.run(newId, a.epc, a.bib, a.participant, a.user_id,
         a.wave_id ? (waveMap.get(a.wave_id) || null) : null, a.category, a.distance, a.team, a.gender);
     }
+    // The copy starts with NO league assignment — the organizer picks a league
+    // for it explicitly (a duplicated list is often reused for a different event).
     return newId;
   });
   const newId = clone();
   auditLog(req.user.id, 'contest.duplicate', 'contest', newId, `from ${src.id}`);
   res.status(201).json(serializeContest(getContest(newId), req.user));
+});
+
+// Reopen a finished race back to active — undo an accidental "Post results"
+// so the start list drops off the public "Finished races" page again.
+router.post('/contests/:id/reopen', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  if (contest.kind !== 'race') return res.status(400).json({ error: 'only races can be reopened' });
+  db.prepare(`UPDATE contests SET status = 'active' WHERE id = ? AND status = 'finished'`).run(contest.id);
+  auditLog(req.user.id, 'contest.reopen', 'contest', contest.id);
+  res.json({ ok: true, status: 'active' });
+});
+
+// Set a race's status straight from "My start lists" — organizer flips a list
+// between active and finished without opening it. Reopen (above) is the
+// finished->active special case wired into the Manage banner.
+router.patch('/contests/:id/status', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  if (contest.kind !== 'race') return res.status(400).json({ error: 'only races have this status' });
+  const status = req.body?.status;
+  if (!['active', 'finished'].includes(status)) return res.status(400).json({ error: 'invalid status' });
+  db.prepare('UPDATE contests SET status = ? WHERE id = ?').run(status, contest.id);
+  auditLog(req.user.id, 'contest.status', 'contest', contest.id, status);
+  res.json({ ok: true, status });
 });
 
 // ---- Participation (req 3.2) ----
@@ -538,10 +577,14 @@ router.post('/contests/:id/finish', requireAuth, (req, res) => {
   res.json({ ok: true, winners: finishContest(contest, req.user.id) });
 });
 
-// Auto-finish contests whose end date has passed (start/end notifications, req 3.6)
+// Auto-finish VOTING contests whose end date has passed: close voting and
+// declare winners (req 3.6). Races are deliberately excluded — a race's end_at
+// is just its scheduled date, and it's finished only when the organizer posts
+// results (or flips the status manually). Sweeping races here would silently
+// re-finish any race the organizer just reopened/set active.
 function sweepEndedContests() {
   const ended = db
-    .prepare(`SELECT * FROM contests WHERE status = 'active' AND end_at < datetime('now')`)
+    .prepare(`SELECT * FROM contests WHERE status = 'active' AND kind = 'voting' AND end_at < datetime('now')`)
     .all();
   for (const contest of ended) {
     try {

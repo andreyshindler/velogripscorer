@@ -60,7 +60,9 @@ public class BridgeService extends Service {
     public static final String EXTRA_LAST_EPC = "lastEpc";
     public static final String EXTRA_LOG = "log";
 
-    private static final String CHANNEL_ID = "bridge";
+    // "_v2": a fresh channel id so setShowBadge(false) actually applies —
+    // Android caches a channel's settings once it's been created.
+    private static final String CHANNEL_ID = "bridge_v2";
     private static final int NOTIFICATION_ID = 1;
     private static final int UPLOAD_INTERVAL_MS = 3000;
     private static final int BATCH_SIZE = 200;
@@ -76,6 +78,7 @@ public class BridgeService extends Service {
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
+    private int toneVolume = -1; // volume the cached ToneGenerator was built with
 
     private Prefs prefs;
     private RaceStore store;
@@ -338,11 +341,13 @@ public class BridgeService extends Service {
     private void beep() {
         if (!prefs.beepOnRead()) return;
         try {
+            int vol = prefs.beepVolume();
             android.media.ToneGenerator t = tone;
-            if (t == null) {
-                t = new android.media.ToneGenerator(
-                        android.media.AudioManager.STREAM_NOTIFICATION, 90);
+            if (t == null || toneVolume != vol) { // rebuild when the volume changed
+                if (t != null) t.release();
+                t = new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, vol);
                 tone = t;
+                toneVolume = vol;
             }
             t.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120);
         } catch (RuntimeException e) {
@@ -424,8 +429,10 @@ public class BridgeService extends Service {
     private Notification buildNotification(String text) {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-            nm.createNotificationChannel(new NotificationChannel(
-                    CHANNEL_ID, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW));
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW);
+            channel.setShowBadge(false); // silent, no app-icon badge dot
+            nm.createNotificationChannel(channel);
         }
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE);
