@@ -14,9 +14,10 @@
 // (startBot) does the real long-poll loop and only runs when TELEGRAM_BOT_TOKEN
 // is set, so tests and default deployments never spin it up.
 
-const { db } = require('./db');
+const { db, auditLog } = require('./db');
 const { signToken } = require('./auth');
 const { getContest, isOrganizer } = require('./routes/contests');
+const { computeRaceResults } = require('./race-results');
 
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
 const FIELD_LABELS = {
@@ -69,6 +70,112 @@ function getState(chatId) {
   const s = getSession(chatId);
   try { return s.state ? JSON.parse(s.state) : null; } catch { return null; }
 }
+
+// ---------- runner (self-service, approval-gated) store ----------
+//
+// A separate identity from telegram_sessions (the operator's per-chat state):
+// runners live in the `runners` table so operator-only broadcasts never reach
+// them. Status/bib together encode the flow — see db.js.
+
+function getRunner(chatId) {
+  return db.prepare('SELECT * FROM runners WHERE chat_id = ?').get(String(chatId)) || null;
+}
+function upsertRunner(chatId, fields) {
+  const cur = getRunner(chatId) || { tg_user_id: '', tg_name: '', bib: '', league_id: null, status: 'pending' };
+  const next = { ...cur, ...fields };
+  db.prepare(
+    `INSERT INTO runners (chat_id, tg_user_id, tg_name, bib, league_id, status)
+     VALUES (@chat_id, @tg_user_id, @tg_name, @bib, @league_id, @status)
+     ON CONFLICT(chat_id) DO UPDATE SET tg_user_id=excluded.tg_user_id, tg_name=excluded.tg_name,
+       bib=excluded.bib, league_id=excluded.league_id, status=excluded.status`
+  ).run({
+    chat_id: String(chatId), tg_user_id: next.tg_user_id || '', tg_name: next.tg_name || '',
+    bib: next.bib || '', league_id: next.league_id ?? null, status: next.status || 'pending',
+  });
+  return getRunner(chatId);
+}
+function setRunnerDecision(chatId, status, leagueId, adminId) {
+  db.prepare(`UPDATE runners SET status=?, league_id=?, decided_at=datetime('now'), decided_by=? WHERE chat_id=?`)
+    .run(status, leagueId ?? null, String(adminId || ''), String(chatId));
+}
+
+// Active leagues whose attached races include this bib -> [{id, name}].
+function activeLeagueIdsForBib(bib) {
+  return db.prepare(
+    `SELECT DISTINCT l.id AS id, l.name AS name
+       FROM league_races lr JOIN leagues l ON l.id = lr.league_id
+       JOIN tag_assignments t ON t.contest_id = lr.contest_id
+      WHERE l.status = 'active' AND TRIM(t.bib) = ?`
+  ).all(String(bib).trim());
+}
+function runnerLeagueId(runner) {
+  if (runner.league_id) return runner.league_id;
+  const cands = activeLeagueIdsForBib(runner.bib);
+  return cands.length ? cands[0].id : null;
+}
+// The most recent FINISHED race of a league (the runner's "current race").
+function latestFinishedRace(leagueId) {
+  return db.prepare(
+    `SELECT c.* FROM league_races lr JOIN contests c ON c.id = lr.contest_id
+      WHERE lr.league_id = ? AND c.status = 'finished'
+      ORDER BY lr.round DESC, datetime(c.start_at) DESC LIMIT 1`
+  ).get(leagueId) || null;
+}
+function leagueRaceRows(leagueId) {
+  return db.prepare(
+    `SELECT lr.round, c.id AS contest_id, c.title, c.start_at, c.end_at, c.status
+       FROM league_races lr JOIN contests c ON c.id = lr.contest_id
+      WHERE lr.league_id = ? ORDER BY lr.round, datetime(c.start_at)`
+  ).all(leagueId);
+}
+function leagueName(id) {
+  const l = db.prepare('SELECT name FROM leagues WHERE id = ?').get(id);
+  return l ? l.name : '';
+}
+function adminChatIds() { return [...allowedIds()]; }
+
+function displayName(from) {
+  return [from.first_name, from.last_name].filter(Boolean).join(' ') || from.username || String(from.id);
+}
+function fmtWhen(iso) {
+  return new Date(iso).toLocaleString('he-IL',
+    { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function raceStatusLabel(r) {
+  if (r.status === 'finished') return 'הסתיים';
+  const now = Date.now();
+  const s = Date.parse(r.start_at), e = r.end_at ? Date.parse(r.end_at) : s;
+  if (now >= s && now <= e) return 'במהלך המרוץ';
+  if (now < s) return 'מתוכנן';
+  return 'ממתין לתוצאות';
+}
+
+// Runner-facing UI (Hebrew).
+const RUNNER_LABELS = { '🏁 הדירוג שלי': 'ranking', '📋 כל המרוצים': 'races', '🏆 הקבוצה שלי': 'team' };
+function runnerKeyboard() {
+  return {
+    keyboard: [[{ text: '🏁 הדירוג שלי' }], [{ text: '📋 כל המרוצים' }, { text: '🏆 הקבוצה שלי' }]],
+    resize_keyboard: true, is_persistent: true,
+  };
+}
+const R_MSG = {
+  askBib: 'שלום! 👋\nכדי לצפות בתוצאות ובדירוג שלך, שלח/י את מספר החזה (Bib) שלך:',
+  badBib: 'שלח/י מספר חזה תקין (ספרות בלבד).',
+  sent: (bib) => `✅ קיבלנו את מספר החזה שלך (#${esc(bib)}).\n⏳ הבקשה נשלחה למארגן לאישור — תקבל/י הודעה כשהיא תאושר.`,
+  waiting: '⏳ בקשתך ממתינה לאישור המארגן.',
+  declined: '❌ הבקשה שלך לא אושרה. אפשר לפנות למארגן.',
+  approved: '🎉 אושרת! בחר/י פעולה מהתפריט שבתחתית המסך:',
+  menuHint: 'בחר/י פעולה מהתפריט למטה:',
+  noLeague: 'מספר החזה שלך עדיין לא משויך לליגה פעילה. נסה/י שוב מאוחר יותר.',
+  noResults: 'אין עדיין תוצאות במרוץ שהסתיים.',
+  noRow: (bib) => `לא נמצאה תוצאה עבור מספר חזה #${esc(bib)} במרוץ האחרון.`,
+  noRaces: 'אין עדיין מרוצים בליגה.',
+  noTeam: 'לא נמצאה קבוצה עבור מספר החזה שלך.',
+  loadFail: '⚠️ לא ניתן לטעון את הנתונים כרגע.',
+};
 
 // ---------- small helpers ----------
 
@@ -520,6 +627,8 @@ function createBotCore({ api, send }) {
     const data = String(cq.data || '');
     await send.answerCallback(cq.id);
     const [tag, a, b] = data.split(':');
+    if (tag === 'rappr') return approveRunner(chatId, a, b, cq.from);
+    if (tag === 'rrej') return rejectRunner(chatId, a, cq.from);
     if (tag === 'use') return useRace(chatId, a);
     if (tag === 'lg') return showLeague(chatId, a);
     if (tag === 'lgcsv') return leagueCsv(chatId, a, b);
@@ -573,22 +682,171 @@ function createBotCore({ api, send }) {
     return undefined;
   }
 
+  // ---- runner self-service flow (non-allowlisted users) ----
+
+  async function notifyAdminsOfRunner(runnerChatId, name, bib, cands) {
+    const admins = adminChatIds();
+    if (!admins.length) return;
+    const leagueLine = cands.length === 0 ? 'League: — (bib not in any active league)'
+      : cands.length === 1 ? `League: ${esc(cands[0].name)}`
+        : `Leagues: ${cands.map((c) => esc(c.name)).join(', ')}`;
+    const text = ['🏃 <b>Runner access request</b>', `Name: ${esc(name)}`, `Bib: <b>${esc(bib)}</b>`, leagueLine].join('\n');
+    let rows;
+    if (cands.length <= 1) {
+      rows = [[btn('✅ Approve', `rappr:${runnerChatId}:${cands[0] ? cands[0].id : ''}`), btn('❌ Reject', `rrej:${runnerChatId}`)]];
+    } else {
+      rows = cands.map((c) => [btn(`✅ Approve — ${c.name}`.slice(0, 60), `rappr:${runnerChatId}:${c.id}`)]);
+      rows.push([btn('❌ Reject', `rrej:${runnerChatId}`)]);
+    }
+    for (const admin of admins) {
+      try { await send.message(admin, text, { reply_markup: kb(rows) }); } catch { /* admin hasn't opened the bot */ }
+    }
+  }
+
+  async function approveRunner(adminChatId, runnerChatId, leagueIdStr, adminFrom) {
+    const runner = getRunner(runnerChatId);
+    if (!runner) return send.message(adminChatId, 'Runner not found.');
+    if (runner.status !== 'pending') return send.message(adminChatId, `Already ${runner.status}.`);
+    let lid = leagueIdStr ? Number(leagueIdStr) : (runner.league_id || null);
+    if (!lid) { const cands = activeLeagueIdsForBib(runner.bib); lid = cands.length ? cands[0].id : null; }
+    setRunnerDecision(runnerChatId, 'approved', lid, adminFrom.id);
+    auditLog(null, 'runner.approve', 'runner', null, `chat ${runner.chat_id} bib ${runner.bib} league ${lid || '-'} by tg ${adminFrom.id}`);
+    await send.message(adminChatId, `✅ Approved ${esc(runner.tg_name)} (bib ${esc(runner.bib)}).`);
+    try { await send.message(runner.chat_id, R_MSG.approved, { reply_markup: runnerKeyboard() }); } catch { /* ignore */ }
+    return undefined;
+  }
+
+  async function rejectRunner(adminChatId, runnerChatId, adminFrom) {
+    const runner = getRunner(runnerChatId);
+    if (!runner) return send.message(adminChatId, 'Runner not found.');
+    if (runner.status !== 'pending') return send.message(adminChatId, `Already ${runner.status}.`);
+    setRunnerDecision(runnerChatId, 'rejected', runner.league_id || null, adminFrom.id);
+    auditLog(null, 'runner.reject', 'runner', null, `chat ${runner.chat_id} bib ${runner.bib} by tg ${adminFrom.id}`);
+    await send.message(adminChatId, `❌ Rejected ${esc(runner.tg_name)}.`);
+    try { await send.message(runner.chat_id, R_MSG.declined); } catch { /* ignore */ }
+    return undefined;
+  }
+
+  async function runnerMyRanking(chatId, runner) {
+    const lid = runnerLeagueId(runner);
+    if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
+    const contest = latestFinishedRace(lid);
+    if (!contest) return send.message(chatId, R_MSG.noResults, { reply_markup: runnerKeyboard() });
+    const results = computeRaceResults(contest);
+    const mine = results.find((x) => String(x.bib).trim() === String(runner.bib).trim());
+    if (!mine) return send.message(chatId, R_MSG.noRow(runner.bib), { reply_markup: runnerKeyboard() });
+    const lines = [`🏁 <b>${esc(contest.title)}</b>`, `🗓 ${esc(fmtWhen(contest.start_at))}`, '',
+      `<b>${esc(mine.participant || ('#' + runner.bib))}</b> — #${esc(mine.bib)}`];
+    if (mine.status === 'finished') {
+      lines.push(`🏅 מקום כללי: <b>${mine.rank}</b>`);
+      if (mine.category) lines.push(`📊 מקום בקטגוריה ${esc(mine.category)}: <b>${mine.category_rank}</b>`);
+      lines.push(`⏱ זמן: <b>${esc(mine.elapsed)}</b>`);
+      if (mine.behind) lines.push(`⛳ פער מהמוביל: ${esc(mine.behind)}`);
+    } else {
+      const st = { DNS: 'לא זינק (DNS)', DNF: 'לא סיים (DNF)', DSQ: 'נפסל (DSQ)', on_course: 'על המסלול', not_started: 'טרם זינק' }[mine.status] || mine.status;
+      lines.push(`סטטוס: ${esc(st)}`);
+    }
+    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+  }
+
+  async function runnerAllRaces(chatId, runner) {
+    const lid = runnerLeagueId(runner);
+    if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
+    const rows = leagueRaceRows(lid);
+    if (!rows.length) return send.message(chatId, R_MSG.noRaces, { reply_markup: runnerKeyboard() });
+    const lines = [`📋 <b>מרוצי הליגה — ${esc(leagueName(lid))}</b>`, ''];
+    for (const x of rows) lines.push(`R${x.round} · ${esc(x.title)} · ${esc(fmtDate(x.start_at))} · ${esc(raceStatusLabel(x))}`);
+    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+  }
+
+  async function runnerMyTeam(chatId, runner) {
+    const lid = runnerLeagueId(runner);
+    if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
+    const res = await A('GET', `/leagues/${lid}/standings`);
+    if (res.status >= 400 || !res.json) return send.message(chatId, R_MSG.loadFail, { reply_markup: runnerKeyboard() });
+    const { individual, teams } = res.json;
+    let myTeam = '';
+    for (const g of individual) {
+      const row = g.rows.find((x) => String(x.bib).trim() === String(runner.bib).trim());
+      if (row) { myTeam = row.team || ''; break; }
+    }
+    if (!myTeam) return send.message(chatId, R_MSG.noTeam, { reply_markup: runnerKeyboard() });
+    const idx = teams.findIndex((t) => t.team === myTeam);
+    const lines = [`🏆 <b>${esc(myTeam)}</b>`];
+    if (idx >= 0) lines.push(`🏅 מקום בליגה: <b>${idx + 1}</b>`, `➕ נקודות: <b>${teams[idx].total}</b>`);
+    const members = [];
+    for (const g of individual) for (const x of g.rows) if ((x.team || '') === myTeam) members.push(x);
+    members.sort((x, y) => y.total - x.total);
+    if (members.length) {
+      lines.push('', '<b>חברי הקבוצה:</b>');
+      members.slice(0, 15).forEach((m) => lines.push(`• ${esc(m.name || ('#' + m.bib))} — ${m.total}`));
+    }
+    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+  }
+
+  async function handleRunner(chatId, from, text) {
+    const cmd = text.toLowerCase().replace(/@.*$/, '');
+    let runner = getRunner(chatId);
+
+    // Approved -> the three-button menu.
+    if (runner && runner.status === 'approved') {
+      const action = RUNNER_LABELS[text];
+      if (action === 'ranking') return runnerMyRanking(chatId, runner);
+      if (action === 'races') return runnerAllRaces(chatId, runner);
+      if (action === 'team') return runnerMyTeam(chatId, runner);
+      return send.message(chatId, R_MSG.menuHint, { reply_markup: runnerKeyboard() });
+    }
+    if (runner && runner.status === 'rejected') return send.message(chatId, R_MSG.declined);
+
+    // Awaiting the bib (brand new, or pending with no bib yet).
+    if (!runner || runner.bib === '') {
+      if (!runner) runner = upsertRunner(chatId, { tg_user_id: String(from.id), tg_name: displayName(from), status: 'pending', bib: '' });
+      if (cmd === '/start' || cmd === '/help') return send.message(chatId, R_MSG.askBib);
+      const bib = text.trim();
+      if (!/^\d{1,10}$/.test(bib)) return send.message(chatId, R_MSG.badBib);
+      const cands = activeLeagueIdsForBib(bib);
+      upsertRunner(chatId, {
+        tg_user_id: String(from.id), tg_name: displayName(from), bib,
+        league_id: cands.length === 1 ? cands[0].id : null, status: 'pending',
+      });
+      await notifyAdminsOfRunner(chatId, displayName(from), bib, cands);
+      return send.message(chatId, R_MSG.sent(bib));
+    }
+
+    // Pending with a bib -> waiting on the admin.
+    return send.message(chatId, R_MSG.waiting);
+  }
+
   async function handleUpdate(update) {
     const msg = update.message || update.edited_message;
     const cq = update.callback_query;
     const from = (msg && msg.from) || (cq && cq.from);
     const chat = (msg && msg.chat) || (cq && cq.message && cq.message.chat);
     if (!from || !chat) return;
-    if (!isAllowed(from.id)) return; // silent for everyone but the allowlisted operator
+    // Fail-safe: with no configured operators the bot does nothing at all —
+    // neither admin actions nor the runner self-service flow (which needs an
+    // admin to approve). This also keeps a misconfigured bot silent.
+    if (allowedIds().size === 0) return;
     const chatId = chat.id;
     try {
-      if (cq) return await handleCallback(chatId, cq);
-      if (!msg.text) return;
+      if (isAllowed(from.id)) {
+        // Trusted operator: the existing admin flow.
+        if (cq) return await handleCallback(chatId, cq);
+        if (!msg.text) return;
+        const t = msg.text.trim();
+        if (t.toLowerCase().replace(/@.*$/, '') === '/whoami') {
+          return await send.message(chatId, `Your Telegram id: <code>${esc(from.id)}</code>`);
+        }
+        return await handleText(chatId, t);
+      }
+      // Everyone else: self-service runner flow (approval-gated).
+      if (cq) { await send.answerCallback(cq.id); return undefined; } // runners have no inline buttons
+      if (!msg || !msg.text) return undefined;
       const t = msg.text.trim();
       if (t.toLowerCase().replace(/@.*$/, '') === '/whoami') {
         return await send.message(chatId, `Your Telegram id: <code>${esc(from.id)}</code>`);
       }
-      return await handleText(chatId, t);
+      return await handleRunner(chatId, from, t);
     } catch (err) {
       console.error('telegram handleUpdate error:', err);
       try { await send.message(chatId, '⚠️ Something went wrong.'); } catch { /* ignore */ }

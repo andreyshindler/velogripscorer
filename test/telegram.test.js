@@ -59,11 +59,15 @@ test('setup: a race exists', async () => {
   contestId = c.body.id;
 });
 
-test('non-allowlisted users get no reply at all', async () => {
+test('non-allowlisted users get the runner self-service flow, not the admin bot', async () => {
   send.reset();
-  await text(999, '/whoami');
+  await text(999, '/start');
+  // Prompted for a bib (Hebrew), NOT the operator help/keyboard.
+  assert.match(send.last('message').text, /Bib|בחזה|החזה/);
+  // Admin operations stay closed to them: /races is treated as a (bad) bib, not a race list.
+  send.reset();
   await text(999, '/races');
-  assert.equal(send.calls.length, 0, 'bot must stay silent for anyone but the allowlist');
+  assert.ok(!/Pick a race/.test(send.last('message').text || ''), 'runner cannot list races like an operator');
 });
 
 test('/whoami answers the allowlisted user', async () => {

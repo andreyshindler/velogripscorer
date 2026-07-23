@@ -241,6 +241,23 @@ CREATE TABLE IF NOT EXISTS league_races (
   PRIMARY KEY (league_id, contest_id)
 );
 
+-- Self-service Telegram runners: a runner DMs the bot, submits a bib and waits
+-- for an admin to approve. Kept separate from telegram_sessions (which is the
+-- operator's per-chat state) so runners never receive operator-only broadcasts.
+-- State without an extra column: pending+bib='' = awaiting bib; pending+bib set
+-- = awaiting admin; approved = menu; rejected = declined.
+CREATE TABLE IF NOT EXISTS runners (
+  chat_id    TEXT PRIMARY KEY,
+  tg_user_id TEXT NOT NULL DEFAULT '',
+  tg_name    TEXT NOT NULL DEFAULT '',
+  bib        TEXT NOT NULL DEFAULT '',
+  league_id  INTEGER REFERENCES leagues(id) ON DELETE SET NULL,
+  status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_at TEXT,
+  decided_by TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_league_races      ON league_races(league_id, round);
 CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);
