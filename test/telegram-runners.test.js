@@ -160,13 +160,16 @@ test('approved runner: all races lists the league races', async () => {
   assert.match(t, /הסתיים/);
 });
 
-test('approved runner: my team shows the team standing and members', async () => {
+test('approved runner: my team shows the full teams ranking with their team bold', async () => {
   send.reset();
   await text(999, '🏆 הקבוצה שלי');
   const t = send.last(999).text;
+  assert.match(t, /דירוג קבוצות/, 'teams ranking header');
   assert.match(t, /Aces/);
-  assert.match(t, /מקום בליגה/);
-  assert.match(t, /Alice/); // teammate listed
+  assert.match(t, /Solo/, 'all teams are listed');
+  // the runner (bib 1) is on Aces -> that line is bold with the marker
+  assert.match(t, /➡️ <b>[^\n]*Aces[^\n]*<\/b>/, "runner's team is bold");
+  assert.doesNotMatch(t, /➡️ <b>[^\n]*Solo/, 'other teams are not bold');
 });
 
 test('approval is idempotent; reject path tells the runner and blocks the menu', async () => {

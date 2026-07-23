@@ -175,7 +175,8 @@ const R_MSG = {
   noResults: 'אין עדיין תוצאות במרוץ שהסתיים.',
   noRow: (bib) => `לא נמצאה תוצאה עבור מספר חזה #${esc(bib)} במרוץ האחרון.`,
   noRaces: 'אין עדיין מרוצים בליגה.',
-  noTeam: 'לא נמצאה קבוצה עבור מספר החזה שלך.',
+  noTeams: 'אין עדיין דירוג קבוצות בליגה.',
+  noTeamHint: 'ℹ️ הקבוצה שלך לא זוהתה לפי מספר החזה — מוצג דירוג כל הקבוצות.',
   loadFail: '⚠️ לא ניתן לטעון את הנתונים כרגע.',
 };
 
@@ -781,23 +782,29 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     const res = await A('GET', `/leagues/${lid}/standings`);
     if (res.status >= 400 || !res.json) return send.message(chatId, R_MSG.loadFail, { reply_markup: runnerKeyboard() });
     const { individual, teams } = res.json;
+    if (!teams.length) return send.message(chatId, R_MSG.noTeams, { reply_markup: runnerKeyboard() });
+    // The runner's own team, matched by their bib in the individual standings.
     let myTeam = '';
     for (const g of individual) {
       const row = g.rows.find((x) => String(x.bib).trim() === String(runner.bib).trim());
       if (row) { myTeam = row.team || ''; break; }
     }
-    if (!myTeam) return send.message(chatId, R_MSG.noTeam, { reply_markup: runnerKeyboard() });
-    const idx = teams.findIndex((t) => t.team === myTeam);
-    const lines = [`🏆 <b>${esc(myTeam)}</b>`];
-    if (idx >= 0) lines.push(`🏅 מקום בליגה: <b>${idx + 1}</b>`, `➕ נקודות: <b>${teams[idx].total}</b>`);
-    const members = [];
-    for (const g of individual) for (const x of g.rows) if ((x.team || '') === myTeam) members.push(x);
-    members.sort((x, y) => y.total - x.total);
-    if (members.length) {
-      lines.push('', '<b>חברי הקבוצה:</b>');
-      members.slice(0, 15).forEach((m) => lines.push(`• ${esc(m.name || ('#' + m.bib))} — ${m.total}`));
+    // Full teams ranking (already sorted by total desc), the runner's team bold.
+    const medals = ['🥇', '🥈', '🥉'];
+    const lines = [`🏆 <b>${esc(leagueName(lid))} — דירוג קבוצות</b>`, ''];
+    teams.forEach((t, i) => {
+      const mark = medals[i] || `${i + 1}.`;
+      const line = `${mark} ${esc(t.team)} — ${t.total}`;
+      lines.push(myTeam && t.team === myTeam ? `➡️ <b>${line}</b>` : line);
+    });
+    if (!myTeam) lines.push('', R_MSG.noTeamHint);
+    // Stay under Telegram's 4096-char cap by trimming whole lines.
+    let text = '';
+    for (const line of lines) {
+      if (text.length + line.length + 1 > 3500) { text += '\n…'; break; }
+      text += (text ? '\n' : '') + line;
     }
-    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+    return send.message(chatId, text, { reply_markup: runnerKeyboard() });
   }
 
   async function handleRunner(chatId, from, text) {
