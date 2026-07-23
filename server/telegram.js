@@ -146,10 +146,16 @@ function raceStatusLabel(r) {
 }
 
 // Runner-facing UI (Hebrew).
-const RUNNER_LABELS = { '🏁 הדירוג שלי': 'ranking', '📋 כל המרוצים': 'races', '🏆 הקבוצה שלי': 'team' };
+const RUNNER_LABELS = {
+  '🏁 הדירוג שלי': 'ranking', '🎽 המרוץ האחרון': 'last',
+  '📋 כל המרוצים': 'races', '🏆 הקבוצה שלי': 'team',
+};
 function runnerKeyboard() {
   return {
-    keyboard: [[{ text: '🏁 הדירוג שלי' }], [{ text: '📋 כל המרוצים' }, { text: '🏆 הקבוצה שלי' }]],
+    keyboard: [
+      [{ text: '🏁 הדירוג שלי' }, { text: '🎽 המרוץ האחרון' }],
+      [{ text: '📋 כל המרוצים' }, { text: '🏆 הקבוצה שלי' }],
+    ],
     resize_keyboard: true, is_persistent: true,
   };
 }
@@ -768,6 +774,42 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     return send.message(chatId, text, { reply_markup: runnerKeyboard() });
   }
 
+  // Full detail of the runner's most recent finished race.
+  async function runnerLastRace(chatId, runner) {
+    const lid = runnerLeagueId(runner);
+    if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
+    const bib = String(runner.bib).trim();
+    const finished = leagueRaceRows(lid).filter((r) => r.status === 'finished')
+      .sort((a, b) => (b.round - a.round) || (Date.parse(b.start_at) - Date.parse(a.start_at)));
+    let contest = null, mine = null;
+    for (const r of finished) {
+      const c = getContest(r.contest_id);
+      if (!c) continue;
+      const row = computeRaceResults(c).find((x) => String(x.bib).trim() === bib);
+      if (row) { contest = c; mine = row; break; }
+    }
+    if (!contest) return send.message(chatId, R_MSG.noResults, { reply_markup: runnerKeyboard() });
+    const lines = [`🏁 <b>${esc(contest.title)}</b>`, `🗓 ${esc(fmtWhen(contest.start_at))}`];
+    if (contest.location) lines.push(`📍 ${esc(contest.location)}`);
+    lines.push('', `👤 <b>${esc(mine.participant || runner.name || ('#' + bib))}</b> — #${esc(mine.bib)}`);
+    const tags = [mine.category, mine.distance].filter(Boolean).map(esc).join(' · ');
+    if (tags) lines.push(`🏷 ${tags}`);
+    if (mine.team) lines.push(`👥 קבוצה: ${esc(mine.team)}`);
+    if (mine.status === 'finished') {
+      lines.push(`🏅 מקום כללי: <b>${mine.rank}</b>`);
+      if (mine.category) lines.push(`📊 מקום בקטגוריה: <b>${mine.category_rank}</b>`);
+      lines.push(`⏱ זמן: <b>${esc(mine.elapsed)}</b>`);
+      if (mine.behind) lines.push(`⛳ פער מהמוביל: ${esc(mine.behind)}`);
+      if (mine.laps > 1) {
+        lines.push(`🔁 הקפות: ${mine.laps}`);
+        if (Array.isArray(mine.lap_splits) && mine.lap_splits.length) lines.push(`⏲ ${mine.lap_splits.map(esc).join(' · ')}`);
+      }
+    } else {
+      lines.push(`סטטוס: ${esc(STATUS_HE[mine.status] || mine.status)}`);
+    }
+    return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
+  }
+
   async function runnerAllRaces(chatId, runner) {
     const lid = runnerLeagueId(runner);
     if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
@@ -826,6 +868,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (runner && runner.status === 'approved') {
       const action = RUNNER_LABELS[text];
       if (action === 'ranking') return runnerMyRanking(chatId, runner);
+      if (action === 'last') return runnerLastRace(chatId, runner);
       if (action === 'races') return runnerAllRaces(chatId, runner);
       if (action === 'team') return runnerMyTeam(chatId, runner);
       return send.message(chatId, R_MSG.menuHint, { reply_markup: runnerKeyboard() });

@@ -73,9 +73,10 @@ set up timing. Set `PUBLIC_BASE_URL` to include a results link in the message.
 their **bib number** and **name**, records the request, and pings the allowlisted
 admins with Approve / Reject buttons (showing the declared name so they can
 confirm identity). Once an admin approves (and the bib is in an active
-league), the runner gets a Hebrew menu with three buttons — **my ranking** (in
-the league's most-recent finished race), **all races**, and **my team's**
-standing. Runners are stored in their own `runners` table (separate from the
+league), the runner gets a Hebrew menu — **my ranking** (their result across
+every finished race), **last race** (full detail of the most recent one),
+**all races** (the schedule, next race in bold), and **my team** (the full
+team standings with theirs highlighted). Runners are stored in their own `runners` table (separate from the
 operator sessions), so opening the bot to runners never exposes admin actions or
 sends them operator-only messages. With an empty allowlist the bot stays fully
 silent (no operators means nobody can approve).

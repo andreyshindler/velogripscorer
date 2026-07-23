@@ -171,6 +171,17 @@ test('approved runner: all races lists the races and bolds the next planned one'
   assert.doesNotMatch(t, /➡️ <b>[^\n]*Round 1/, 'the finished race is not bold');
 });
 
+test('approved runner: last race shows the detailed most-recent result', async () => {
+  send.reset();
+  await text(999, '🎽 המרוץ האחרון');
+  const t = send.last(999).text;
+  assert.match(t, /Round 1/, 'the most recent finished race the runner completed');
+  assert.match(t, /מקום כללי: <b>1<\/b>/, 'overall place');
+  assert.match(t, /מקום בקטגוריה/, 'category place');
+  assert.match(t, /זמן:/, 'time');
+  assert.match(t, /Aces/, 'team');
+});
+
 test('approved runner: my team shows the full teams ranking with their team bold', async () => {
   send.reset();
   await text(999, '🏆 הקבוצה שלי');
