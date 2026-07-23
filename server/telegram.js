@@ -773,8 +773,17 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (!lid) return send.message(chatId, R_MSG.noLeague, { reply_markup: runnerKeyboard() });
     const rows = leagueRaceRows(lid);
     if (!rows.length) return send.message(chatId, R_MSG.noRaces, { reply_markup: runnerKeyboard() });
+    // The next planned race = the soonest race still in the future; bold it.
+    const now = Date.now();
+    const upcoming = rows.filter((x) => Date.parse(x.start_at) > now);
+    const nextId = upcoming.length
+      ? upcoming.reduce((a, b) => (Date.parse(a.start_at) <= Date.parse(b.start_at) ? a : b)).contest_id
+      : null;
     const lines = [`📋 <b>מרוצי הליגה — ${esc(leagueName(lid))}</b>`, ''];
-    for (const x of rows) lines.push(`R${x.round} · ${esc(x.title)} · ${esc(fmtDate(x.start_at))} · ${esc(raceStatusLabel(x))}`);
+    for (const x of rows) {
+      const line = `R${x.round} · ${esc(x.title)} · ${esc(fmtDate(x.start_at))} · ${esc(raceStatusLabel(x))}`;
+      lines.push(x.contest_id === nextId ? `➡️ <b>${line}</b>` : line);
+    }
     return send.message(chatId, lines.join('\n'), { reply_markup: runnerKeyboard() });
   }
 

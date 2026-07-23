@@ -152,13 +152,23 @@ test('approved runner: my ranking lists every finished race they completed', asy
   assert.match(t, /1 מרוצים/);    // one finished race so far
 });
 
-test('approved runner: all races lists the league races', async () => {
+test('approved runner: all races lists the races and bolds the next planned one', async () => {
+  // attach an upcoming (future) race to the league
+  const soonStart = new Date(Date.now() + 3 * 86400_000).toISOString();
+  const soonEnd = new Date(Date.now() + 3 * 86400_000 + 5400_000).toISOString();
+  const round2 = (await request(app).post('/api/contests').set(auth(admin))
+    .send({ title: 'Round 2', kind: 'race', start_at: soonStart, end_at: soonEnd })).body;
+  await request(app).post(`/api/leagues/${league.id}/races`).set(auth(admin)).send({ contest_id: round2.id });
+
   send.reset();
   await text(999, '📋 כל המרוצים');
   const t = send.last(999).text;
   assert.match(t, /מרוצי הליגה/);
   assert.match(t, /R1 · Round 1/);
   assert.match(t, /הסתיים/);
+  // the upcoming race is bold with the marker; the finished one is not
+  assert.match(t, /➡️ <b>[^\n]*Round 2[^\n]*<\/b>/, 'next planned race is bold');
+  assert.doesNotMatch(t, /➡️ <b>[^\n]*Round 1/, 'the finished race is not bold');
 });
 
 test('approved runner: my team shows the full teams ranking with their team bold', async () => {
