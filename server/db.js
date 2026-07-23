@@ -272,6 +272,9 @@ for (const stmt of [
   // 0 = single-crossing race: the first valid crossing is the finish and
   // later reads are ignored (no phantom "laps" from double reads).
   `ALTER TABLE contests ADD COLUMN record_laps INTEGER NOT NULL DEFAULT 1`,
+  // Timestamp of the one-time "race is a day away" Telegram reminder, so it
+  // fires at most once per race. NULL = not sent yet.
+  `ALTER TABLE contests ADD COLUMN reminder_sent_at TEXT`,
 ]) {
   try {
     db.exec(stmt);

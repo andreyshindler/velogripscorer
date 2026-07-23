@@ -654,6 +654,13 @@ function startBot({ port, basePath } = {}) {
   const send = tgSender(botToken);
   const core = createBotCore({ api: localApi(apiBase), send });
 
+  // Race-day reminders: check hourly (and shortly after boot) for races a day out.
+  const runReminders = () => sendRaceReminders({ send, now: new Date() })
+    .then((r) => { if (r.races) console.log(`Race-day reminders: ${r.races} race(s), ${r.messages} message(s).`); })
+    .catch((err) => console.error('race reminder sweep failed:', err.message));
+  setInterval(runReminders, 60 * 60 * 1000).unref();
+  setTimeout(runReminders, 10_000).unref();
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   (async function poll() {
     await send.call('deleteWebhook', { drop_pending_updates: false }).catch(() => {});
@@ -686,4 +693,61 @@ function startBot({ port, basePath } = {}) {
   })();
 }
 
-module.exports = { startBot, createBotCore };
+// ---------- race-day reminders ----------
+//
+// A day before a race, ping every chat that has talked to the bot (the
+// allowlisted organizers) so nobody forgets to set up timing. Fires at most
+// once per race, tracked by contests.reminder_sent_at.
+
+// Active races starting within the next 24h that haven't been reminded yet.
+function pendingRaceReminders(nowMs = Date.now()) {
+  const now = new Date(nowMs).toISOString();
+  const soon = new Date(nowMs + 24 * 3600 * 1000).toISOString();
+  return db.prepare(
+    `SELECT * FROM contests
+      WHERE kind = 'race' AND status = 'active' AND reminder_sent_at IS NULL
+        AND datetime(start_at) > datetime(?) AND datetime(start_at) <= datetime(?)
+      ORDER BY datetime(start_at)`
+  ).all(now, soon);
+}
+
+function raceReminderMessage(c) {
+  const when = new Date(c.start_at).toLocaleString('he-IL', {
+    weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  const lines = [
+    '⏰ <b>תזכורת: מחר יוצאים לדרך!</b>',
+    '',
+    `🏁 <b>${esc(c.title)}</b>`,
+    `🗓 ${esc(when)}`,
+  ];
+  if (c.location) lines.push(`📍 ${esc(c.location)}`);
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+  if (baseUrl) lines.push('', `🔗 ${baseUrl}/#/results/${c.id}`);
+  return lines.join('\n');
+}
+
+// Send the reminder for each race that's a day out to every known chat, then
+// mark it reminded. Best-effort per chat: a failed send skips that chat but
+// still marks the race so it isn't retried in a loop.
+async function sendRaceReminders({ send, now = new Date() } = {}) {
+  const due = pendingRaceReminders(now.getTime());
+  if (!due.length) return { races: 0, messages: 0 };
+  const chats = db.prepare('SELECT chat_id FROM telegram_sessions').all().map((r) => r.chat_id);
+  const mark = db.prepare('UPDATE contests SET reminder_sent_at = ? WHERE id = ?');
+  let messages = 0;
+  for (const c of due) {
+    const text = raceReminderMessage(c);
+    for (const chatId of chats) {
+      try { await send.message(chatId, text); messages++; }
+      catch (err) { console.error(`race reminder to ${chatId} failed:`, err.message); }
+    }
+    mark.run(now.toISOString(), c.id);
+  }
+  return { races: due.length, messages };
+}
+
+module.exports = {
+  startBot, createBotCore,
+  pendingRaceReminders, raceReminderMessage, sendRaceReminders,
+};

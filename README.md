@@ -38,6 +38,7 @@ Environment variables:
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | see above | Seeded administrator |
 | `TELEGRAM_BOT_TOKEN` | unset | Enables the Telegram start-list bot |
 | `TELEGRAM_ALLOWED_USER_IDS` | unset | Comma-separated Telegram user ids allowed to use the bot |
+| `PUBLIC_BASE_URL` | unset | Public site URL; when set, race-day reminders include a results link |
 | `DISABLE_RATE_LIMIT` | unset | Disables rate limiting (tests only) |
 
 ### Telegram start-list bot
@@ -62,6 +63,11 @@ ones and the Telegram “Menu” list): `/races` (pick a race), `/list [text]`,
 polling (outbound to `api.telegram.org`) — no inbound webhook or public URL is
 needed, so it works behind a `BASE_PATH` reverse proxy. Under Docker, set both
 vars in `.env`; `docker-compose.yml` passes them through.
+
+**Race-day reminders.** When the bot is running it checks hourly for races
+starting within the next 24 hours and sends a one-time reminder to every chat
+that has talked to the bot (the allowlisted organizers), so nobody forgets to
+set up timing. Set `PUBLIC_BASE_URL` to include a results link in the message.
 
 ## Continuous integration
 
