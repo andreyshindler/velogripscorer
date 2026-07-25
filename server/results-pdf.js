@@ -172,14 +172,14 @@ async function raceResultsPdf(contest, results) {
   addPage(ctx);
 
   const columns = [
-    { header: H.place, width: 42, align: 'r' },
-    { header: H.bib, width: 46, align: 'r' },
-    { header: H.name, width: 195, align: 'r' },
-    { header: H.team, width: 180, align: 'r' },
-    { header: H.category, width: 90, align: 'r' },
-    { header: H.gender, width: 58, align: 'r' },
-    { header: H.time, width: 78, align: 'r' },
-    { header: H.behind, width: 80, align: 'r' },
+    { header: H.place, width: 34, align: 'r' },
+    { header: H.bib, width: 40, align: 'r' },
+    { header: H.name, width: 140, align: 'r' },
+    { header: H.team, width: 145, align: 'r' },
+    { header: H.category, width: 64, align: 'r' },
+    { header: H.gender, width: 42, align: 'r' },
+    { header: H.time, width: 60, align: 'r' },
+    { header: H.behind, width: 64, align: 'r' },
   ];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
   const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
@@ -244,11 +244,11 @@ async function raceResultsPdf(contest, results) {
     ctx.y -= 6;
     drawTitle(ctx, `${H.dnf} · ${others.length}`, 11, x0, totalW);
     const cols = [
-      { header: H.bib, width: 46, align: 'r', render: (r) => r.bib },
-      { header: H.name, width: 220, align: 'r', render: (r) => r.participant },
-      { header: H.team, width: 200, align: 'r', render: (r) => r.team },
-      { header: H.category, width: 110, align: 'r', render: (r) => r.category },
-      { header: H.status, width: 80, align: 'r', render: (r) => r.status },
+      { header: H.bib, width: 40, align: 'r', render: (r) => r.bib },
+      { header: H.name, width: 150, align: 'r', render: (r) => r.participant },
+      { header: H.team, width: 150, align: 'r', render: (r) => r.team },
+      { header: H.category, width: 74, align: 'r', render: (r) => r.category },
+      { header: H.status, width: 60, align: 'r', render: (r) => r.status },
     ];
     const dnfW = cols.reduce((s, c) => s + c.width, 0);
     drawTable(ctx, cols, others, ctx.size.W - MARGIN - dnfW); // right-anchored too
@@ -274,12 +274,12 @@ async function leagueTeamPdf(league, teams, raceList) {
   addPage(ctx);
   const usable = ctx.size.W - MARGIN * 2;
   const fixed = [
-    { header: H.place, width: 40, align: 'r', render: (r, i) => i + 1 },
-    { header: H.team, width: 190, align: 'r', render: (r) => r.team },
+    { header: H.place, width: 36, align: 'r', render: (r, i) => i + 1 },
+    { header: H.team, width: 150, align: 'r', render: (r) => r.team },
   ];
-  const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 52; // + Total col
+  const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 46; // + Total col
   const rounds = roundColumns(raceList, usable, totalFixed);
-  const columns = [...fixed, ...rounds, { header: H.total, width: 52, align: 'r', render: (r) => r.total }];
+  const columns = [...fixed, ...rounds, { header: H.total, width: 46, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
   const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
@@ -297,14 +297,14 @@ async function leagueIndividualPdf(league, individual, raceList) {
   addPage(ctx);
   const usable = ctx.size.W - MARGIN * 2;
   const fixed = [
-    { header: H.place, width: 40, align: 'r', render: (r, i) => i + 1 },
-    { header: H.bib, width: 44, align: 'r', render: (r) => r.bib },
-    { header: H.name, width: 190, align: 'r', render: (r) => r.name },
-    { header: H.team, width: 170, align: 'r', render: (r) => r.team },
+    { header: H.place, width: 34, align: 'r', render: (r, i) => i + 1 },
+    { header: H.bib, width: 40, align: 'r', render: (r) => r.bib },
+    { header: H.name, width: 140, align: 'r', render: (r) => r.name },
+    { header: H.team, width: 140, align: 'r', render: (r) => r.team },
   ];
-  const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 50; // + Total col
+  const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 46; // + Total col
   const rounds = roundColumns(raceList, usable, totalFixed);
-  const columns = [...fixed, ...rounds, { header: H.total, width: 50, align: 'r', render: (r) => r.total }];
+  const columns = [...fixed, ...rounds, { header: H.total, width: 46, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
   const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
