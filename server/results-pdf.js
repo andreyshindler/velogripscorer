@@ -141,8 +141,21 @@ function drawTable(ctx, columns, rows, x0) {
 
 function drawTitle(ctx, text, sizePt, x0, totalW) {
   if (ctx.y - sizePt - 6 < MARGIN) addPage(ctx);
-  drawParts(ctx, visualParts(text), ctx.fontB, sizePt, 'r', x0, totalW, ctx.y - sizePt, INK);
+  const parts = Array.isArray(text) ? text : visualParts(text);
+  drawParts(ctx, parts, ctx.fontB, sizePt, 'r', x0, totalW, ctx.y - sizePt, INK);
   ctx.y -= sizePt + 6;
+}
+
+// Build a section-title draw order from components given in RTL reading order
+// (first component sits at the right). Each component keeps its own internal
+// bidi; forcing the order avoids the base-direction guess flipping the distance
+// to the left when a title starts with "5k"/"10k".
+function rtlTitle(components) {
+  const parts = [];
+  for (let i = components.length - 1; i >= 0; i--) {
+    if (components[i]) parts.push(...visualParts(components[i]));
+  }
+  return parts.length ? parts : [H.overall];
 }
 
 function drawSub(ctx, text, x0, totalW) {
@@ -208,9 +221,9 @@ async function raceResultsPdf(contest, results) {
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
     const label = d || H.overall;
-    section(`${label} ${H.overall}`, inD);
-    section(`${label} ${H.female}`, inD.filter((r) => isFemaleG(r.gender)));
-    section(`${label} ${H.male}`, inD.filter((r) => isMaleG(r.gender)));
+    section(rtlTitle([label, H.overall]), inD);
+    section(rtlTitle([label, H.female]), inD.filter((r) => isFemaleG(r.gender)));
+    section(rtlTitle([label, H.male]), inD.filter((r) => isMaleG(r.gender)));
   }
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
@@ -219,7 +232,8 @@ async function raceResultsPdf(contest, results) {
     for (const combo of combos) {
       const [cat, g] = combo.split('|');
       const gl = genderHe(genderLabelG(g), true);
-      section(`${label} ${cat}${gl ? ` ${gl}` : ''}`,
+      // RTL reading order: distance, then category, then gender.
+      section(rtlTitle([label, cat, gl]),
         inD.filter((r) => r.category === cat && (r.gender || '').toLowerCase() === g));
     }
   }
@@ -298,7 +312,8 @@ async function leagueIndividualPdf(league, individual, raceList) {
   drawSub(ctx, `${H.individualStandings} · ${raceList.length} ${H.races}`, x0, totalW);
 
   for (const group of individual) {
-    const title = [group.distance, genderHe(group.gender, true), group.category].filter(Boolean).join(' · ') || H.overall;
+    // RTL reading order: distance, then category, then gender.
+    const title = rtlTitle([group.distance, group.category, genderHe(group.gender, true)]);
     ctx.y -= 4;
     drawTitle(ctx, title, 11, x0, totalW);
     drawTable(ctx, columns, group.rows, x0);
