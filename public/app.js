@@ -1154,26 +1154,40 @@ function topFinishersTables(results, n) {
   }).join('') || `<p class="muted">${t('no_results_yet')}</p>`;
 }
 
+// Full results split into a section per distance, each ranked on its own
+// (a 5k time can't be compared to a 10k, so they're separate competitions).
 function fullResultsTable(results) {
-  const finished = results.filter((r) => r.status === 'finished');
-  const others = results.filter((r) => r.status !== 'finished');
-  const rows = [
-    ...finished.map((r) => `<tr class="${r.rank <= 3 ? 'top' + r.rank : ''}">
-      <td><strong>${MEDALS[r.rank] || r.rank}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
-      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td><td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td>
-      <td>${esc(r.distance || '')}</td><td>${r.laps}</td>
+  const byDist = groupByDistance(results);
+  const dists = [...byDist.keys()].sort();
+  const sections = dists.map((d) => {
+    const all = byDist.get(d);
+    const finished = all.filter((r) => r.status === 'finished').sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
+    const others = all.filter((r) => r.status !== 'finished');
+    if (!finished.length && !others.length) return '';
+    const lead = finished[0];
+    const behindOf = (r, i) => {
+      if (i === 0 || !lead) return '';
+      if (r.laps < lead.laps) { const g = lead.laps - r.laps; return `-${g} ${g > 1 ? t('laps') : t('lap')}`; }
+      return '+' + fmtElapsedMs(r.elapsed_ms - lead.elapsed_ms);
+    };
+    const finRows = finished.map((r, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
+      <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
+      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td>
+      <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
-      <td class="muted" style="font-variant-numeric:tabular-nums">${esc(r.behind || '')}</td></tr>`),
-    ...others.map((r) => `<tr>
+      <td class="muted" style="font-variant-numeric:tabular-nums">${behindOf(r, i)}</td></tr>`).join('');
+    const otherRows = others.map((r) => `<tr>
       <td class="muted">–</td><td><strong>${esc(r.bib || '')}</strong></td>
-      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td><td>${esc(r.category || '')}</td><td></td>
-      <td>${esc(r.distance || '')}</td><td>${r.laps || ''}</td>
-      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td></tr>`),
-  ].join('') || `<tr><td colspan="9" class="muted">${t('no_results_yet')}</td></tr>`;
-  return `<div style="overflow-x:auto"><table class="board mt"><thead><tr>
-    <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-    <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('laps')}</th>
-    <th>${t('elapsed_col')}</th><th>${t('behind')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td>
+      <td>${esc(r.category || '')}</td><td></td><td>${r.laps || ''}</td>
+      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td></tr>`).join('');
+    return `<div style="overflow-x:auto"><table class="board mt"><thead>
+      <tr><th colspan="8">${esc(d || t('overall'))}</th></tr>
+      <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
+      <th>${t('category_place')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th></tr></thead>
+      <tbody>${finRows}${otherRows}</tbody></table></div>`;
+  }).join('');
+  return sections || `<p class="muted">${t('no_results_yet')}</p>`;
 }
 
 async function renderStartlist(box, c) {
