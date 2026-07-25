@@ -232,8 +232,8 @@ async function raceResultsPdf(contest, results) {
     for (const combo of combos) {
       const [cat, g] = combo.split('|');
       const gl = genderHe(genderLabelG(g), true);
-      // RTL reading order: distance, then category, then gender.
-      section(rtlTitle([label, cat, gl]),
+      // RTL reading order: distance, then gender, then category.
+      section(rtlTitle([label, gl, cat]),
         inD.filter((r) => r.category === cat && (r.gender || '').toLowerCase() === g));
     }
   }
@@ -312,8 +312,8 @@ async function leagueIndividualPdf(league, individual, raceList) {
   drawSub(ctx, `${H.individualStandings} · ${raceList.length} ${H.races}`, x0, totalW);
 
   for (const group of individual) {
-    // RTL reading order: distance, then category, then gender.
-    const title = rtlTitle([group.distance, group.category, genderHe(group.gender, true)]);
+    // RTL reading order: distance, then gender, then category.
+    const title = rtlTitle([group.distance, genderHe(group.gender, true), group.category]);
     ctx.y -= 4;
     drawTitle(ctx, title, 11, x0, totalW);
     drawTable(ctx, columns, group.rows, x0);
