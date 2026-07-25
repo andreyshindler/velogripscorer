@@ -1,76 +1,65 @@
 'use strict';
 
-// Compact right-to-left reorderer for the PDF exports. pdf-lib (like every
-// pure-JS PDF library) has no bidi engine: drawText() paints glyphs strictly
-// left-to-right in code-point order, so a logical-order Hebrew string comes out
-// reversed on the page. The result tables are made of short, per-cell
-// mono-directional strings — a Hebrew name/team, or an LTR bib/time/place — so a
-// full UAX#9 implementation is overkill. reorderRtl() turns one logical-order
-// cell into the visual (left-to-right) order pdf-lib should draw, with a base
-// direction of RTL.
+// Bidi run splitting for the PDF exports. The PDF renderers real users open
+// (Chromium/pdfium, phone viewers, Telegram's in-app viewer) render a *pure*
+// left-to-right or *pure* right-to-left string correctly on their own, but when
+// a single drawn text run mixes Hebrew with a multi-digit number they mangle it
+// — e.g. "נדב 109" comes out "נדב 901" (the digits get reversed). The reliable
+// fix is to never hand the renderer a mixed run: split each cell into maximal
+// same-direction runs and let the caller draw each run with its own positioned
+// drawText, ordered per the paragraph's base direction.
 //
-// Fidelity limits (deliberate): no nested embeddings/overrides, no bracket-pair
-// mirroring, no combining-mark reordering, and no Arabic shaping. This is
-// sufficient for Hebrew names, team names, categories, bib numbers and times;
-// pathological mixed punctuation could rarely misorder.
+// visualParts(str) returns the runs already ordered left-to-right for drawing
+// (each run drawn as-is, no character reversal), trimmed, so the caller lays
+// them out with a single gap between runs.
+//
+// Fidelity limits (deliberate): the base direction is the first strong
+// character (UAX#9 P2/P3), neutrals resolve to their surrounding runs, but
+// there are no nested embeddings/overrides, no bracket-pair mirroring and no
+// Arabic shaping. Sufficient for names, teams, categories, times and titles.
 
-// Hebrew block (letters + niqqud + geresh/gershayim) plus the Alphabetic
-// Presentation Forms used for a few Hebrew ligatures.
 function isHebrew(ch) {
   const c = ch.codePointAt(0);
   return (c >= 0x0590 && c <= 0x05ff) || (c >= 0xfb1d && c <= 0xfb4f);
 }
-// Latin letters (basic + Latin-1 + extended) count as strong LTR.
 function isLatin(ch) {
   const c = ch.codePointAt(0);
-  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) ||
-    (c >= 0xc0 && c <= 0x24f);
+  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0xc0 && c <= 0x24f);
 }
-// ASCII digits: kept LTR so bibs ("3"), times ("12:34") and years never reverse.
 function isDigit(ch) {
   const c = ch.codePointAt(0);
   return c >= 0x30 && c <= 0x39;
 }
 
-// R = strong RTL (Hebrew); L = keep-logical-order LTR (Latin letters and
-// digits — neither is ever glyph-reversed); N = neutral (punctuation,
-// whitespace — direction inherited from the surrounding runs).
+// R = strong RTL (Hebrew); L = strong-ish LTR (Latin letters and digits — a
+// digit never joins an RTL run so numbers stay upright); N = neutral.
 function dirOf(ch) {
   if (isHebrew(ch)) return 'R';
   if (isLatin(ch) || isDigit(ch)) return 'L';
   return 'N';
 }
 
-/**
- * Reorder one logical-order string into visual (left-to-right draw) order for a
- * base-RTL paragraph. Hebrew runs are reversed; Latin and neutral (number/time)
- * runs keep their logical order so bibs like "3" and times like "12:34" stay
- * upright. Non-strings return ''.
- */
-function reorderRtl(str) {
-  if (typeof str !== 'string') return '';
-  if (!str) return '';
-  const chars = Array.from(str); // code-point safe
-
-  // 1) Resolve each character's direction. A neutral takes the direction shared
-  //    by its nearest strong neighbours on both sides, otherwise the base (R).
+/** Resolve directions and coalesce into logical-order runs. */
+function resolveRuns(str) {
+  const chars = Array.from(str);
   const strong = chars.map(dirOf);
+  const base = strong.find((s) => s !== 'N') || 'L'; // first strong char (UAX#9)
+
   const resolved = strong.slice();
   for (let i = 0; i < chars.length; i++) {
     if (strong[i] !== 'N') continue;
     let prev = null, next = null;
     for (let j = i - 1; j >= 0; j--) { if (strong[j] !== 'N') { prev = strong[j]; break; } }
     for (let j = i + 1; j < chars.length; j++) { if (strong[j] !== 'N') { next = strong[j]; break; } }
-    // A neutral takes the direction shared by its nearest strong neighbours; at
-    // a string boundary it follows its only neighbour (so a leading "+"/"." binds
-    // to the number it precedes); with none, or a conflict, it takes base (R).
-    if (prev === null && next === null) resolved[i] = 'R';
+    // A neutral joins a run only when both sides agree; at a boundary between
+    // opposite runs (or the string edge) it takes the base direction, which
+    // keeps a boundary space out of a Hebrew word and beside the number.
+    if (prev === null && next === null) resolved[i] = base;
     else if (prev === null) resolved[i] = next;
     else if (next === null) resolved[i] = prev;
-    else resolved[i] = prev === next ? prev : 'R';
+    else resolved[i] = prev === next ? prev : base;
   }
 
-  // 2) Coalesce into maximal runs of one resolved direction.
   const runs = [];
   for (let i = 0; i < chars.length; i++) {
     const d = resolved[i];
@@ -78,15 +67,19 @@ function reorderRtl(str) {
     if (last && last.dir === d) last.text += chars[i];
     else runs.push({ dir: d, text: chars[i] });
   }
-
-  // 3) Emit runs right-to-left (last logical run drawn leftmost). Reverse the
-    //  glyphs inside RTL runs; leave LTR/number runs in logical order.
-  let out = '';
-  for (let i = runs.length - 1; i >= 0; i--) {
-    const run = runs[i];
-    out += run.dir === 'R' ? Array.from(run.text).reverse().join('') : run.text;
-  }
-  return out;
+  return { base, runs };
 }
 
-module.exports = { reorderRtl, dirOf };
+/**
+ * Runs of one string ordered left-to-right for drawing, each trimmed and drawn
+ * as-is (no reversal). For a base-RTL paragraph the logical run order is
+ * reversed so the first logical run sits rightmost. Non-strings → [].
+ */
+function visualParts(str) {
+  if (typeof str !== 'string' || !str) return [];
+  const { base, runs } = resolveRuns(str);
+  const ordered = base === 'R' ? runs.slice().reverse() : runs;
+  return ordered.map((r) => r.text.trim()).filter((t) => t.length > 0);
+}
+
+module.exports = { visualParts, dirOf };

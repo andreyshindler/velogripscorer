@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { PDFDocument, rgb } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
-const { reorderRtl } = require('./bidi');
+const { visualParts } = require('./bidi');
 const { formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('./race-results');
 
 // Fonts embedded (and subset) into every document; read once at startup.
@@ -42,30 +42,47 @@ function addPage(ctx) {
   return ctx.page;
 }
 
-// Truncate a logical-order string so its reordered visual form fits maxWidth.
+// Rendered width of a cell: its bidi runs laid out with a single gap between.
+function partsWidth(font, parts, sizePt) {
+  if (!parts.length) return 0;
+  const gap = font.widthOfTextAtSize(' ', sizePt);
+  return parts.reduce((s, t) => s + font.widthOfTextAtSize(t, sizePt), 0) + gap * (parts.length - 1);
+}
+
+// Truncate a logical-order string so its rendered (bidi) width fits maxWidth.
 function fit(ctx, str, sizePt, maxWidth, bold) {
   const font = bold ? ctx.fontB : ctx.fontR;
   let s = String(str == null ? '' : str);
-  if (font.widthOfTextAtSize(reorderRtl(s), sizePt) <= maxWidth) return s;
+  if (partsWidth(font, visualParts(s), sizePt) <= maxWidth) return s;
   while (s.length > 1) {
     s = s.slice(0, -1);
-    if (font.widthOfTextAtSize(reorderRtl(s + '…'), sizePt) <= maxWidth) return s + '…';
+    if (partsWidth(font, visualParts(s + '…'), sizePt) <= maxWidth) return s + '…';
   }
   return s;
 }
 
-// Draw one cell's text within [x, x+width], honouring alignment + RTL reorder.
+// Place already-split visual runs within [x0, x0+boxW] at absolute y, each run
+// drawn as its own text object so the viewer's bidi can't reorder across runs.
+function drawParts(ctx, parts, font, sizePt, align, x0, boxW, y, color) {
+  if (!parts.length) return;
+  const gap = font.widthOfTextAtSize(' ', sizePt);
+  const total = partsWidth(font, parts, sizePt);
+  let tx;
+  if (align === 'l') tx = x0;
+  else if (align === 'c') tx = x0 + (boxW - total) / 2;
+  else tx = x0 + boxW - total; // 'r'
+  for (const t of parts) {
+    ctx.page.drawText(t, { x: tx, y, size: sizePt, font, color });
+    tx += font.widthOfTextAtSize(t, sizePt) + gap;
+  }
+}
+
+// Draw one table cell, honouring alignment; splits into bidi runs first.
 function drawCell(ctx, value, col, x, y, sizePt, bold) {
   const font = bold ? ctx.fontB : ctx.fontR;
   const pad = 3;
-  const text = reorderRtl(fit(ctx, value, sizePt, col.width - pad * 2, bold));
-  if (text === '') return;
-  const w = font.widthOfTextAtSize(text, sizePt);
-  let tx;
-  if (col.align === 'l') tx = x + pad;
-  else if (col.align === 'c') tx = x + (col.width - w) / 2;
-  else tx = x + col.width - w - pad; // 'r'
-  ctx.page.drawText(text, { x: tx, y, size: sizePt, font, color: INK });
+  const parts = visualParts(fit(ctx, value, sizePt, col.width - pad * 2, bold));
+  drawParts(ctx, parts, font, sizePt, col.align, x + pad, col.width - pad * 2, y, INK);
 }
 
 const ROW_H = 15;
@@ -106,17 +123,13 @@ function drawTable(ctx, columns, rows, x0) {
 
 function drawTitle(ctx, text, sizePt, x0, totalW) {
   if (ctx.y - sizePt - 6 < MARGIN) addPage(ctx);
-  const t = reorderRtl(text);
-  const w = ctx.fontB.widthOfTextAtSize(t, sizePt);
-  ctx.page.drawText(t, { x: x0 + totalW - w, y: ctx.y - sizePt, size: sizePt, font: ctx.fontB, color: INK });
+  drawParts(ctx, visualParts(text), ctx.fontB, sizePt, 'r', x0, totalW, ctx.y - sizePt, INK);
   ctx.y -= sizePt + 6;
 }
 
 function drawSub(ctx, text, x0, totalW) {
   if (ctx.y - 12 < MARGIN) addPage(ctx);
-  const t = reorderRtl(text);
-  const w = ctx.fontR.widthOfTextAtSize(t, 9);
-  ctx.page.drawText(t, { x: x0 + totalW - w, y: ctx.y - 10, size: 9, font: ctx.fontR, color: rgb(0.4, 0.4, 0.45) });
+  drawParts(ctx, visualParts(text), ctx.fontR, 9, 'r', x0, totalW, ctx.y - 10, rgb(0.4, 0.4, 0.45));
   ctx.y -= 16;
 }
 
