@@ -1089,8 +1089,9 @@ function raceWinnersTables(id, results, raceDone) {
   // One shared table (a distance separator row per distance) so every column
   // aligns across all distances/categories — the leader and time columns size
   // to the longest name across the whole result set, not per distance.
-  const multiLap = results.some((r) => (r.laps || 0) > 1);
-  const colCount = multiLap ? 6 : 5;
+  // Lap times aren't a per-row column here — they live in the top "lap times"
+  // tab, so a lap race keeps this table just as clean as a single-lap one.
+  const colCount = 5;
 
   const line = (d, label, scope, indent, catFilter, gender) => {
     const seg = (view) => `#/results/${id}/${view}?dist=${encodeURIComponent(d)}`
@@ -1104,7 +1105,6 @@ function raceWinnersTables(id, results, raceDone) {
       <td>${raceDone ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('results_word')}</a>`
         : scope.some((r) => r.wave_started_at) ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('live_race')}</a>`
         : `<span class="muted">${t('not_started_yet')}</span>`}</td>
-      ${multiLap ? `<td><a href="#/results/${id}/laps">${arrow()} ${t('lap_times')}</a></td>` : ''}
     </tr>`;
   };
 
@@ -1123,7 +1123,6 @@ function raceWinnersTables(id, results, raceDone) {
       <thead><tr>
         <th>${t('category')}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
         <th>${t('total_racers')}</th><th>${raceDone ? t('results_word') : t('progress_view')}</th>
-        ${multiLap ? `<th>${t('lap_times')}</th>` : ''}
       </tr></thead>
       <tbody>${body}</tbody>
     </table></div>`;
