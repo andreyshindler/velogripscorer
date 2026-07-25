@@ -19,11 +19,23 @@ seedAdmin();
 const past = new Date(Date.now() - 3600_000).toISOString();
 const future = new Date(Date.now() + 86400_000).toISOString();
 
-// supertest-backed API client (same shape the prod fetch client returns)
+// Collect a binary response body into a Buffer (PDF exports).
+const binaryParser = (res, cb) => {
+  const chunks = [];
+  res.on('data', (c) => chunks.push(Buffer.from(c)));
+  res.on('end', () => cb(null, Buffer.concat(chunks)));
+};
+
+// supertest-backed API client (same shape the prod fetch client returns):
+// PDF requests come back as a Buffer, everything else as json/text.
 const api = async (method, p, { token, body } = {}) => {
   let r = request(app)[method.toLowerCase()](`/api${p}`);
   if (token) r = r.set('Authorization', `Bearer ${token}`);
   if (body !== undefined) r = r.send(body);
+  if (/[?&]format=pdf(&|$)/.test(p)) {
+    const res = await r.buffer(true).parse(binaryParser);
+    return { status: res.status, buffer: res.body };
+  }
   const res = await r;
   return { status: res.status, json: res.body, text: res.text };
 };
@@ -229,6 +241,42 @@ test('/league lists leagues, shows standings, and sends CSVs', async () => {
   await tap(ALLOWED, `lgcsv:${league.id}:team`);
   doc = send.last('document');
   assert.equal(doc.filename, `league-${league.id}-team.csv`);
+});
+
+test('/pdf sends a PDF document', async () => {
+  send.reset();
+  await text(ALLOWED, '/pdf');
+  const doc = send.last('document');
+  assert.ok(doc, 'a document was sent');
+  assert.equal(doc.filename, `race-results-${contestId}.pdf`);
+  assert.ok(Buffer.isBuffer(doc.content), 'PDF content is a Buffer');
+  assert.equal(doc.content.subarray(0, 5).toString('latin1'), '%PDF-');
+});
+
+test('league PDF buttons send PDF documents', async () => {
+  const admin = (await request(app).post('/api/auth/login')
+    .send({ email: 'admin@velogripscorer.local', password: 'change-me-please' })).body;
+  const leagues = (await request(app).get('/api/leagues')
+    .set({ Authorization: `Bearer ${admin.token}` })).body;
+  const league = (leagues.leagues || leagues)[0];
+  assert.ok(league && league.id, 'a league exists from the earlier test');
+
+  // the standings message offers PDF buttons alongside the CSV ones
+  send.reset();
+  await text(ALLOWED, '/league');
+  const btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.includes(`lgpdf:${league.id}:individual`));
+  assert.ok(btns.includes(`lgpdf:${league.id}:team`));
+
+  for (const which of ['individual', 'team']) {
+    send.reset();
+    await tap(ALLOWED, `lgpdf:${league.id}:${which}`);
+    const doc = send.last('document');
+    assert.ok(doc, `${which} PDF sent`);
+    assert.equal(doc.filename, `league-${league.id}-${which}.pdf`);
+    assert.ok(Buffer.isBuffer(doc.content), 'PDF content is a Buffer');
+    assert.equal(doc.content.subarray(0, 5).toString('latin1'), '%PDF-');
+  }
 });
 
 test('empty allowlist serves nobody (fail-safe)', async () => {

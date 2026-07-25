@@ -58,7 +58,9 @@ ones and the Telegram “Menu” list): `/races` (pick a race), `/list [text]`,
 `/add` (guided, or one line
 `/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=…`),
 `/edit <bib>` (field buttons incl. wave & chip, or `/edit 101 name=… wave=…`),
-`/del <bib>`, `/csv`. A racer added without a chip gets its bib as a full
+`/del <bib>`, `/csv`, `/pdf`. `/pdf` sends the race-results PDF; `/league`'s
+standings message also offers **Individual/Team PDF** buttons (see _PDF exports_
+below). A racer added without a chip gets its bib as a full
 24-char EPC (`000…000101`), matching what the readers emit. The bot uses long
 polling (outbound to `api.telegram.org`) — no inbound webhook or public URL is
 needed, so it works behind a `BASE_PATH` reverse proxy. Under Docker, set both
@@ -136,7 +138,10 @@ server/
   scoring.js      weighted score: Score = Σ (weight/100 × avg criterion score)
   events.js       SSE hub (real-time leaderboards), in-app notifications,
                   HMAC-signed outbound webhooks
-  telegram.js     Telegram start-list bot (add/edit/delete racers, CSV export)
+  telegram.js     Telegram start-list bot (add/edit/delete racers, CSV/PDF export)
+  results-pdf.js  race-results + league-standings PDF builders (pdf-lib)
+  bidi.js         Hebrew logical→visual reorderer for the PDF tables
+  assets/fonts/   bundled Noto Sans Hebrew (SIL OFL) embedded into the PDFs
   moderation.js   automated profanity screen
   routes/         users, contests, entries (+votes/comments/reports), admin
 public/           vanilla-JS SPA — no build step; English + Hebrew (RTL) i18n
@@ -251,6 +256,27 @@ The Timing tab is a full race console:
   filtered by category (`?category=`).
 - **Manual entry** — type a bib and hit Record for racers whose chip failed;
   unknown numeric bibs get a synthetic assignment automatically.
+
+### PDF exports
+
+Three PDF reports, alongside the existing CSV exports, are produced server-side
+and delivered through the **operator Telegram bot**:
+
+- `/pdf` — the selected race's results (per-distance Overall / Female / Male and
+  per category+gender sections).
+- `/league` → **Individual PDF** / **Team PDF** buttons — the accumulated league
+  standings (best-N applied, one round column per race).
+
+They render Hebrew right-to-left. There is no external browser or system font
+dependency: `results-pdf.js` builds the pages with `pdf-lib` (+ `@pdf-lib/fontkit`)
+and embeds a subset of the bundled **Noto Sans Hebrew** TTF under
+`server/assets/fonts/` (SIL OFL 1.1, shipped by the Dockerfile's `COPY server`).
+Because pure-JS PDF drawing has no bidi engine, `bidi.js` reorders each Hebrew
+cell into visual order; numbers, times and bib IDs stay LTR. It handles the
+mono-directional cells in these tables (names, teams, times) — not full UAX#9
+(no nested embeddings, bracket mirroring, or Arabic shaping). The same data is
+also reachable at `GET /contests/:id/race-results?format=pdf` (organizer only)
+and `GET /leagues/:id/standings?format=pdf&table=team|individual`.
 
 ### App ⇄ web sync (all authenticated by the reader device token)
 
