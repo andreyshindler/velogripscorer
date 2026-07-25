@@ -11,6 +11,7 @@ const { db, auditLog } = require('../db');
 const { requireAuth, requireAdmin } = require('../auth');
 const { computeRaceResults } = require('../race-results');
 const { normalizeSettings, computeLeagueStandings } = require('../league-scoring');
+const { leagueTeamPdf, leagueIndividualPdf } = require('../results-pdf');
 
 const router = express.Router();
 
@@ -50,7 +51,7 @@ router.get('/leagues/:id', (req, res) => {
   res.json({ league: leagueJson(league), races: leagueRaces(league.id) });
 });
 
-router.get('/leagues/:id/standings', (req, res) => {
+router.get('/leagues/:id/standings', async (req, res) => {
   const league = getLeague(req.params.id);
   if (!league) return res.status(404).json({ error: 'league not found' });
   const settings = normalizeSettings(league.settings);
@@ -77,6 +78,19 @@ router.get('/leagues/:id/standings', (req, res) => {
     return res.type('text/csv; charset=utf-8')
       .set('Content-Disposition', `attachment; filename="league-${league.id}-${table}.csv"`)
       .send('﻿' + csv); // BOM so Excel reads Hebrew as UTF-8
+  }
+  if (req.query.format === 'pdf') {
+    const table = req.query.table === 'team' ? 'team' : 'individual';
+    try {
+      const buf = table === 'team'
+        ? await leagueTeamPdf(leagueJson(league), teams, raceList)
+        : await leagueIndividualPdf(leagueJson(league), individual, raceList);
+      return res.type('application/pdf')
+        .set('Content-Disposition', `attachment; filename="league-${league.id}-${table}.pdf"`)
+        .send(buf);
+    } catch (err) {
+      return res.status(500).json({ error: 'pdf build failed' });
+    }
   }
 
   res.json({ league: leagueJson(league), races: raceList, individual, teams });

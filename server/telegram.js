@@ -200,13 +200,13 @@ function btn(text, data) { return { text, callback_data: data }; }
 // The labels map back to their slash commands in handleText.
 const COMMAND_LABELS = {
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add',
-  '📄 CSV': '/csv', '🏆 League': '/league', '❓ Help': '/help',
+  '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league', '❓ Help': '/help',
 };
 function mainKeyboard() {
   return {
     keyboard: [
       [{ text: '🏁 Races' }, { text: '📋 List' }],
-      [{ text: '➕ Add' }, { text: '📄 CSV' }],
+      [{ text: '➕ Add' }, { text: '📄 CSV' }, { text: '📑 PDF' }],
       [{ text: '🏆 League' }, { text: '❓ Help' }],
     ],
     resize_keyboard: true,
@@ -278,7 +278,8 @@ const HELP = [
   '   <code>/edit 101 name=New Name cat=M45 wave=Sport epc=E280A1</code>',
   '/del &lt;bib&gt; — remove a racer',
   '/csv — download the results CSV',
-  '/league — season league standings + CSV',
+  '/pdf — download the results PDF',
+  '/league — season league standings + CSV/PDF',
   '/whoami — show your Telegram id',
   '/cancel — abort the current step',
 ].join('\n');
@@ -517,6 +518,14 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     await send.document(chatId, `race-results-${c.id}.csv`, res.text, `${c.title} — results`);
   }
 
+  async function cmdPdf(chatId) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const res = await A('GET', `/contests/${c.id}/race-results?format=pdf`);
+    if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
+    await send.document(chatId, `race-results-${c.id}.pdf`, res.buffer, `${c.title} — results`);
+  }
+
   // ---- league standings ----
 
   async function cmdLeague(chatId) {
@@ -554,7 +563,10 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       text += (text ? '\n' : '') + line;
     }
     await send.message(chatId, text || 'No scores yet.', {
-      reply_markup: kb([[btn('📄 Individual CSV', `lgcsv:${id}:individual`), btn('📄 Team CSV', `lgcsv:${id}:team`)]]),
+      reply_markup: kb([
+        [btn('📄 Individual CSV', `lgcsv:${id}:individual`), btn('📄 Team CSV', `lgcsv:${id}:team`)],
+        [btn('📑 Individual PDF', `lgpdf:${id}:individual`), btn('📑 Team PDF', `lgpdf:${id}:team`)],
+      ]),
     });
   }
 
@@ -563,6 +575,13 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     const res = await A('GET', `/leagues/${id}/standings?format=csv&table=${which}`);
     if (res.status >= 400) { await send.message(chatId, '⚠️ Could not build the CSV.'); return; }
     await send.document(chatId, `league-${id}-${which}.csv`, res.text, `League standings — ${which}`);
+  }
+
+  async function leaguePdf(chatId, id, table) {
+    const which = table === 'team' ? 'team' : 'individual';
+    const res = await A('GET', `/leagues/${id}/standings?format=pdf&table=${which}`);
+    if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
+    await send.document(chatId, `league-${id}-${which}.pdf`, res.buffer, `League standings — ${which}`);
   }
 
   // ---- wizard (guided /add) ----
@@ -640,6 +659,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       case '/del':
       case '/delete': return cmdDel(chatId, rest);
       case '/csv': return cmdCsv(chatId);
+      case '/pdf': return cmdPdf(chatId);
       case '/league': return cmdLeague(chatId);
       default:
         return send.message(chatId, 'Unknown command. /help for the list.');
@@ -655,6 +675,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (tag === 'use') return useRace(chatId, a);
     if (tag === 'lg') return showLeague(chatId, a);
     if (tag === 'lgcsv') return leagueCsv(chatId, a, b);
+    if (tag === 'lgpdf') return leaguePdf(chatId, a, b);
     if (tag === 'edit') return cmdEdit(chatId, a);
     if (tag === 'del') return cmdDel(chatId, a);
     if (tag === 'delyes') return doDelete(chatId, a);
@@ -961,6 +982,15 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
 
 // ---------- transport (real IO; only when enabled) ----------
 
+// Content type for an uploaded document, inferred from its extension so PDF and
+// CSV both send correctly through the one helper.
+function mimeFor(filename) {
+  const n = String(filename || '').toLowerCase();
+  if (n.endsWith('.pdf')) return 'application/pdf';
+  if (n.endsWith('.csv')) return 'text/csv; charset=utf-8';
+  return 'application/octet-stream';
+}
+
 function tgSender(botToken) {
   const base = `https://api.telegram.org/bot${botToken}`;
   const call = async (method, params) => {
@@ -977,10 +1007,11 @@ function tgSender(botToken) {
     message: (chatId, text, extra = {}) => call('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }),
     answerCallback: (id, text) => call('answerCallbackQuery', { callback_query_id: id, text: text || undefined }),
     async document(chatId, filename, content, caption) {
+      // content is a CSV string or a PDF Buffer; Blob accepts both.
       const form = new FormData();
       form.append('chat_id', String(chatId));
       if (caption) form.append('caption', caption);
-      form.append('document', new Blob([content], { type: 'text/csv' }), filename);
+      form.append('document', new Blob([content], { type: mimeFor(filename) }), filename);
       const res = await fetch(`${base}/sendDocument`, { method: 'POST', body: form, signal: AbortSignal.timeout(35000) });
       return res.json().catch(() => ({}));
     },
@@ -995,6 +1026,12 @@ function localApi(apiBase) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000),
     });
+    // Binary responses (PDF) come back as a Buffer; text/JSON keep their path.
+    const ctype = res.headers.get('content-type') || '';
+    if (/application\/pdf|application\/octet-stream/.test(ctype)) {
+      const buffer = Buffer.from(await res.arrayBuffer());
+      return { status: res.status, buffer };
+    }
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); } catch { /* non-JSON (CSV) */ }
@@ -1009,6 +1046,7 @@ const OPERATOR_COMMANDS = [
   { command: 'edit', description: 'Edit a racer: /edit <bib>' },
   { command: 'del', description: 'Delete a racer: /del <bib>' },
   { command: 'csv', description: 'Download the results CSV' },
+  { command: 'pdf', description: 'Download the results PDF' },
   { command: 'league', description: 'Season league standings' },
   { command: 'whoami', description: 'Show your Telegram id' },
   { command: 'help', description: 'Show help' },

@@ -9,6 +9,7 @@ const multer = require('multer');
 const { parseXlsx } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
 const { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('../race-results');
+const { raceResultsPdf } = require('../results-pdf');
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -592,7 +593,7 @@ router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
 
 // ---- Race results: elapsed = first read after wave start + suppression ----
 // The computation lives in server/race-results.js (shared with league standings).
-router.get('/contests/:id/race-results', (req, res) => {
+router.get('/contests/:id/race-results', async (req, res) => {
   const contest = viewableContest(req, res);
   if (!contest) return;
 
@@ -604,6 +605,18 @@ router.get('/contests/:id/race-results', (req, res) => {
     return res.type('text/csv; charset=utf-8')
       .set('Content-Disposition', `attachment; filename="race-results-${contest.id}.csv"`)
       .send('﻿' + resultsCsv(results)); // BOM so Excel reads Hebrew as UTF-8
+  }
+  if (req.query.format === 'pdf') {
+    // Same organizer gating as the CSV export.
+    if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+    try {
+      const buf = await raceResultsPdf(contest, results); // async; Express 4 won't catch a rejection
+      return res.type('application/pdf')
+        .set('Content-Disposition', `attachment; filename="race-results-${contest.id}.pdf"`)
+        .send(buf);
+    } catch (err) {
+      return res.status(500).json({ error: 'pdf build failed' });
+    }
   }
   res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
