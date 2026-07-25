@@ -13,7 +13,7 @@ process.env.ADMIN_PASSWORD = 'admin-secret-1';
 
 const request = require('supertest');
 const { app, seedAdmin } = require('../server/index');
-const { DEFAULT_SETTINGS, normalizeSettings, scoreRace, computeLeagueStandings } = require('../server/league-scoring');
+const { DEFAULT_SETTINGS, normalizeSettings, scoreRace, computeLeagueStandings, presetSettings } = require('../server/league-scoring');
 
 seedAdmin();
 
@@ -83,6 +83,76 @@ test('scoreRace: team sums its best N runners only', () => {
   assert.equal(byTeam['Aces'].counted.length, 5);
   // Solo places 6,7 -> 1+1 = 2 (fewer than 5 runners: sum what exists)
   assert.equal(byTeam['Solo'].points, 2);
+});
+
+test('normalizeSettings: MTB team_scoring_mode + team_overall_start', () => {
+  const s = normalizeSettings({ team_scoring_mode: 'overall', team_overall_start: 100 });
+  assert.equal(s.team_scoring_mode, 'overall');
+  assert.equal(s.team_overall_start, 100);
+  assert.equal(normalizeSettings({}).team_scoring_mode, 'category', 'default stays category');
+  assert.throws(() => normalizeSettings({ team_scoring_mode: 'bogus' }));
+  assert.throws(() => normalizeSettings({ team_overall_start: 0 }));
+  assert.throws(() => normalizeSettings({ team_overall_start: 1.5 }));
+});
+
+test('presetSettings: mtb preset shape', () => {
+  const m = presetSettings('mtb');
+  assert.deepEqual(m.individual_points, [26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2]);
+  assert.equal(m.individual_other_points, 0);
+  assert.equal(m.individual_best_n, 5);
+  assert.equal(m.team_scoring_mode, 'overall');
+  assert.equal(m.team_overall_start, 100);
+  assert.equal(m.team_top_runners, 3);
+  assert.equal(m.team_best_n, 5);
+  assert.throws(() => presetSettings('nope'));
+  // running preset equals the defaults
+  assert.deepEqual(presetSettings('running'), DEFAULT_SETTINGS);
+});
+
+test('scoreRace: MTB overall team points (100,99,…), best 3, individual per category', () => {
+  const s = normalizeSettings(presetSettings('mtb'));
+  const fin = (bib, team, cat, elapsed) => ({
+    bib, participant: `R${bib}`, status: 'finished', laps: 1, elapsed_ms: elapsed,
+    distance: '', gender: 'M', category: cat, team,
+  });
+  // overall order 1..6 across two categories and two teams
+  const results = [
+    fin('1', 'Alpha', 'Elite', 1000), // overall 1 -> team 100 ; Elite 1st -> ind 26
+    fin('2', 'Beta', 'Elite', 1100),  // overall 2 -> team 99  ; Elite 2nd -> ind 24
+    fin('3', 'Alpha', 'Elite', 1200), // overall 3 -> team 98  ; Elite 3rd -> ind 22
+    fin('4', 'Beta', 'Sport', 1300),  // overall 4 -> team 97  ; Sport 1st -> ind 26
+    fin('5', 'Alpha', 'Sport', 1400), // overall 5 -> team 96  ; Sport 2nd -> ind 24
+    fin('6', 'Beta', 'Sport', 1500),  // overall 6 -> team 95  ; Sport 3rd -> ind 22
+  ];
+  const { riders, teams } = scoreRace(results, s);
+  const byBib = Object.fromEntries(riders.map((r) => [r.bib, r]));
+  // team points come from OVERALL place
+  assert.equal(byBib['1'].team_points, 100);
+  assert.equal(byBib['6'].team_points, 95);
+  // individual points come from CATEGORY place (both category winners get 26)
+  assert.equal(byBib['1'].points, 26);
+  assert.equal(byBib['4'].points, 26, 'Sport winner also gets 26');
+  assert.equal(byBib['2'].points, 24);
+  assert.equal(byBib['3'].points, 22);
+  // team race score = sum of best 3 overall-placed finishers
+  const byTeam = Object.fromEntries(teams.map((t) => [t.team, t]));
+  assert.equal(byTeam['Alpha'].points, 100 + 98 + 96); // 294
+  assert.equal(byTeam['Beta'].points, 99 + 97 + 95);   // 291 (matches the user's example)
+  assert.equal(byTeam['Alpha'].counted.length, 3);
+});
+
+test('scoreRace: MTB overall points floor at team_other_points past the start', () => {
+  const s = normalizeSettings(presetSettings('mtb')); // start 100, floor 1
+  const many = Array.from({ length: 102 }, (_, i) => ({
+    bib: String(i + 1), participant: 'r', status: 'finished', laps: 1, elapsed_ms: 1000 + i,
+    distance: '', gender: 'M', category: 'Elite', team: 'T', // one team so all are members
+  }));
+  const { riders } = scoreRace(many, s);
+  const byPlace = Object.fromEntries(riders.map((r) => [r.place, r]));
+  assert.equal(byPlace[1].team_points, 100);
+  assert.equal(byPlace[100].team_points, 1);
+  assert.equal(byPlace[101].team_points, 1, 'floored at team_other_points');
+  assert.equal(byPlace[102].team_points, 1);
 });
 
 test('computeLeagueStandings: best-N races and identity by bib', () => {
@@ -208,9 +278,19 @@ test('league CRUD: create with defaults, patch settings, validation', async () =
   assert.equal((await request(app).patch(`/api/leagues/${league.id}`).set(auth(admin))
     .send({ status: 'bogus' })).status, 400);
 
+  // creating with the MTB preset seeds the whole MTB settings block
+  const mtb = await request(app).post('/api/leagues').set(auth(admin))
+    .send({ name: 'Negev MTB League', season: '2026', preset: 'mtb' });
+  assert.equal(mtb.status, 201);
+  assert.equal(mtb.body.league.settings.team_scoring_mode, 'overall');
+  assert.equal(mtb.body.league.settings.team_top_runners, 3);
+  assert.equal(mtb.body.league.settings.individual_points[0], 26);
+  assert.equal((await request(app).post('/api/leagues').set(auth(admin))
+    .send({ name: 'Bad preset', preset: 'nope' })).status, 400);
+
   const listed = await request(app).get('/api/leagues');
   assert.equal(listed.status, 200);
-  assert.equal(listed.body.leagues.length, 1);
+  assert.equal(listed.body.leagues.length, 2); // running + MTB
 });
 
 test('attach races: rounds, duplicates, non-race contests', async () => {

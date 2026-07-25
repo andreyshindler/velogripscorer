@@ -14,10 +14,12 @@ const DEFAULT_SETTINGS = {
   individual_other_points: 1,
   individual_best_n: 5, // best race scores counted per rider over the season
 
-  // Team: every finisher earns team_points by the same category place; a
-  // team's race score sums its best team_top_runners values.
-  team_points: [10, 8, 6, 4, 2],
-  team_other_points: 1,
+  // Team: every finisher earns team_points; a team's race score sums its best
+  // team_top_runners values.
+  team_scoring_mode: 'category', // 'category' (place within group) | 'overall'
+  team_points: [10, 8, 6, 4, 2], // used when team_scoring_mode === 'category'
+  team_overall_start: 100,       // used when team_scoring_mode === 'overall': 1st
+  team_other_points: 1,          // = start, 2nd = start-1 … floored at this value
   team_top_runners: 5,
   team_best_n: 6, // best race scores counted per team over the season
 };
@@ -44,8 +46,11 @@ function normalizeSettings(raw) {
       throw new Error(`${key} must be a non-negative number`);
     }
   }
-  for (const key of ['individual_best_n', 'team_top_runners', 'team_best_n']) {
+  for (const key of ['individual_best_n', 'team_top_runners', 'team_best_n', 'team_overall_start']) {
     if (!Number.isInteger(s[key]) || s[key] < 1) throw new Error(`${key} must be an integer >= 1`);
+  }
+  if (!['category', 'overall'].includes(s.team_scoring_mode)) {
+    throw new Error('team_scoring_mode must be "category" or "overall"');
   }
   // keep only known keys so stale/unknown fields never persist
   return Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map((k) => [k, s[k]]));
@@ -73,10 +78,32 @@ function scoreRace(results, settings) {
   }
 
   const pointsFor = (place, table, other) => (place <= table.length ? table[place - 1] : other);
+  const byTime = (a, b) => (b.laps - a.laps) || (a.elapsed_ms - b.elapsed_ms);
+
+  // Assign competition-ranking places (ties share, next skips) over an ordered
+  // list; returns a Map from row -> place.
+  const placeMap = (arr) => {
+    const sorted = arr.slice().sort(byTime);
+    const m = new Map();
+    let place = 0;
+    sorted.forEach((r, i) => {
+      const prev = sorted[i - 1];
+      if (!prev || prev.laps !== r.laps || prev.elapsed_ms !== r.elapsed_ms) place = i + 1;
+      m.set(r, place);
+    });
+    return m;
+  };
+
+  // Team "overall" mode ranks every finisher together and awards
+  // team_overall_start, start-1, … floored at team_other_points.
+  const overall = settings.team_scoring_mode === 'overall';
+  const overallPlace = overall ? placeMap(finished) : null;
+  const overallTeamPoints = (r) =>
+    Math.max(settings.team_other_points, settings.team_overall_start - (overallPlace.get(r) - 1));
 
   const riders = [];
   for (const arr of groups.values()) {
-    arr.sort((a, b) => (b.laps - a.laps) || (a.elapsed_ms - b.elapsed_ms));
+    arr.sort(byTime);
     let place = 0;
     arr.forEach((r, i) => {
       const prev = arr[i - 1];
@@ -90,7 +117,7 @@ function scoreRace(results, settings) {
         category: (r.category || '').trim(),
         place,
         points: pointsFor(place, settings.individual_points, settings.individual_other_points),
-        team_points: pointsFor(place, settings.team_points, settings.team_other_points),
+        team_points: overall ? overallTeamPoints(r) : pointsFor(place, settings.team_points, settings.team_other_points),
       });
     });
   }
@@ -181,4 +208,39 @@ function computeLeagueStandings(races, settings) {
   return { individual, teams };
 }
 
-module.exports = { DEFAULT_SETTINGS, normalizeSettings, groupKey, scoreRace, computeLeagueStandings };
+// Descending points ramp, e.g. rampDown(26, 2, 2) -> [26,24,…,4,2].
+function rampDown(start, step, min = 0) {
+  const out = [];
+  for (let v = start; v >= min; v -= step) out.push(v);
+  return out;
+}
+
+// Scoring presets a league can be seeded with at creation time.
+const PRESETS = {
+  running: { ...DEFAULT_SETTINGS },
+  mtb: {
+    ...DEFAULT_SETTINGS,
+    // Individual: per-category place, 26,24,22,…,2 (place 14+ -> 0), best 5 of 6.
+    individual_points: rampDown(26, 2, 2),
+    individual_other_points: 0,
+    individual_best_n: 5,
+    // Team: overall placement 100,99,…,1 (floor 1), sum of best 3, best 5 of 6.
+    team_scoring_mode: 'overall',
+    team_overall_start: 100,
+    team_other_points: 1,
+    team_top_runners: 3,
+    team_best_n: 5,
+  },
+};
+
+/** Return a fresh copy of a named preset's settings. Throws on unknown name. */
+function presetSettings(name) {
+  const p = PRESETS[name];
+  if (!p) throw new Error(`unknown preset: ${name}`);
+  return { ...p };
+}
+
+module.exports = {
+  DEFAULT_SETTINGS, PRESETS, presetSettings, rampDown,
+  normalizeSettings, groupKey, scoreRace, computeLeagueStandings,
+};

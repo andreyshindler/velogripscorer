@@ -10,7 +10,7 @@ const express = require('express');
 const { db, auditLog } = require('../db');
 const { requireAuth, requireAdmin } = require('../auth');
 const { computeRaceResults } = require('../race-results');
-const { normalizeSettings, computeLeagueStandings } = require('../league-scoring');
+const { normalizeSettings, computeLeagueStandings, presetSettings } = require('../league-scoring');
 const { leagueTeamPdf, leagueIndividualPdf } = require('../results-pdf');
 
 const router = express.Router();
@@ -99,10 +99,15 @@ router.get('/leagues/:id/standings', async (req, res) => {
 // ---- admin writes ----
 
 router.post('/leagues', requireAuth, requireAdmin, (req, res) => {
-  const { name, season, settings } = req.body || {};
+  const { name, season, settings, preset } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   let normalized;
-  try { normalized = normalizeSettings(settings ?? {}); } catch (err) {
+  try {
+    // An optional preset ('running' | 'mtb') seeds the settings; any explicit
+    // settings the caller sends override the preset's values.
+    const base = preset ? presetSettings(String(preset)) : {};
+    normalized = normalizeSettings({ ...base, ...(settings ?? {}) });
+  } catch (err) {
     return res.status(400).json({ error: String(err.message) });
   }
   const info = db.prepare(
