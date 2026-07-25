@@ -202,7 +202,9 @@ test('timing settings are adjustable and affect results', async () => {
   assert.equal(patch.status, 200);
   const res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
   const rider101 = res.body.results.find((r) => r.bib === '101');
-  assert.equal(rider101.status, 'on_course', '+90s read now falls inside the 100s suppression window');
+  // +90s read now falls inside the 100s suppression window -> no valid crossing.
+  // The race was finished earlier, so a non-crosser is DNF (not "on course").
+  assert.equal(rider101.status, 'DNF');
   // restore
   await request(app).patch(`/api/contests/${contest.id}/timing-settings`).set(auth(org))
     .send({ suppress_secs: 10, min_lap_gap_secs: 30 });
@@ -511,4 +513,34 @@ test('edit schedule: PATCH updates start_at/end_at with validation', async () =>
   const denied = await request(app).patch(`/api/contests/${c.id}`).set(auth(outsider))
     .send({ start_at: newStart, end_at: newEnd });
   assert.equal(denied.status, 403);
+});
+
+test('finished race: non-crossers become DNF (started wave) or DNS (wave never started)', async () => {
+  const o = await register('finstatus-org@test.co', 'Fin Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    title: 'Finish statuses', kind: 'race', start_at: past, end_at: future })).body;
+  const wave = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'A' })).body;
+  const dead = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'B' })).body;
+  await request(app).post(`/api/contests/${c.id}/waves/${wave.id}/start`).set(auth(o))
+    .send({ at: new Date(Date.now() - 600_000).toISOString() });
+  // 200: started wave, no reads. 201: wave never started.
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+    .send({ epc: 'FF000200', bib: '200', participant: 'No Cross', wave_id: wave.id });
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+    .send({ epc: 'FF000201', bib: '201', participant: 'No Start', wave_id: dead.id });
+
+  const token = (await request(app).get('/api/my/races').set(auth(o))).body.races.find((r) => r.id === c.id).app_token;
+
+  // While active: on_course / not_started.
+  let byBib = Object.fromEntries((await request(app).get(`/api/contests/${c.id}/race-results`))
+    .body.results.map((r) => [r.bib, r.status]));
+  assert.equal(byBib['200'], 'on_course');
+  assert.equal(byBib['201'], 'not_started');
+
+  // After finishing: DNF / DNS.
+  await request(app).post('/api/ingest/finish').set('X-Reader-Token', token).send({});
+  byBib = Object.fromEntries((await request(app).get(`/api/contests/${c.id}/race-results`))
+    .body.results.map((r) => [r.bib, r.status]));
+  assert.equal(byBib['200'], 'DNF', 'started but never crossed -> DNF once finished');
+  assert.equal(byBib['201'], 'DNS', 'wave never started -> DNS once finished');
 });

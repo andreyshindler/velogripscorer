@@ -38,6 +38,7 @@ Environment variables:
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | see above | Seeded administrator |
 | `TELEGRAM_BOT_TOKEN` | unset | Enables the Telegram start-list bot |
 | `TELEGRAM_ALLOWED_USER_IDS` | unset | Comma-separated Telegram user ids allowed to use the bot |
+| `PUBLIC_BASE_URL` | unset | Public site URL; when set, race-day reminders include a results link |
 | `DISABLE_RATE_LIMIT` | unset | Disables rate limiting (tests only) |
 
 ### Telegram start-list bot
@@ -62,6 +63,34 @@ ones and the Telegram “Menu” list): `/races` (pick a race), `/list [text]`,
 polling (outbound to `api.telegram.org`) — no inbound webhook or public URL is
 needed, so it works behind a `BASE_PATH` reverse proxy. Under Docker, set both
 vars in `.env`; `docker-compose.yml` passes them through.
+
+**Race-day reminders.** When the bot is running it checks hourly for races
+starting within the next 24 hours and sends a one-time reminder to every chat
+that has talked to the bot (the allowlisted organizers), so nobody forgets to
+set up timing. Set `PUBLIC_BASE_URL` to include a results link in the message.
+
+**Runner self-service (approval-gated).** Anyone can DM the bot: it asks for
+their **bib number** and **name**, records the request, and pings the allowlisted
+admins with Approve / Reject buttons (showing the declared name so they can
+confirm identity). Once an admin approves (and the bib is in an active
+league), the runner gets a Hebrew menu — **my ranking** (their result across
+every finished race), **last race** (full detail of the most recent one),
+**all races** (the schedule, next race in bold), and **my team** (the full
+team standings with theirs highlighted). Runners are stored in their own `runners` table (separate from the
+operator sessions), so opening the bot to runners never exposes admin actions or
+sends them operator-only messages. With an empty allowlist the bot stays fully
+silent (no operators means nobody can approve).
+
+**Optional second (runner) bot.** Set `TELEGRAM_RUNNER_BOT_TOKEN` to a *different*
+@BotFather bot and the server runs a second poller that serves **only** the
+runner flow to everyone who DMs it — approvals still happen on the operator bot.
+This lets one person test the whole flow from a single account (DM the runner
+bot as a runner; approve on the operator bot), and doubles as a public
+runner-facing bot separate from the private operator bot. With no runner token
+set, the single operator bot serves both roles exactly as before. To try it on
+staging, edit `~/projects/velogripscorer-staging/.env` to set `TELEGRAM_BOT_TOKEN`
+(operator), `TELEGRAM_ALLOWED_USER_IDS` (your id), and `TELEGRAM_RUNNER_BOT_TOKEN`
+(runner), then `docker compose -p velogrip-staging up -d --build app`.
 
 ## Continuous integration
 

@@ -55,9 +55,12 @@ function computeRaceResults(contest, { category } = {}) {
       distance: a.distance || '', team: a.team || '', gender: a.gender || '',
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
     };
+    // Once the race is finished, a racer who never crossed is a non-finisher,
+    // not still "on course": no started wave -> DNS, no finish read -> DNF.
+    const raceFinished = contest.status === 'finished';
     // organizer-declared statuses override everything (Webscorer-style)
     if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
-    if (!wave || !wave.started_at) return { ...base, status: 'not_started', laps: 0 };
+    if (!wave || !wave.started_at) return { ...base, status: raceFinished ? 'DNS' : 'not_started', laps: 0 };
     const startMs = Date.parse(wave.started_at);
     // Operator taps are deliberate: exempt from the start-suppression window
     // and the lap-gap dedupe (each tap is one crossing) — mirrors the app.
@@ -65,7 +68,7 @@ function computeRaceResults(contest, { category } = {}) {
       .flatMap((epc) => readsByEpc.get(epc) || [])
       .sort((x, y) => x.at - y.at)
       .filter((r) => r.manual || r.at >= startMs + suppressMs);
-    if (!valid.length) return { ...base, status: 'on_course', laps: 0 };
+    if (!valid.length) return { ...base, status: raceFinished ? 'DNF' : 'on_course', laps: 0 };
 
     const crossings = [];
     for (const r of valid) {
