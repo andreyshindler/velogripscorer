@@ -4,8 +4,9 @@
 // results sheet and the two accumulated league-standings sheets (team +
 // individual). They mirror the column/section layout of the CSV builders
 // (resultsCsv in routes/readers.js; individualCsv/teamCsv in routes/leagues.js)
-// but render a paginated table with pdf-lib. Hebrew cells are reordered to
-// visual order with ./bidi and right-aligned; numbers/times stay LTR.
+// but render a paginated table with pdf-lib. Headers and labels are Hebrew;
+// each cell is split into bidi runs by ./bidi and drawn right-aligned so Hebrew
+// reads RTL while numbers/times stay LTR.
 
 const fs = require('fs');
 const path = require('path');
@@ -13,6 +14,21 @@ const { PDFDocument, rgb } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 const { visualParts } = require('./bidi');
 const { formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('./race-results');
+
+// Hebrew column headers + labels, matching the web UI (public/i18n.js `he`).
+const H = {
+  place: 'מקום', bib: 'מס׳', name: 'שם', team: 'קבוצה', category: 'קטגוריה',
+  gender: 'מין', time: 'זמן', behind: 'פער', status: 'סטטוס', distance: 'מרחק',
+  total: 'סה״כ', overall: 'כללי', female: 'נשים', male: 'גברים',
+  finishers: 'מסיימים', dnf: 'לא סיימו', races: 'מרוצים', counted: 'נספרים',
+  teamStandings: 'ניקוד קבוצתי', individualStandings: 'ניקוד אישי',
+};
+// gender label for a cell (singular) or a section/group title (plural).
+function genderHe(label, plural) {
+  if (label === 'Male' || isMaleG(label)) return plural ? 'גברים' : 'גבר';
+  if (label === 'Female' || isFemaleG(label)) return plural ? 'נשים' : 'אישה';
+  return '';
+}
 
 // Fonts embedded (and subset) into every document; read once at startup.
 const FONT_DIR = path.join(__dirname, 'assets', 'fonts');
@@ -142,19 +158,19 @@ async function raceResultsPdf(contest, results) {
   const x0 = MARGIN;
 
   const columns = [
-    { header: 'Place', width: 42, align: 'r' },
-    { header: 'Bib', width: 46, align: 'r' },
-    { header: 'Name', width: 195, align: 'r' },
-    { header: 'Team', width: 180, align: 'r' },
-    { header: 'Category', width: 90, align: 'r' },
-    { header: 'Gender', width: 58, align: 'l' },
-    { header: 'Time', width: 78, align: 'r' },
-    { header: 'Behind', width: 80, align: 'r' },
+    { header: H.place, width: 42, align: 'r' },
+    { header: H.bib, width: 46, align: 'r' },
+    { header: H.name, width: 195, align: 'r' },
+    { header: H.team, width: 180, align: 'r' },
+    { header: H.category, width: 90, align: 'r' },
+    { header: H.gender, width: 58, align: 'r' },
+    { header: H.time, width: 78, align: 'r' },
+    { header: H.behind, width: 80, align: 'r' },
   ];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
 
   drawTitle(ctx, contest.title || 'Race results', 15, x0, totalW);
-  drawSub(ctx, `${results.filter((r) => r.status === 'finished').length} finishers`, x0, totalW);
+  drawSub(ctx, `${results.filter((r) => r.status === 'finished').length} ${H.finishers}`, x0, totalW);
 
   const finished = results.filter((r) => r.status === 'finished');
   const byTime = (a, b) => (b.laps - a.laps) || (a.elapsed_ms - b.elapsed_ms);
@@ -169,7 +185,7 @@ async function raceResultsPdf(contest, results) {
       prevMs = r.elapsed_ms; prevPlace = place;
       const behind = r.elapsed_ms === leaderMs ? '' : '+' + formatElapsed(r.elapsed_ms - leaderMs);
       return { place, bib: r.bib, name: r.participant, team: r.team, category: r.category,
-        gender: genderLabelG(r.gender), time: r.elapsed, behind };
+        gender: genderHe(genderLabelG(r.gender), false), time: r.elapsed, behind };
     });
     const cols = [
       { ...columns[0], render: (r) => r.place },
@@ -189,18 +205,18 @@ async function raceResultsPdf(contest, results) {
   const distances = [...new Set(finished.map((r) => r.distance))];
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
-    const label = d || 'Overall';
-    section(`${label} — Overall`, inD);
-    section(`${label} — Female`, inD.filter((r) => isFemaleG(r.gender)));
-    section(`${label} — Male`, inD.filter((r) => isMaleG(r.gender)));
+    const label = d || H.overall;
+    section(`${label} — ${H.overall}`, inD);
+    section(`${label} — ${H.female}`, inD.filter((r) => isFemaleG(r.gender)));
+    section(`${label} — ${H.male}`, inD.filter((r) => isMaleG(r.gender)));
   }
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
-    const label = d || 'Overall';
+    const label = d || H.overall;
     const combos = [...new Set(inD.filter((r) => r.category).map((r) => `${r.category}|${(r.gender || '').toLowerCase()}`))];
     for (const combo of combos) {
       const [cat, g] = combo.split('|');
-      const gl = genderLabelG(g);
+      const gl = genderHe(genderLabelG(g), true);
       section(`${label} — ${cat}${gl ? ` — ${gl}` : ''}`,
         inD.filter((r) => r.category === cat && (r.gender || '').toLowerCase() === g));
     }
@@ -210,13 +226,13 @@ async function raceResultsPdf(contest, results) {
   const others = results.filter((r) => r.status !== 'finished');
   if (others.length) {
     ctx.y -= 6;
-    drawTitle(ctx, `Did not finish (${others.length})`, 11, x0, totalW);
+    drawTitle(ctx, `${H.dnf} (${others.length})`, 11, x0, totalW);
     const cols = [
-      { header: 'Bib', width: 46, align: 'r', render: (r) => r.bib },
-      { header: 'Name', width: 220, align: 'r', render: (r) => r.participant },
-      { header: 'Team', width: 200, align: 'r', render: (r) => r.team },
-      { header: 'Category', width: 110, align: 'r', render: (r) => r.category },
-      { header: 'Status', width: 80, align: 'l', render: (r) => r.status },
+      { header: H.bib, width: 46, align: 'r', render: (r) => r.bib },
+      { header: H.name, width: 220, align: 'r', render: (r) => r.participant },
+      { header: H.team, width: 200, align: 'r', render: (r) => r.team },
+      { header: H.category, width: 110, align: 'r', render: (r) => r.category },
+      { header: H.status, width: 80, align: 'r', render: (r) => r.status },
     ];
     drawTable(ctx, cols, others, x0);
   }
@@ -231,7 +247,7 @@ function roundColumns(raceList, availWidth, fixedWidth, opts = {}) {
   const n = raceList.length;
   const roundW = n ? Math.max(22, Math.min(40, Math.floor((availWidth - fixedWidth) / Math.max(n, 1)))) : 0;
   return raceList.map((r) => ({
-    header: `R${r.round}`, width: roundW, align: 'r',
+    header: `ס${r.round}`, width: roundW, align: 'r', // ס = סבב (round)
     render: (row) => (row.per_race && row.per_race[r.contest_id] !== undefined ? row.per_race[r.contest_id] : ''),
   }));
 }
@@ -242,16 +258,16 @@ async function leagueTeamPdf(league, teams, raceList) {
   const x0 = MARGIN;
   const usable = ctx.size.W - MARGIN * 2;
   const fixed = [
-    { header: 'Place', width: 40, align: 'r', render: (r, i) => i + 1 },
-    { header: 'Team', width: 190, align: 'r', render: (r) => r.team },
+    { header: H.place, width: 40, align: 'r', render: (r, i) => i + 1 },
+    { header: H.team, width: 190, align: 'r', render: (r) => r.team },
   ];
   const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 52; // + Total col
   const rounds = roundColumns(raceList, usable, totalFixed);
-  const columns = [...fixed, ...rounds, { header: 'Total', width: 52, align: 'r', render: (r) => r.total }];
+  const columns = [...fixed, ...rounds, { header: H.total, width: 52, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
 
   drawTitle(ctx, `${league.name}${league.season ? ` — ${league.season}` : ''}`, 15, x0, totalW);
-  drawSub(ctx, `Team standings · ${raceList.length} race(s) · best ${bestNote(teams)}`, x0, totalW);
+  drawSub(ctx, `${H.teamStandings} · ${raceList.length} ${H.races} · ${bestNote(teams)}`, x0, totalW);
   drawTable(ctx, columns, teams, x0);
   return Buffer.from(await ctx.doc.save());
 }
@@ -265,21 +281,21 @@ async function leagueIndividualPdf(league, individual, raceList) {
   const x0 = MARGIN;
   const usable = ctx.size.W - MARGIN * 2;
   const fixed = [
-    { header: 'Place', width: 40, align: 'r', render: (r, i) => i + 1 },
-    { header: 'Bib', width: 44, align: 'r', render: (r) => r.bib },
-    { header: 'Name', width: 190, align: 'r', render: (r) => r.name },
-    { header: 'Team', width: 170, align: 'r', render: (r) => r.team },
+    { header: H.place, width: 40, align: 'r', render: (r, i) => i + 1 },
+    { header: H.bib, width: 44, align: 'r', render: (r) => r.bib },
+    { header: H.name, width: 190, align: 'r', render: (r) => r.name },
+    { header: H.team, width: 170, align: 'r', render: (r) => r.team },
   ];
   const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 50; // + Total col
   const rounds = roundColumns(raceList, usable, totalFixed);
-  const columns = [...fixed, ...rounds, { header: 'Total', width: 50, align: 'r', render: (r) => r.total }];
+  const columns = [...fixed, ...rounds, { header: H.total, width: 50, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
 
   drawTitle(ctx, `${league.name}${league.season ? ` — ${league.season}` : ''}`, 15, x0, totalW);
-  drawSub(ctx, `Individual standings · ${raceList.length} race(s)`, x0, totalW);
+  drawSub(ctx, `${H.individualStandings} · ${raceList.length} ${H.races}`, x0, totalW);
 
   for (const group of individual) {
-    const title = [group.distance, group.gender, group.category].filter(Boolean).join(' · ') || 'Overall';
+    const title = [group.distance, genderHe(group.gender, true), group.category].filter(Boolean).join(' · ') || H.overall;
     ctx.y -= 4;
     drawTitle(ctx, title, 11, x0, totalW);
     drawTable(ctx, columns, group.rows, x0);
@@ -289,7 +305,7 @@ async function leagueIndividualPdf(league, individual, raceList) {
 
 function bestNote(teams) {
   const c = teams.reduce((mx, t) => Math.max(mx, (t.counted_ids || []).length), 0);
-  return c ? `${c} counted` : 'all';
+  return c ? `${c} ${H.counted}` : H.overall;
 }
 
 module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf };
