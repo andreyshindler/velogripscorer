@@ -208,9 +208,9 @@ async function raceResultsPdf(contest, results) {
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
     const label = d || H.overall;
-    section(`${label} — ${H.overall}`, inD);
-    section(`${label} — ${H.female}`, inD.filter((r) => isFemaleG(r.gender)));
-    section(`${label} — ${H.male}`, inD.filter((r) => isMaleG(r.gender)));
+    section(`${label} ${H.overall}`, inD);
+    section(`${label} ${H.female}`, inD.filter((r) => isFemaleG(r.gender)));
+    section(`${label} ${H.male}`, inD.filter((r) => isMaleG(r.gender)));
   }
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
@@ -219,7 +219,7 @@ async function raceResultsPdf(contest, results) {
     for (const combo of combos) {
       const [cat, g] = combo.split('|');
       const gl = genderHe(genderLabelG(g), true);
-      section(`${label} — ${cat}${gl ? ` — ${gl}` : ''}`,
+      section(`${label} ${cat}${gl ? ` ${gl}` : ''}`,
         inD.filter((r) => r.category === cat && (r.gender || '').toLowerCase() === g));
     }
   }
