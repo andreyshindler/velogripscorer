@@ -108,9 +108,10 @@ const HEAD_SIZE = 8.5;
 function drawHeaderRow(ctx, columns, x0) {
   const totalW = columns.reduce((s, c) => s + c.width, 0);
   ctx.page.drawRectangle({ x: x0, y: ctx.y - ROW_H + 3, width: totalW, height: ROW_H, color: HEADER_BG });
-  let x = x0;
   const ty = ctx.y - ROW_H + 7;
-  for (const c of columns) { drawCell(ctx, c.header, c, x, ty, HEAD_SIZE, true); x += c.width; }
+  // RTL: the first logical column sits at the right edge.
+  let x = x0;
+  for (const c of columns.slice().reverse()) { drawCell(ctx, c.header, c, x, ty, HEAD_SIZE, true); x += c.width; }
   ctx.y -= ROW_H;
   ctx.page.drawLine({ start: { x: x0, y: ctx.y + 3 }, end: { x: x0 + totalW, y: ctx.y + 3 }, thickness: 0.6, color: LINE });
 }
@@ -126,9 +127,10 @@ function drawTable(ctx, columns, rows, x0) {
     if (ctx.y - ROW_H < MARGIN) { addPage(ctx); drawHeaderRow(ctx, columns, x0); }
     const totalW = columns.reduce((s, c) => s + c.width, 0);
     if (i % 2 === 1) ctx.page.drawRectangle({ x: x0, y: ctx.y - ROW_H + 3, width: totalW, height: ROW_H, color: ROW_ALT });
-    let x = x0;
     const ty = ctx.y - ROW_H + 7;
-    for (const c of columns) {
+    let x = x0;
+    // RTL: draw columns right-to-left so the first logical column is rightmost.
+    for (const c of columns.slice().reverse()) {
       const v = typeof c.render === 'function' ? c.render(row, i) : row[c.key];
       drawCell(ctx, v, c, x, ty, CELL_SIZE, false);
       x += c.width;
@@ -155,7 +157,6 @@ function drawSub(ctx, text, x0, totalW) {
 async function raceResultsPdf(contest, results) {
   const ctx = await newDoc(true);
   addPage(ctx);
-  const x0 = MARGIN;
 
   const columns = [
     { header: H.place, width: 42, align: 'r' },
@@ -168,6 +169,7 @@ async function raceResultsPdf(contest, results) {
     { header: H.behind, width: 80, align: 'r' },
   ];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
   drawTitle(ctx, contest.title || 'Race results', 15, x0, totalW);
   drawSub(ctx, `${results.filter((r) => r.status === 'finished').length} ${H.finishers}`, x0, totalW);
@@ -226,7 +228,7 @@ async function raceResultsPdf(contest, results) {
   const others = results.filter((r) => r.status !== 'finished');
   if (others.length) {
     ctx.y -= 6;
-    drawTitle(ctx, `${H.dnf} (${others.length})`, 11, x0, totalW);
+    drawTitle(ctx, `${H.dnf} · ${others.length}`, 11, x0, totalW);
     const cols = [
       { header: H.bib, width: 46, align: 'r', render: (r) => r.bib },
       { header: H.name, width: 220, align: 'r', render: (r) => r.participant },
@@ -234,7 +236,8 @@ async function raceResultsPdf(contest, results) {
       { header: H.category, width: 110, align: 'r', render: (r) => r.category },
       { header: H.status, width: 80, align: 'r', render: (r) => r.status },
     ];
-    drawTable(ctx, cols, others, x0);
+    const dnfW = cols.reduce((s, c) => s + c.width, 0);
+    drawTable(ctx, cols, others, ctx.size.W - MARGIN - dnfW); // right-anchored too
   }
 
   return Buffer.from(await ctx.doc.save());
@@ -255,7 +258,6 @@ function roundColumns(raceList, availWidth, fixedWidth, opts = {}) {
 async function leagueTeamPdf(league, teams, raceList) {
   const ctx = await newDoc(false);
   addPage(ctx);
-  const x0 = MARGIN;
   const usable = ctx.size.W - MARGIN * 2;
   const fixed = [
     { header: H.place, width: 40, align: 'r', render: (r, i) => i + 1 },
@@ -265,6 +267,7 @@ async function leagueTeamPdf(league, teams, raceList) {
   const rounds = roundColumns(raceList, usable, totalFixed);
   const columns = [...fixed, ...rounds, { header: H.total, width: 52, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
   drawTitle(ctx, `${league.name}${league.season ? ` — ${league.season}` : ''}`, 15, x0, totalW);
   drawSub(ctx, `${H.teamStandings} · ${raceList.length} ${H.races} · ${bestNote(teams)}`, x0, totalW);
@@ -278,7 +281,6 @@ async function leagueTeamPdf(league, teams, raceList) {
 async function leagueIndividualPdf(league, individual, raceList) {
   const ctx = await newDoc(true);
   addPage(ctx);
-  const x0 = MARGIN;
   const usable = ctx.size.W - MARGIN * 2;
   const fixed = [
     { header: H.place, width: 40, align: 'r', render: (r, i) => i + 1 },
@@ -290,6 +292,7 @@ async function leagueIndividualPdf(league, individual, raceList) {
   const rounds = roundColumns(raceList, usable, totalFixed);
   const columns = [...fixed, ...rounds, { header: H.total, width: 50, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
   drawTitle(ctx, `${league.name}${league.season ? ` — ${league.season}` : ''}`, 15, x0, totalW);
   drawSub(ctx, `${H.individualStandings} · ${raceList.length} ${H.races}`, x0, totalW);
