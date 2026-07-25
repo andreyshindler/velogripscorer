@@ -54,7 +54,11 @@ jobs:
         run: |
           set -uo pipefail
           if [ "$STATUS" = "success" ]; then ICON="✅"; WORD="deployed"; else ICON="❌"; WORD="deploy FAILED"; fi
-          SUBJECT=$(printf '%s' "${COMMIT_MSG:-manual dispatch}" | head -n1 | cut -c1-200)
+          # First line, capped — pure bash so a long/multi-line commit message
+          # can't SIGPIPE `head` and (under pipefail) fail this best-effort step.
+          SUBJECT="${COMMIT_MSG:-manual dispatch}"
+          SUBJECT="${SUBJECT%%$'\n'*}"
+          SUBJECT="${SUBJECT:0:200}"
           TEXT="${ICON} VeloGrip ${WORD} — ${GITHUB_SHA::7} on main
           ${SUBJECT}
           ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
