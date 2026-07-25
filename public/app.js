@@ -1031,9 +1031,9 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       ${stat(scope.length, t('racers'), 'total')}
       ${stat(finished.length, t('status_finished_r'), 'finished')}
       ${stat(onCourse.length, t('status_on_course'), 'oncourse')}
+      ${stat(dnf.length, 'DNF', 'dnf')}
       ${stat(dns.length, 'DNS', 'dns')}
       ${notStarted.length ? stat(notStarted.length, t('status_not_started'), 'notstarted') : ''}
-      ${dnf.length ? stat(dnf.length, 'DNF', 'dns') : ''}
       ${dsq.length ? stat(dsq.length, 'DSQ', 'dns') : ''}
     </div>
     <div style="overflow-x:auto"><table class="board"><thead><tr>
