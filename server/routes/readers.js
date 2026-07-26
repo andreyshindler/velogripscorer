@@ -944,4 +944,38 @@ router.post('/contests/:id/manual-read', requireAuth, (req, res) => {
   res.status(201).json({ ok: true, epc: assignment.epc, read_at: at });
 });
 
+// ---- Results editing (organizer corrections) ----
+
+// Delete one crossing (raw read). Results are recomputed from reads, so removing
+// a spurious read (double-count, wrong racer, bad time) fixes a finish/lap.
+router.delete('/contests/:id/reads/:readId', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const readId = Number(req.params.readId);
+  const row = db.prepare('SELECT * FROM tag_reads WHERE id = ? AND contest_id = ?').get(readId, contest.id);
+  if (!row) return res.status(404).json({ error: 'read not found' });
+  db.prepare('DELETE FROM tag_reads WHERE id = ?').run(readId);
+  auditLog(req.user.id, 'read.delete', 'contest', contest.id, `read ${readId} epc ${row.epc} @ ${row.read_at}`);
+  sseBroadcast(contest.id, 'tag_reads', { deleted: [readId] });
+  res.json({ ok: true });
+});
+
+// Set a racer's status override (''=auto | DNS | DNF | DSQ) without touching the
+// rest of their start-list row. Applies to every chip of a two-chip racer.
+router.patch('/contests/:id/racer-status', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const status = ['', 'DNS', 'DNF', 'DSQ'].includes(req.body?.status) ? req.body.status : null;
+  if (status === null) return res.status(400).json({ error: 'status must be one of "", DNS, DNF, DSQ' });
+  const bib = String(req.body?.bib || '').trim();
+  const epc = String(req.body?.epc || '').toUpperCase().trim();
+  const info = bib
+    ? db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND bib = ?').run(status, contest.id, bib)
+    : db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND epc = ?').run(status, contest.id, epc);
+  if (!info.changes) return res.status(404).json({ error: 'no such racer in this contest' });
+  auditLog(req.user.id, 'racer.status', 'contest', contest.id, `${bib || epc} -> ${status || 'auto'}`);
+  sseBroadcast(contest.id, 'tag_reads', { statuses: [{ bib, epc, racer_status: status }] });
+  res.json({ ok: true });
+});
+
 module.exports = { router };

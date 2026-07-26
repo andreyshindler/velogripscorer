@@ -783,7 +783,7 @@ async function renderRaceResults(box, c) {
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
           <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-          <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>
+          <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>${c.is_organizer ? '<th></th>' : ''}
         </tr></thead><tbody id="race-results-body"></tbody></table>
       </div>
     </div>`;
@@ -797,7 +797,13 @@ async function renderRaceResults(box, c) {
   const teamBtn = box.querySelector('#rr-dl-team');
   if (teamBtn) teamBtn.onclick = () => downloadAuthed(`/contests/${c.id}/race-results?format=pdf&doc=team`, `team-${c.id}.pdf`);
 
+  const editKey = (r) => r.bib || ('epc:' + r.epc);
+  const editCell = (r) => (c.is_organizer
+    ? `<td><button class="btn small secondary rr-edit" data-key="${esc(editKey(r))}">✎ ${t('edit_result')}</button></td>` : '');
+  let currentResults = data.results;
+
   const draw = (results) => {
+    currentResults = results;
     const filter = box.querySelector('#cat-filter');
     const cat = filter ? filter.value : '';
     const rows = results.filter((r) => !cat || r.category === cat);
@@ -818,6 +824,7 @@ async function renderRaceResults(box, c) {
           <td>${r.laps}</td>
           <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
           <td style="font-variant-numeric:tabular-nums" class="muted">${esc(r.behind || '')}</td>
+          ${editCell(r)}
         </tr>`),
       ...others.map((r) => `
         <tr>
@@ -831,8 +838,9 @@ async function renderRaceResults(box, c) {
           <td>${r.laps || ''}</td>
           <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td>
           <td></td>
+          ${editCell(r)}
         </tr>`),
-    ].join('') || `<tr><td colspan="10" class="muted">${t('no_results_yet')}</td></tr>`;
+    ].join('') || `<tr><td colspan="${c.is_organizer ? 11 : 10}" class="muted">${t('no_results_yet')}</td></tr>`;
   };
   draw(data.results);
 
@@ -840,13 +848,110 @@ async function renderRaceResults(box, c) {
   const refetch = async () => {
     const fresh = await api(`/contests/${c.id}/race-results`);
     draw(fresh.results);
+    return fresh.results;
   };
   if (filter) filter.onchange = refetch;
+
+  // Organizer: open the per-racer result editor (status + crossings) on ✎ click.
+  if (c.is_organizer) {
+    box.querySelector('#race-results-body').addEventListener('click', (e) => {
+      const btn = e.target.closest('.rr-edit');
+      if (!btn) return;
+      const row = currentResults.find((r) => editKey(r) === btn.dataset.key);
+      if (row) openResultEditor(c, row, refetch);
+    });
+  }
 
   closeSse();
   state.sse = new EventSource(`${BASE}/api/contests/${c.id}/stream`);
   state.sse.addEventListener('tag_reads', refetch);
   state.sse.addEventListener('wave_start', refetch);
+}
+
+// Elapsed helpers for the result editor: ms <-> "h:mm:ss" / "m:ss".
+function msToClock(ms) {
+  if (ms == null || ms < 0) return '';
+  const s = Math.floor(ms / 1000), pad = (n) => String(n).padStart(2, '0');
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+function parseClock(str) {
+  const parts = String(str || '').trim().split(':').map((x) => x.trim());
+  if (!parts.length || parts.some((p) => !/^\d+$/.test(p))) return null;
+  const n = parts.map(Number);
+  const s = n.length === 1 ? n[0] : n.length === 2 ? n[0] * 60 + n[1]
+    : n.length === 3 ? n[0] * 3600 + n[1] * 60 + n[2] : null;
+  return s == null ? null : s * 1000;
+}
+
+// Organizer result editor: results are recomputed from raw crossings + a status
+// override, so editing here means (a) setting DNS/DNF/DSQ/auto and (b) adding or
+// deleting the racer's crossings (each crossing = a finish or lap). `refetch`
+// redraws the results table; after each change we reopen with fresh data.
+async function openResultEditor(c, row, refetch) {
+  const key = row.bib || ('epc:' + row.epc);
+  const { reads } = await api(`/contests/${c.id}/reads?limit=2000`);
+  const epcs = row.epcs || [row.epc];
+  const mine = reads
+    .filter((x) => (row.bib && x.bib === row.bib) || epcs.includes(x.epc))
+    .sort((a, b) => Date.parse(a.read_at) - Date.parse(b.read_at));
+  const waveStart = row.wave_started_at ? Date.parse(row.wave_started_at) : null;
+  const canAdd = waveStart && row.bib; // a timed manual crossing needs a wave start + bib
+
+  const statusSel = `<select id="re-status" aria-label="${t('result_status')}" style="width:auto">
+    ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${row.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
+  </select>`;
+  const crossRows = mine.length
+    ? mine.map((x) => `<tr>
+        <td style="font-variant-numeric:tabular-nums"><strong>${waveStart ? esc(msToClock(Date.parse(x.read_at) - waveStart)) : '—'}</strong></td>
+        <td class="muted" style="font-size:.85em">${esc(x.reader_name || '')}${x.reader_location === 'manual' ? ` · ${t('result_manual')}` : ''}</td>
+        <td><button class="btn small danger re-del" data-readid="${x.id}" title="${t('result_del_crossing')}">🗑</button></td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" class="muted">${t('result_no_crossings')}</td></tr>`;
+  const addRow = canAdd
+    ? `<div style="display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap">
+         <label for="re-elapsed">${t('result_add_crossing')}</label>
+         <input id="re-elapsed" placeholder="${t('result_elapsed_ph')}" style="width:110px">
+         <button class="btn small" id="re-add">${t('result_add_btn')}</button>
+       </div>`
+    : `<p class="muted" style="margin-top:12px">${t('result_need_wave')}</p>`;
+
+  const body = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <strong>${t('result_status')}:</strong> ${statusSel}
+    </div>
+    <h4 style="margin:0 0 6px">${t('result_crossings')} <span class="muted" style="font-weight:400">(${t('result_elapsed_col')})</span></h4>
+    <div style="overflow-x:auto"><table class="board"><tbody>${crossRows}</tbody></table></div>
+    ${addRow}`;
+  const root = openModal(`✎ ${esc(row.participant || row.bib || '')}`, body);
+
+  const reopen = async () => {
+    const results = await refetch();
+    const updated = results.find((r) => (r.bib || ('epc:' + r.epc)) === key);
+    if (updated) openResultEditor(c, updated, refetch); else closeModal();
+  };
+
+  root.querySelector('#re-status').onchange = async (e) => {
+    try {
+      await api(`/contests/${c.id}/racer-status`, { method: 'PATCH', body: { bib: row.bib || '', epc: row.epc, status: e.target.value } });
+      toast(t('result_saved')); await reopen();
+    } catch (err) { toast(String(err.message || err), true); }
+  };
+  root.querySelectorAll('.re-del').forEach((b) => (b.onclick = async () => {
+    try {
+      await api(`/contests/${c.id}/reads/${b.dataset.readid}`, { method: 'DELETE' });
+      toast(t('result_saved')); await reopen();
+    } catch (err) { toast(String(err.message || err), true); }
+  }));
+  const addBtn = root.querySelector('#re-add');
+  if (addBtn) addBtn.onclick = async () => {
+    const ms = parseClock(root.querySelector('#re-elapsed').value);
+    if (ms == null) return toast(t('result_bad_elapsed'), true);
+    try {
+      await api(`/contests/${c.id}/manual-read`, { method: 'POST', body: { bib: row.bib, at: new Date(waveStart + ms).toISOString() } });
+      toast(t('result_saved')); await reopen();
+    } catch (err) { toast(String(err.message || err), true); }
+  };
 }
 
 // ---------- public results page (the shareable /race-results/<id> link) ----------
@@ -1816,6 +1921,7 @@ function openModal(title, bodyHtml) {
   wireLeagueLinks(root); // members/team links inside the modal stay live
   // Following a race link navigates away, so drop the modal first.
   root.querySelectorAll('a[href^="#/"]').forEach((a) => a.addEventListener('click', closeModal));
+  return root;
 }
 
 // Team roster: every scoring member of `team`, with their category and season total.

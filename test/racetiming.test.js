@@ -544,3 +544,58 @@ test('finished race: non-crossers become DNF (started wave) or DNS (wave never s
   assert.equal(byBib['200'], 'DNF', 'started but never crossed -> DNF once finished');
   assert.equal(byBib['201'], 'DNS', 'wave never started -> DNS once finished');
 });
+
+test('organizer edits results: delete a crossing and override status', async () => {
+  const o = await register('edit-results@test.co', 'Edit Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    kind: 'race', title: 'Editable race', start_at: past, end_at: future,
+  })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'w' })).body;
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+    .send({ epc: 'AAAA0300', bib: '300', participant: 'Edit Me', wave_id: w.id });
+  await request(app).post(`/api/contests/${c.id}/waves/${w.id}/start`).set(auth(o))
+    .send({ at: gunTime.toISOString() });
+
+  // Add a finish via the manual endpoint, confirm it lands, then delete it.
+  await request(app).post(`/api/contests/${c.id}/manual-read`).set(auth(o))
+    .send({ bib: '300', at: atOffset(120) });
+  let res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  let rider = res.body.results.find((r) => r.bib === '300');
+  assert.equal(rider.status, 'finished');
+  assert.equal(rider.elapsed, '2:00.0');
+  assert.equal(rider.racer_status, '', 'auto status exposed as empty override');
+
+  const reads = (await request(app).get(`/api/contests/${c.id}/reads`).set(auth(o))).body.reads;
+  const mine = reads.find((x) => x.bib === '300');
+  assert.ok(mine, 'the crossing is listed');
+
+  // A stranger cannot delete it; a bad id 404s.
+  const other = await register('edit-stranger@test.co', 'Stranger');
+  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(other))).status, 403);
+  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/99999999`).set(auth(o))).status, 404);
+
+  // Delete the crossing -> recomputed with no finish. Race still active -> on_course.
+  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o))).status, 200);
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  assert.equal(res.body.results.find((r) => r.bib === '300').status, 'on_course');
+
+  // Override status: DSQ, then clear back to auto.
+  const bad = await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
+    .send({ bib: '300', status: 'nope' });
+  assert.equal(bad.status, 400);
+  const miss = await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
+    .send({ bib: 'ghost', status: 'DSQ' });
+  assert.equal(miss.status, 404);
+
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
+    .send({ bib: '300', status: 'DSQ' })).status, 200);
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  rider = res.body.results.find((r) => r.bib === '300');
+  assert.equal(rider.status, 'DSQ');
+  assert.equal(rider.racer_status, 'DSQ');
+
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
+    .send({ bib: '300', status: '' })).status, 200);
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  assert.equal(res.body.results.find((r) => r.bib === '300').status, 'on_course');
+});

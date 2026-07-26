@@ -54,6 +54,9 @@ function computeRaceResults(contest, { category } = {}) {
       epc: a.epc, epcs: a.epcs.slice(), bib: a.bib, participant: a.participant, category: a.category,
       distance: a.distance || '', team: a.team || '', gender: a.gender || '',
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
+      // raw organizer override ('' when auto) so the web editor shows the true
+      // stored value, not the computed DNS/DNF; ignored by the public views.
+      racer_status: a.racer_status || '',
     };
     // Once the race is finished, a racer who never crossed is a non-finisher,
     // not still "on course": no started wave -> DNS, no finish read -> DNF.
