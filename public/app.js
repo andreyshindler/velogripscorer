@@ -1907,7 +1907,7 @@ async function renderAdminLeagues(box) {
           <label data-mode-field="category">${t('league_team_points')}<input data-f="team_points" value="${s.team_points.join(', ')}"></label>
           <label data-mode-field="overall">${t('league_team_overall_start')}<input data-f="team_overall_start" type="number" min="1" value="${s.team_overall_start}"></label>
           <label>${t('league_team_other_points')}<input data-f="team_other_points" type="number" min="0" value="${s.team_other_points}"></label>
-          <label>${t('league_team_top_runners')}<input data-f="team_top_runners" type="number" min="1" value="${s.team_top_runners}"></label>
+          <label><span data-toprunners-label>${t('league_team_top_runners')}</span><input data-f="team_top_runners" type="number" min="1" value="${s.team_top_runners}"></label>
           <label>${t('league_team_best_n')}<input data-f="team_best_n" type="number" min="1" value="${s.team_best_n}"></label>
           <span class="muted" style="font-size:12px">${t('league_team_mode_hint')}</span>
           <button class="btn small">${t('save')}</button>
@@ -1949,10 +1949,13 @@ async function renderAdminLeagues(box) {
     // Show only the team-points field that applies to the selected mode.
     const settingsForm = card.querySelector('[data-form="settings"]');
     const modeSel = settingsForm.querySelector('[data-f="team_scoring_mode"]');
+    const topLabel = settingsForm.querySelector('[data-toprunners-label]');
     const applyMode = () => {
       settingsForm.querySelectorAll('[data-mode-field]').forEach((el) => {
         el.style.display = el.dataset.modeField === modeSel.value ? '' : 'none';
       });
+      // Overall mode is the MTB model — count "riders"; category mode counts "runners".
+      if (topLabel) topLabel.textContent = t(modeSel.value === 'overall' ? 'league_team_top_riders' : 'league_team_top_runners');
     };
     modeSel.onchange = applyMode;
     applyMode();
