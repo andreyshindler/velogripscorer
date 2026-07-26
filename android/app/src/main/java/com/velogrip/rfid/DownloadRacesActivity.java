@@ -217,6 +217,12 @@ public class DownloadRacesActivity extends BaseActivity {
 
     private void pairAndDownload(JSONObject race, String email, boolean clearFirst) {
         prefs.savePairing(race.optString("app_token"), race.optString("title"), email, race.optInt("id"));
+        // Default the Post Results "Sport" to the league this race belongs to
+        // (its configured sport as a fallback), so league races don't default to
+        // Running. The operator can still change it on the Post Results screen.
+        String league = race.optString("league_names").trim();
+        String sport = race.optString("sport").trim();
+        prefs.setSport(!league.isEmpty() ? league : sport);
         new Thread(() -> {
             String message;
             boolean ok = false;

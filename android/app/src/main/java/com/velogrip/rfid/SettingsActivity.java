@@ -288,6 +288,11 @@ public class SettingsActivity extends BaseActivity {
     private void pairRace(Prefs prefs, JSONObject race, String email,
                           EditText readerToken, android.widget.TextView selectedRace) {
         prefs.savePairing(race.optString("app_token"), race.optString("title"), email, race.optInt("id"));
+        // Default the Post Results "Sport" to this race's league (its configured
+        // sport as a fallback), matching the Download Races pairing flow.
+        String league = race.optString("league_names").trim();
+        String sport = race.optString("sport").trim();
+        prefs.setSport(!league.isEmpty() ? league : sport);
         readerToken.setText(race.optString("app_token"));
         selectedRace.setText(race.optString("title"));
         Toast.makeText(this, getString(R.string.race_paired, race.optString("title")), Toast.LENGTH_LONG).show();
