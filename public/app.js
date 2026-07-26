@@ -1815,6 +1815,10 @@ async function renderAdminLeagues(box) {
       <form id="lg-new">
         <label>${t('league_name')}<input id="lg-name" required></label>
         <label>${t('league_season')}<input id="lg-season" placeholder="2026"></label>
+        <label>${t('league_preset')}<select id="lg-preset">
+          <option value="running">${t('league_preset_running')}</option>
+          <option value="mtb">${t('league_preset_mtb')}</option>
+        </select></label>
         <button class="btn">${t('league_create')}</button>
       </form>
     </div>
@@ -1826,6 +1830,7 @@ async function renderAdminLeagues(box) {
       await api('/leagues', { method: 'POST', body: {
         name: document.getElementById('lg-name').value,
         season: document.getElementById('lg-season').value,
+        preset: document.getElementById('lg-preset').value,
       }});
       toast(t('league_saved'));
       viewAdmin('leagues');
@@ -1896,10 +1901,15 @@ async function renderAdminLeagues(box) {
           <label>${t('league_ind_points')}<input data-f="individual_points" value="${s.individual_points.join(', ')}"></label>
           <label>${t('league_ind_other_points')}<input data-f="individual_other_points" type="number" min="0" value="${s.individual_other_points}"></label>
           <label>${t('league_ind_best_n')}<input data-f="individual_best_n" type="number" min="1" value="${s.individual_best_n}"></label>
-          <label>${t('league_team_points')}<input data-f="team_points" value="${s.team_points.join(', ')}"></label>
+          <label>${t('league_team_mode')}<select data-f="team_scoring_mode">
+            ${['category', 'overall'].map((m) => `<option value="${m}" ${s.team_scoring_mode === m ? 'selected' : ''}>${t('league_team_mode_' + m)}</option>`).join('')}
+          </select></label>
+          <label data-mode-field="category">${t('league_team_points')}<input data-f="team_points" value="${s.team_points.join(', ')}"></label>
+          <label data-mode-field="overall">${t('league_team_overall_start')}<input data-f="team_overall_start" type="number" min="1" value="${s.team_overall_start}"></label>
           <label>${t('league_team_other_points')}<input data-f="team_other_points" type="number" min="0" value="${s.team_other_points}"></label>
           <label>${t('league_team_top_runners')}<input data-f="team_top_runners" type="number" min="1" value="${s.team_top_runners}"></label>
           <label>${t('league_team_best_n')}<input data-f="team_best_n" type="number" min="1" value="${s.team_best_n}"></label>
+          <span class="muted" style="font-size:12px">${t('league_team_mode_hint')}</span>
           <button class="btn small">${t('save')}</button>
         </form>
       </details>`;
@@ -1936,7 +1946,18 @@ async function renderAdminLeagues(box) {
         viewAdmin('leagues');
       } catch (err) { toast(err.message, true); }
     };
-    card.querySelector('[data-form="settings"]').onsubmit = async (e) => {
+    // Show only the team-points field that applies to the selected mode.
+    const settingsForm = card.querySelector('[data-form="settings"]');
+    const modeSel = settingsForm.querySelector('[data-f="team_scoring_mode"]');
+    const applyMode = () => {
+      settingsForm.querySelectorAll('[data-mode-field]').forEach((el) => {
+        el.style.display = el.dataset.modeField === modeSel.value ? '' : 'none';
+      });
+    };
+    modeSel.onchange = applyMode;
+    applyMode();
+
+    settingsForm.onsubmit = async (e) => {
       e.preventDefault();
       const f = (name) => e.target.querySelector(`[data-f="${name}"]`).value;
       const nums = (v) => v.split(',').map((x) => Number(x.trim())).filter((x) => !Number.isNaN(x));
@@ -1945,7 +1966,9 @@ async function renderAdminLeagues(box) {
           individual_points: nums(f('individual_points')),
           individual_other_points: Number(f('individual_other_points')),
           individual_best_n: Number(f('individual_best_n')),
+          team_scoring_mode: f('team_scoring_mode'),
           team_points: nums(f('team_points')),
+          team_overall_start: Number(f('team_overall_start')),
           team_other_points: Number(f('team_other_points')),
           team_top_runners: Number(f('team_top_runners')),
           team_best_n: Number(f('team_best_n')),

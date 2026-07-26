@@ -136,6 +136,10 @@ server/
   db.js           SQLite schema (WAL mode) + immutable audit log helper
   auth.js         JWT sessions, bcrypt passwords, role guards, rate limiting
   scoring.js      weighted score: Score = Σ (weight/100 × avg criterion score)
+  league-scoring.js  season standings (config-driven). Presets: 'running'
+                  (individual + team points by category place) and 'mtb'
+                  (individual 26/24/22… per category; team = overall place
+                  100/99/98… floored at 1, sum of best 3, best 5 of 6)
   events.js       SSE hub (real-time leaderboards), in-app notifications,
                   HMAC-signed outbound webhooks
   telegram.js     Telegram start-list bot (add/edit/delete racers, CSV/PDF export)
