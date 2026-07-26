@@ -85,6 +85,24 @@ test('scoreRace: team sums its best N runners only', () => {
   assert.equal(byTeam['Solo'].points, 2);
 });
 
+test('scoreRace: a partial-lap finisher still counts, ranked below full-lap finishers', () => {
+  // MTB lap race: rider B did 3 of 4 laps and was finalised (status finished).
+  // Even with a faster elapsed time, fewer laps must rank below the 4-lap rider,
+  // but B still scores — it is not dropped for finishing short.
+  const row = (bib, laps, elapsed) => ({
+    bib, participant: `R${bib}`, status: 'finished', laps, elapsed_ms: elapsed,
+    distance: '5k', gender: 'M', category: 'A', team: 'T1',
+  });
+  const results = [row('A', 4, 5000), row('B', 3, 4000)]; // B faster but a lap short
+  const { riders } = scoreRace(results, DEFAULT_SETTINGS);
+  const byBib = Object.fromEntries(riders.map((r) => [r.bib, r]));
+  assert.ok(byBib['B'], 'the 3-lap finisher is counted, not dropped');
+  assert.equal(byBib['A'].place, 1, 'more laps wins even with a slower time');
+  assert.equal(byBib['B'].place, 2, 'the partial-lap rider ranks just below');
+  assert.equal(byBib['A'].points, 20);
+  assert.equal(byBib['B'].points, 18, 'the partial-lap rider still earns points');
+});
+
 test('normalizeSettings: MTB team_scoring_mode + team_overall_start', () => {
   const s = normalizeSettings({ team_scoring_mode: 'overall', team_overall_start: 100 });
   assert.equal(s.team_scoring_mode, 'overall');

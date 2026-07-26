@@ -941,13 +941,18 @@ public class RaceTimingActivity extends BaseActivity {
         return v;
     }
 
-    /** Finish race: if racers are still out, ask whether to mark them DNS or
-     *  DNF; either way (or when everyone finished) go to the results. */
+    /** Finish race: riders who completed at least one lap are finalised at their
+     *  last crossing with the laps they did (ranked below full-distance
+     *  finishers). Only riders who never crossed the line are still "out" — for
+     *  those we ask whether to mark them DNS or DNF. Either way (or when nobody
+     *  is left out) go to the results. */
     private void finishRace() {
+        // Preview with laps-down finalisation so partial-lap riders count as
+        // finished; the only ones left "out" are those with no crossings at all.
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized());
+                true);
         final List<RaceEngine.Result> onCourse = new ArrayList<>();
         for (RaceEngine.Result r : results) {
             if ("on_course".equals(r.status) || "not_started".equals(r.status)) onCourse.add(r);
@@ -956,12 +961,12 @@ public class RaceTimingActivity extends BaseActivity {
             new android.app.AlertDialog.Builder(this)
                     .setTitle(R.string.rc_finish)
                     .setMessage(R.string.finish_race_confirm)
-                    .setPositiveButton(R.string.finish_race_ok, (d, w) -> goToResults())
+                    .setPositiveButton(R.string.finish_race_ok, (d, w) -> finalizeAndGoToResults())
                     .setNegativeButton(R.string.cancel_popup, null)
                     .show();
             return;
         }
-        // Racers still out: mark them DNS or DNF before showing results.
+        // Riders who never crossed the line: mark them DNS or DNF before results.
         new android.app.AlertDialog.Builder(this)
                 .setTitle(R.string.still_on_course)
                 .setItems(new String[]{getString(R.string.mark_dns), getString(R.string.mark_dnf)},
@@ -970,10 +975,17 @@ public class RaceTimingActivity extends BaseActivity {
                             for (RaceEngine.Result r : onCourse) {
                                 if (!r.bib.isEmpty()) store.setRacerStatus(r.bib, status);
                             }
-                            goToResults();
+                            finalizeAndGoToResults();
                         })
                 .setNegativeButton(R.string.cancel_popup, null)
                 .show();
+    }
+
+    /** Commit the finish: persist laps-down finalisation so the results screen
+     *  and the upload treat partial-lap riders as finished, then show results. */
+    private void finalizeAndGoToResults() {
+        prefs.setRaceFinalized(true);
+        goToResults();
     }
 
     private void goToResults() {
