@@ -1009,7 +1009,9 @@ async function viewPublicResults(id, tab) {
   const tapsBtn = document.getElementById('dl-taps');
   if (tapsBtn) tapsBtn.onclick = () => downloadAuthed(`/contests/${id}/taps`, `taps-${id}.csv`);
 
+  let currentResults = data.results;
   const render = (results) => {
+    currentResults = results;
     const body = document.getElementById('pubbody');
     if (!body) return;
     const qi = location.hash.indexOf('?');
@@ -1018,7 +1020,7 @@ async function viewPublicResults(id, tab) {
       body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '', c.status === 'finished');
     } else if (qs && qs.has('dist')) {
       body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
-    } else if (tab === 'full') body.innerHTML = fullResultsTable(results);
+    } else if (tab === 'full') body.innerHTML = fullResultsTable(results, c.is_organizer);
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
     else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
     else body.innerHTML = raceWinnersTables(id, results, c.status === 'finished');
@@ -1026,9 +1028,24 @@ async function viewPublicResults(id, tab) {
   render(data.results);
 
   state.sse = new EventSource(`${BASE}/api/contests/${id}/stream`);
-  const refetch = async () => { const fresh = await api(`/contests/${id}/race-results`); render(fresh.results); };
+  const refetch = async () => {
+    const fresh = await api(`/contests/${id}/race-results`);
+    render(fresh.results);
+    return fresh.results;
+  };
   state.sse.addEventListener('tag_reads', refetch);
   state.sse.addEventListener('wave_start', refetch);
+
+  // Organizer: the Full results tab exposes ✎ Edit per racer (same editor as the
+  // Results tab). The #pubbody element persists across renders, so delegate once.
+  if (c.is_organizer) {
+    document.getElementById('pubbody').addEventListener('click', (e) => {
+      const btn = e.target.closest('.rr-edit');
+      if (!btn) return;
+      const row = currentResults.find((r) => (r.bib || ('epc:' + r.epc)) === btn.dataset.key);
+      if (row) openResultEditor(c, row, refetch);
+    });
+  }
 }
 
 // "Race info" box shown above the results tabs (mirrors the reference layout).
@@ -1289,7 +1306,10 @@ function topFinishersTables(results, n) {
 
 // Full results split into a section per distance, each ranked on its own
 // (a 5k time can't be compared to a 10k, so they're separate competitions).
-function fullResultsTable(results) {
+function fullResultsTable(results, editable) {
+  const eKey = (r) => r.bib || ('epc:' + r.epc);
+  const eCell = (r) => (editable
+    ? `<td><button class="btn small secondary rr-edit" data-key="${esc(eKey(r))}">✎ ${t('edit_result')}</button></td>` : '');
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
   const sections = dists.map((d) => {
@@ -1308,16 +1328,16 @@ function fullResultsTable(results) {
       <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td>
       <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
-      <td class="muted" style="font-variant-numeric:tabular-nums">${behindOf(r, i)}</td></tr>`).join('');
+      <td class="muted" style="font-variant-numeric:tabular-nums">${behindOf(r, i)}</td>${eCell(r)}</tr>`).join('');
     const otherRows = others.map((r) => `<tr>
       <td class="muted">–</td><td><strong>${esc(r.bib || '')}</strong></td>
       <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td>
       <td>${esc(r.category || '')}</td><td></td><td>${r.laps || ''}</td>
-      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td></tr>`).join('');
+      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td>${eCell(r)}</tr>`).join('');
     return `<div style="overflow-x:auto"><table class="board mt"><thead>
-      <tr><th colspan="8">${esc(d || t('overall'))}</th></tr>
+      <tr><th colspan="${editable ? 9 : 8}">${esc(d || t('overall'))}</th></tr>
       <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-      <th>${t('category_place')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th></tr></thead>
+      <th>${t('category_place')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>${editable ? '<th></th>' : ''}</tr></thead>
       <tbody>${finRows}${otherRows}</tbody></table></div>`;
   }).join('');
   return sections || `<p class="muted">${t('no_results_yet')}</p>`;
