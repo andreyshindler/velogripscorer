@@ -22,6 +22,7 @@ const H = {
   total: 'סה״כ', overall: 'כללי', female: 'נשים', male: 'גברים',
   finishers: 'מסיימים', dnf: 'לא סיימו', races: 'מרוצים', counted: 'נספרים',
   teamStandings: 'ניקוד קבוצתי', individualStandings: 'ניקוד אישי',
+  laps: 'סיבובים', points: 'ניקוד', cumulative: 'ניקוד מצטבר', deduction: 'הפחתה',
 };
 // gender label for a cell (singular) or a section/group title (plural).
 function genderHe(label, plural) {
@@ -277,9 +278,17 @@ async function leagueTeamPdf(league, teams, raceList) {
     { header: H.place, width: 36, align: 'r', render: (r, i) => i + 1 },
     { header: H.team, width: 150, align: 'r', render: (r) => r.team },
   ];
-  const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 46; // + Total col
+  const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 46 + 62; // + Deduction + Cumulative cols
   const rounds = roundColumns(raceList, usable, totalFixed);
-  const columns = [...fixed, ...rounds, { header: H.total, width: 46, align: 'r', render: (r) => r.total }];
+  // The dropped rounds (best-N) show as a deduction: the points not counted.
+  const deduction = (r) => {
+    const sum = Object.values(r.per_race || {}).reduce((a, b) => a + b, 0);
+    const d = sum - r.total;
+    return d > 0 ? d : '';
+  };
+  const columns = [...fixed, ...rounds,
+    { header: H.deduction, width: 46, align: 'r', render: deduction },
+    { header: H.cumulative, width: 62, align: 'r', render: (r) => r.total }];
   const totalW = columns.reduce((s, c) => s + c.width, 0);
   const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
@@ -326,4 +335,41 @@ function bestNote(teams) {
   return c ? `${c} ${H.counted}` : H.overall;
 }
 
-module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf };
+// ---------------------------------------------------------------------------
+// 4) Per-race individual standings: one race's laps/time/points shown next to
+//    the rider's season cumulative, grouped per category. `groups` =
+//    [{distance, gender, category, rows:[{place-order..., cumulative, name, bib,
+//    team, laps, time, points}]}] — laps/time/points are '' for riders who did
+//    not race this round (season-only rows).
+// ---------------------------------------------------------------------------
+async function raceIndividualPdf(contest, groups) {
+  const ctx = await newDoc(true);
+  addPage(ctx);
+  const columns = [
+    { header: H.place, width: 34, align: 'r', render: (r, i) => i + 1 },
+    { header: H.cumulative, width: 60, align: 'r', render: (r) => r.cumulative },
+    { header: H.name, width: 150, align: 'r', render: (r) => r.name },
+    { header: H.bib, width: 42, align: 'r', render: (r) => r.bib },
+    { header: H.team, width: 150, align: 'r', render: (r) => r.team },
+    { header: H.laps, width: 52, align: 'r', render: (r) => r.laps },
+    { header: H.time, width: 62, align: 'r', render: (r) => r.time },
+    { header: H.points, width: 44, align: 'r', render: (r) => r.points },
+  ];
+  const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
+
+  drawTitle(ctx, contest.title || 'Race results', 15, x0, totalW);
+  drawSub(ctx, H.individualStandings, x0, totalW);
+
+  for (const group of groups) {
+    if (!group.rows.length) continue;
+    // RTL reading order: distance, then gender, then category.
+    const title = rtlTitle([group.distance, genderHe(group.gender, true), group.category]);
+    ctx.y -= 4;
+    drawTitle(ctx, title, 11, x0, totalW);
+    drawTable(ctx, columns, group.rows, x0);
+  }
+  return Buffer.from(await ctx.doc.save());
+}
+
+module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceIndividualPdf };

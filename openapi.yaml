@@ -385,11 +385,12 @@ paths:
       responses: { '200': { description: OK } }
   /contests/{id}/race-results:
     get:
-      summary: 'Ranked race results: elapsed = last crossing − gun time, laps via min lap gap, suppression window applied; `?format=csv` exports, `?category=` filters'
+      summary: 'Ranked race results: elapsed = last crossing − gun time, laps via min lap gap, suppression window applied; `?format=csv` exports, `?format=pdf` (organizer) exports the results PDF, `?format=pdf&doc=individual|team` exports the per-race league standings PDF (race must be in a league), `?category=` filters'
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: category, in: query, schema: { type: string } }
-        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv, pdf] } }
+        - { name: doc, in: query, description: 'With format=pdf: individual/team season standings for the race''s league', schema: { type: string, enum: [individual, team] } }
       responses: { '200': { description: OK } }
   /contests/{id}/manual-read:
     post:

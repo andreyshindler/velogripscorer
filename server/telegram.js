@@ -524,6 +524,22 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     const res = await A('GET', `/contests/${c.id}/race-results?format=pdf`);
     if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
     await send.document(chatId, `race-results-${c.id}.pdf`, res.buffer, `${c.title} — results`);
+    // When the race is part of a league, also offer the season standings PDFs.
+    const inLeague = db.prepare('SELECT 1 FROM league_races WHERE contest_id = ?').get(c.id);
+    if (inLeague) {
+      await send.message(chatId, 'League standings for this race:', {
+        reply_markup: kb([[btn('📑 Individual PDF', 'rpdf:individual'), btn('📑 Team PDF', 'rpdf:team')]]),
+      });
+    }
+  }
+
+  async function raceStandingsPdf(chatId, doc) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const which = doc === 'team' ? 'team' : 'individual';
+    const res = await A('GET', `/contests/${c.id}/race-results?format=pdf&doc=${which}`);
+    if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
+    await send.document(chatId, `${which}-standings-${c.id}.pdf`, res.buffer, `${c.title} — ${which} standings`);
   }
 
   // ---- league standings ----
@@ -676,6 +692,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (tag === 'lg') return showLeague(chatId, a);
     if (tag === 'lgcsv') return leagueCsv(chatId, a, b);
     if (tag === 'lgpdf') return leaguePdf(chatId, a, b);
+    if (tag === 'rpdf') return raceStandingsPdf(chatId, a);
     if (tag === 'edit') return cmdEdit(chatId, a);
     if (tag === 'del') return cmdDel(chatId, a);
     if (tag === 'delyes') return doDelete(chatId, a);

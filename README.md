@@ -263,13 +263,21 @@ The Timing tab is a full race console:
 
 ### PDF exports
 
-Three PDF reports, alongside the existing CSV exports, are produced server-side
-and delivered through the **operator Telegram bot**:
+PDF reports, alongside the existing CSV exports, are produced server-side and
+delivered through the **operator Telegram bot** and the web Results tab:
 
 - `/pdf` — the selected race's results (per-distance Overall / Female / Male and
-  per category+gender sections).
+  per category+gender sections). When the race belongs to a league, `/pdf` also
+  offers **Individual PDF** / **Team PDF** buttons for that race (see below).
 - `/league` → **Individual PDF** / **Team PDF** buttons — the accumulated league
   standings (best-N applied, one round column per race).
+- **Per-race standings** — for a race attached to a league, the Results tab
+  (organizer) and Telegram expose two documents scoped to that race:
+  - _Individual_ — per-category tables showing each rider's season cumulative
+    (`ניקוד מצטבר`) beside this race's laps, time and points; riders who skipped
+    this round show cumulative only.
+  - _Team_ — the league's season team matrix: one column per round, a `הפחתה`
+    (drop) column for the best-N points not counted, and the cumulative total.
 
 They render Hebrew right-to-left. There is no external browser or system font
 dependency: `results-pdf.js` builds the pages with `pdf-lib` (+ `@pdf-lib/fontkit`)
@@ -279,8 +287,9 @@ Because pure-JS PDF drawing has no bidi engine, `bidi.js` reorders each Hebrew
 cell into visual order; numbers, times and bib IDs stay LTR. It handles the
 mono-directional cells in these tables (names, teams, times) — not full UAX#9
 (no nested embeddings, bracket mirroring, or Arabic shaping). The same data is
-also reachable at `GET /contests/:id/race-results?format=pdf` (organizer only)
-and `GET /leagues/:id/standings?format=pdf&table=team|individual`.
+also reachable at `GET /contests/:id/race-results?format=pdf` (organizer only;
+`&doc=individual|team` for the per-race league standings) and
+`GET /leagues/:id/standings?format=pdf&table=team|individual`.
 
 ### App ⇄ web sync (all authenticated by the reader device token)
 

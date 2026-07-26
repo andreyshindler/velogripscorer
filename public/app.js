@@ -775,7 +775,9 @@ async function renderRaceResults(box, c) {
             ${categories.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('')}
           </select>` : ''}
           ${c.is_organizer ? `<button class="btn small secondary" id="rr-dl-csv">⬇ ${t('export_csv')}</button>
-          <button class="btn small secondary" id="rr-dl-taps">⬇ ${t('export_taps')}</button>` : ''}
+          <button class="btn small secondary" id="rr-dl-taps">⬇ ${t('export_taps')}</button>
+          ${c.league_id ? `<button class="btn small secondary" id="rr-dl-individual">⬇ ${t('individual_pdf')}</button>
+          <button class="btn small secondary" id="rr-dl-team">⬇ ${t('team_pdf')}</button>` : ''}` : ''}
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -790,6 +792,10 @@ async function renderRaceResults(box, c) {
   if (csvBtn) csvBtn.onclick = () => downloadAuthed(`/contests/${c.id}/race-results?format=csv`, `race-results-${c.id}.csv`);
   const tapsBtn = box.querySelector('#rr-dl-taps');
   if (tapsBtn) tapsBtn.onclick = () => downloadAuthed(`/contests/${c.id}/taps`, `taps-${c.id}.csv`);
+  const indBtn = box.querySelector('#rr-dl-individual');
+  if (indBtn) indBtn.onclick = () => downloadAuthed(`/contests/${c.id}/race-results?format=pdf&doc=individual`, `individual-${c.id}.pdf`);
+  const teamBtn = box.querySelector('#rr-dl-team');
+  if (teamBtn) teamBtn.onclick = () => downloadAuthed(`/contests/${c.id}/race-results?format=pdf&doc=team`, `team-${c.id}.pdf`);
 
   const draw = (results) => {
     const filter = box.querySelector('#cat-filter');

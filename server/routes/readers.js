@@ -9,7 +9,8 @@ const multer = require('multer');
 const { parseXlsx } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
 const { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('../race-results');
-const { raceResultsPdf } = require('../results-pdf');
+const { normalizeSettings, computeLeagueStandings, scoreRace } = require('../league-scoring');
+const { raceResultsPdf, raceIndividualPdf, leagueTeamPdf } = require('../results-pdf');
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -591,6 +592,69 @@ router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Resolve the league a race belongs to and compute its season standings, so a
+// per-race view can offer the same team/individual PDFs the league page does.
+// Returns null when the race is not attached to any league.
+function leagueContext(contestId) {
+  const lr = db.prepare('SELECT league_id FROM league_races WHERE contest_id = ?').get(contestId);
+  if (!lr) return null;
+  const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(lr.league_id);
+  if (!league) return null;
+  const settings = normalizeSettings(league.settings);
+  const attached = db.prepare(
+    `SELECT lr.contest_id, lr.round FROM league_races lr JOIN contests c ON c.id = lr.contest_id
+       WHERE lr.league_id = ? ORDER BY lr.round, datetime(c.start_at)`
+  ).all(league.id);
+  const races = attached.map((row) => {
+    const c = db.prepare('SELECT * FROM contests WHERE id = ?').get(row.contest_id);
+    return {
+      contest: { id: c.id, title: c.title, start_at: c.start_at, end_at: c.end_at, status: c.status },
+      round: row.round,
+      results: computeRaceResults(c),
+    };
+  });
+  const { individual, teams } = computeLeagueStandings(races, settings);
+  const raceList = races.map((r) => ({
+    contest_id: r.contest.id, round: r.round, title: r.contest.title,
+    start_at: r.contest.start_at, end_at: r.contest.end_at, status: r.contest.status,
+  }));
+  return { league: { ...league, settings }, settings, individual, teams, raceList };
+}
+
+// Per-category rows for the individual PDF of ONE race: this race's laps/time/
+// points (finishers) shown next to each rider's season cumulative. Finishers
+// come first (by this-race place), then season-only riders (by cumulative desc).
+function raceIndividualGroups(contest, lc) {
+  const raceResults = computeRaceResults(contest);
+  const timing = new Map(); // bib -> {laps, time}
+  for (const r of raceResults) {
+    if (r.status === 'finished') timing.set(String(r.bib || '').trim(), { laps: r.laps, time: r.elapsed });
+  }
+  const raceScore = new Map(); // bib -> {place, points}
+  for (const r of scoreRace(raceResults, lc.settings).riders) raceScore.set(r.bib, { place: r.place, points: r.points });
+
+  return lc.individual.map((g) => {
+    const rows = g.rows.map((row) => {
+      const t = timing.get(row.bib);
+      const s = raceScore.get(row.bib);
+      const finishedHere = !!t;
+      return {
+        bib: row.bib, name: row.name, team: row.team, cumulative: row.total,
+        finishedHere, racePlace: s ? s.place : Infinity,
+        laps: finishedHere ? t.laps : '',
+        time: finishedHere ? t.time : '',
+        points: finishedHere && s ? s.points : '',
+      };
+    });
+    rows.sort((a, b) => {
+      if (a.finishedHere !== b.finishedHere) return a.finishedHere ? -1 : 1;
+      if (a.finishedHere) return a.racePlace - b.racePlace;
+      return b.cumulative - a.cumulative;
+    });
+    return { distance: g.distance, gender: g.gender, category: g.category, rows };
+  });
+}
+
 // ---- Race results: elapsed = first read after wave start + suppression ----
 // The computation lives in server/race-results.js (shared with league standings).
 router.get('/contests/:id/race-results', async (req, res) => {
@@ -609,7 +673,25 @@ router.get('/contests/:id/race-results', async (req, res) => {
   if (req.query.format === 'pdf') {
     // Same organizer gating as the CSV export.
     if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+    const doc = req.query.doc;
     try {
+      // Season standings PDFs (team / per-category individual) require the race
+      // to belong to a league — that's where cumulative + rounds come from.
+      if (doc === 'team' || doc === 'individual') {
+        const lc = leagueContext(contest.id);
+        if (!lc) return res.status(400).json({ error: 'race not in a league' });
+        let buf, name;
+        if (doc === 'team') {
+          buf = await leagueTeamPdf(lc.league, lc.teams, lc.raceList);
+          name = `team-standings-${contest.id}.pdf`;
+        } else {
+          buf = await raceIndividualPdf(contest, raceIndividualGroups(contest, lc));
+          name = `individual-standings-${contest.id}.pdf`;
+        }
+        return res.type('application/pdf')
+          .set('Content-Disposition', `attachment; filename="${name}"`)
+          .send(buf);
+      }
       const buf = await raceResultsPdf(contest, results); // async; Express 4 won't catch a rejection
       return res.type('application/pdf')
         .set('Content-Disposition', `attachment; filename="race-results-${contest.id}.pdf"`)
