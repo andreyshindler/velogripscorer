@@ -161,6 +161,7 @@ const I18N = {
     league_team_overall_start: 'Overall 1st-place team points (overall mode)',
     league_team_other_points: 'Team points for remaining finishers',
     league_team_top_runners: 'Runners counted per team per race',
+    league_team_top_riders: 'Riders counted per team per race',
     league_team_best_n: 'Best races counted (team)',
   },
   he: {
@@ -322,6 +323,7 @@ const I18N = {
     league_team_overall_start: 'נקודות למקום 1 כללי (שיטה כללית)',
     league_team_other_points: 'ניקוד קבוצתי לשאר המסיימים',
     league_team_top_runners: 'מספר רצים נספרים לקבוצה בכל מרוץ',
+    league_team_top_riders: 'מספר רוכבים נספרים לקבוצה בכל מרוץ',
     league_team_best_n: 'מספר תוצאות נספרות (קבוצה)',
   },
 };
