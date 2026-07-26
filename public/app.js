@@ -768,7 +768,9 @@ async function renderRaceResults(box, c) {
   box.innerHTML = `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <h3 style="margin:0">${t('race_results')} <span class="live-indicator">● ${t('live')}</span></h3>
+        <h3 style="margin:0">${t('race_results')} ${c.status === 'finished'
+          ? `<span class="pill finished">${t('final_results_label')}</span>`
+          : `<span class="live-indicator">● ${t('live')}</span>`}</h3>
         <div style="display:flex;gap:8px;align-items:center">
           ${categories.length ? `<select id="cat-filter" aria-label="${t('category')}">
             <option value="">${t('all_cats')}</option>
