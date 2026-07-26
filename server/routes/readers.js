@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { db, auditLog } = require('../db');
-const { requireAuth } = require('../auth');
+const { requireAuth, requireAdmin } = require('../auth');
 const { sseBroadcast } = require('../events');
 const multer = require('multer');
 const { parseXlsx } = require('../xlsx');
@@ -948,7 +948,7 @@ router.post('/contests/:id/manual-read', requireAuth, (req, res) => {
 
 // Delete one crossing (raw read). Results are recomputed from reads, so removing
 // a spurious read (double-count, wrong racer, bad time) fixes a finish/lap.
-router.delete('/contests/:id/reads/:readId', requireAuth, (req, res) => {
+router.delete('/contests/:id/reads/:readId', requireAuth, requireAdmin, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
   const readId = Number(req.params.readId);
@@ -963,7 +963,7 @@ router.delete('/contests/:id/reads/:readId', requireAuth, (req, res) => {
 // Change one crossing's time (organizer): edit a lap/finish in place. `at` is an
 // ISO instant; the read is also marked manual so the corrected time is exempt
 // from the start-suppression window and lap-gap dedupe (a deliberate crossing).
-router.patch('/contests/:id/reads/:readId', requireAuth, (req, res) => {
+router.patch('/contests/:id/reads/:readId', requireAuth, requireAdmin, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
   const readId = Number(req.params.readId);
@@ -980,7 +980,7 @@ router.patch('/contests/:id/reads/:readId', requireAuth, (req, res) => {
 
 // Set a racer's status override (''=auto | DNS | DNF | DSQ) without touching the
 // rest of their start-list row. Applies to every chip of a two-chip racer.
-router.patch('/contests/:id/racer-status', requireAuth, (req, res) => {
+router.patch('/contests/:id/racer-status', requireAuth, requireAdmin, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;
   const status = ['', 'DNS', 'DNF', 'DSQ'].includes(req.body?.status) ? req.body.status : null;

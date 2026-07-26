@@ -21,6 +21,9 @@ function esc(s) {
 // Drill-in arrow that points in the reading direction (left in Hebrew RTL).
 function arrow() { return LANG === 'he' ? '◂' : '▸'; }
 
+// Editing race results is restricted to admin accounts.
+function isAdmin() { return !!(state.user && state.user.role === 'admin'); }
+
 // Sport is stored as free text (often typed in English, e.g. "Running").
 // Translate the common values so cards read in the UI language; anything
 // unrecognised falls through unchanged.
@@ -764,6 +767,7 @@ async function renderRaceResults(box, c) {
   const data = await api(`/contests/${c.id}/race-results`);
   if (generation !== renderGeneration) return;
   const categories = [...new Set(data.results.map((r) => r.category).filter(Boolean))];
+  const canEdit = isAdmin(); // editing results is restricted to admins
 
   box.innerHTML = `
     <div class="card">
@@ -785,7 +789,7 @@ async function renderRaceResults(box, c) {
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
           <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-          <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>${c.is_organizer ? '<th></th>' : ''}
+          <th>${t('category_place')}</th><th>${t('distance')}</th><th>${t('wave')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>${canEdit ? '<th></th>' : ''}
         </tr></thead><tbody id="race-results-body"></tbody></table>
       </div>
     </div>`;
@@ -800,7 +804,7 @@ async function renderRaceResults(box, c) {
   if (teamBtn) teamBtn.onclick = () => downloadAuthed(`/contests/${c.id}/race-results?format=pdf&doc=team`, `team-${c.id}.pdf`);
 
   const editKey = (r) => r.bib || ('epc:' + r.epc);
-  const editCell = (r) => (c.is_organizer
+  const editCell = (r) => (canEdit
     ? `<td><button class="btn small secondary rr-edit" data-key="${esc(editKey(r))}">✎ ${t('edit_result')}</button></td>` : '');
   let currentResults = data.results;
 
@@ -842,7 +846,7 @@ async function renderRaceResults(box, c) {
           <td></td>
           ${editCell(r)}
         </tr>`),
-    ].join('') || `<tr><td colspan="${c.is_organizer ? 11 : 10}" class="muted">${t('no_results_yet')}</td></tr>`;
+    ].join('') || `<tr><td colspan="${canEdit ? 11 : 10}" class="muted">${t('no_results_yet')}</td></tr>`;
   };
   draw(data.results);
 
@@ -854,8 +858,8 @@ async function renderRaceResults(box, c) {
   };
   if (filter) filter.onchange = refetch;
 
-  // Organizer: open the per-racer result editor (status + crossings) on ✎ click.
-  if (c.is_organizer) {
+  // Admin: open the per-racer result editor (status + crossings) on ✎ click.
+  if (canEdit) {
     box.querySelector('#race-results-body').addEventListener('click', (e) => {
       const btn = e.target.closest('.rr-edit');
       if (!btn) return;
@@ -1020,7 +1024,7 @@ async function viewPublicResults(id, tab) {
       body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '', c.status === 'finished');
     } else if (qs && qs.has('dist')) {
       body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
-    } else if (tab === 'full') body.innerHTML = fullResultsTable(results, c.is_organizer);
+    } else if (tab === 'full') body.innerHTML = fullResultsTable(results, isAdmin());
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
     else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
     else body.innerHTML = raceWinnersTables(id, results, c.status === 'finished');
@@ -1036,9 +1040,9 @@ async function viewPublicResults(id, tab) {
   state.sse.addEventListener('tag_reads', refetch);
   state.sse.addEventListener('wave_start', refetch);
 
-  // Organizer: the Full results tab exposes ✎ Edit per racer (same editor as the
+  // Admin: the Full results tab exposes ✎ Edit per racer (same editor as the
   // Results tab). The #pubbody element persists across renders, so delegate once.
-  if (c.is_organizer) {
+  if (isAdmin()) {
     document.getElementById('pubbody').addEventListener('click', (e) => {
       const btn = e.target.closest('.rr-edit');
       if (!btn) return;

@@ -8,9 +8,12 @@ const path = require('path');
 
 process.env.DATA_DIR = process.env.DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'vgs-race-'));
 process.env.DISABLE_RATE_LIMIT = '1';
+process.env.ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'race-admin@test.local';
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'race-admin-secret';
 
 const request = require('supertest');
-const { app } = require('../server/index');
+const { app, seedAdmin } = require('../server/index');
+seedAdmin(); // create the admin account (ADMIN_EMAIL/PASSWORD) for the edit tests
 
 const past = new Date(Date.now() - 3600_000).toISOString();
 const future = new Date(Date.now() + 86400_000).toISOString();
@@ -545,8 +548,12 @@ test('finished race: non-crossers become DNF (started wave) or DNS (wave never s
   assert.equal(byBib['201'], 'DNS', 'wave never started -> DNS once finished');
 });
 
-test('organizer edits results: delete a crossing and override status', async () => {
-  const o = await register('edit-results@test.co', 'Edit Org');
+test('admin-only result editing: delete/edit a crossing and override status', async () => {
+  const o = await register('edit-results@test.co', 'Edit Org'); // organizer, not admin
+  const admin = (await request(app).post('/api/auth/login')
+    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD })).body;
+  assert.equal(admin.user.role, 'admin');
+
   const c = (await request(app).post('/api/contests').set(auth(o)).send({
     kind: 'race', title: 'Editable race', start_at: past, end_at: future,
   })).body;
@@ -556,7 +563,7 @@ test('organizer edits results: delete a crossing and override status', async () 
   await request(app).post(`/api/contests/${c.id}/waves/${w.id}/start`).set(auth(o))
     .send({ at: gunTime.toISOString() });
 
-  // Add a finish via the manual endpoint, confirm it lands, then delete it.
+  // Add a finish via the manual endpoint (an organizer capability), confirm it lands.
   await request(app).post(`/api/contests/${c.id}/manual-read`).set(auth(o))
     .send({ bib: '300', at: atOffset(120) });
   let res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
@@ -569,43 +576,38 @@ test('organizer edits results: delete a crossing and override status', async () 
   const mine = reads.find((x) => x.bib === '300');
   assert.ok(mine, 'the crossing is listed');
 
-  // A stranger cannot delete it; a bad id 404s.
-  const other = await register('edit-stranger@test.co', 'Stranger');
-  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(other))).status, 403);
-  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/99999999`).set(auth(o))).status, 404);
+  // The race's own (non-admin) organizer is forbidden from the edit endpoints.
+  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o))).status, 403);
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o)).send({ at: atOffset(9) })).status, 403);
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o)).send({ bib: '300', status: 'DSQ' })).status, 403);
+  // A bad id / bad payload 404s / 400s for admin.
+  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/99999999`).set(auth(admin))).status, 404);
 
-  // Edit the crossing's time in place: 2:00 -> 3:30, results recompute.
-  const badAt = await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o)).send({ at: 'nope' });
-  assert.equal(badAt.status, 400);
-  const edit = await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o))
-    .send({ at: atOffset(210) });
-  assert.equal(edit.status, 200);
+  // Admin edits the crossing's time in place: 2:00 -> 3:30, results recompute.
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(admin)).send({ at: 'nope' })).status, 400);
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(admin))
+    .send({ at: atOffset(210) })).status, 200);
   res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
   rider = res.body.results.find((r) => r.bib === '300');
   assert.equal(rider.status, 'finished');
   assert.equal(rider.elapsed, '3:30.0', 'edited crossing time drives the finish');
 
-  // Delete the crossing -> recomputed with no finish. Race still active -> on_course.
-  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o))).status, 200);
+  // Admin deletes the crossing -> recomputed with no finish. Race active -> on_course.
+  assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(admin))).status, 200);
   res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
   assert.equal(res.body.results.find((r) => r.bib === '300').status, 'on_course');
 
-  // Override status: DSQ, then clear back to auto.
-  const bad = await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
-    .send({ bib: '300', status: 'nope' });
-  assert.equal(bad.status, 400);
-  const miss = await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
-    .send({ bib: 'ghost', status: 'DSQ' });
-  assert.equal(miss.status, 404);
-
-  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
+  // Admin overrides status: DSQ, then clears back to auto.
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(admin)).send({ bib: '300', status: 'nope' })).status, 400);
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(admin)).send({ bib: 'ghost', status: 'DSQ' })).status, 404);
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(admin))
     .send({ bib: '300', status: 'DSQ' })).status, 200);
   res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
   rider = res.body.results.find((r) => r.bib === '300');
   assert.equal(rider.status, 'DSQ');
   assert.equal(rider.racer_status, 'DSQ');
 
-  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(o))
+  assert.equal((await request(app).patch(`/api/contests/${c.id}/racer-status`).set(auth(admin))
     .send({ bib: '300', status: '' })).status, 200);
   res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
   assert.equal(res.body.results.find((r) => r.bib === '300').status, 'on_course');
