@@ -1906,7 +1906,7 @@ async function renderAdminLeagues(box) {
           </select></label>
           <label data-mode-field="category">${t('league_team_points')}<input data-f="team_points" value="${s.team_points.join(', ')}"></label>
           <label data-mode-field="overall">${t('league_team_overall_start')}<input data-f="team_overall_start" type="number" min="1" value="${s.team_overall_start}"></label>
-          <label>${t('league_team_other_points')}<input data-f="team_other_points" type="number" min="0" value="${s.team_other_points}"></label>
+          <label><span data-otherpoints-label>${t('league_team_other_points')}</span><input data-f="team_other_points" type="number" min="0" value="${s.team_other_points}"></label>
           <label><span data-toprunners-label>${t('league_team_top_runners')}</span><input data-f="team_top_runners" type="number" min="1" value="${s.team_top_runners}"></label>
           <label>${t('league_team_best_n')}<input data-f="team_best_n" type="number" min="1" value="${s.team_best_n}"></label>
           <span class="muted" style="font-size:12px">${t('league_team_mode_hint')}</span>
@@ -1950,12 +1950,16 @@ async function renderAdminLeagues(box) {
     const settingsForm = card.querySelector('[data-form="settings"]');
     const modeSel = settingsForm.querySelector('[data-f="team_scoring_mode"]');
     const topLabel = settingsForm.querySelector('[data-toprunners-label]');
+    const otherLabel = settingsForm.querySelector('[data-otherpoints-label]');
     const applyMode = () => {
       settingsForm.querySelectorAll('[data-mode-field]').forEach((el) => {
         el.style.display = el.dataset.modeField === modeSel.value ? '' : 'none';
       });
       // Overall mode is the MTB model — count "riders"; category mode counts "runners".
       if (topLabel) topLabel.textContent = t(modeSel.value === 'overall' ? 'league_team_top_riders' : 'league_team_top_runners');
+      // In overall mode team_other_points is the floor; in category mode it's the
+      // fallback for finishers placed beyond the ranked list.
+      if (otherLabel) otherLabel.textContent = t(modeSel.value === 'overall' ? 'league_team_other_points_overall' : 'league_team_other_points');
     };
     modeSel.onchange = applyMode;
     applyMode();
