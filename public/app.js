@@ -24,6 +24,12 @@ function arrow() { return LANG === 'he' ? '◂' : '▸'; }
 // Editing race results is restricted to admin accounts.
 function isAdmin() { return !!(state.user && state.user.role === 'admin'); }
 
+// Participant name with the team as a small muted sub-line (shared across the
+// results tables so every tab shows the team the same way).
+function nameWithTeam(r) {
+  return `${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}`;
+}
+
 // Sport is stored as free text (often typed in English, e.g. "Running").
 // Translate the common values so cards read in the UI language; anything
 // unrecognised falls through unchanged.
@@ -1254,7 +1260,7 @@ function raceWinnersTables(id, results, raceDone) {
     const leader = leaderOf(scope);
     return `<tr>
       <td style="padding-left:${indent}px"><a href="${seg('winners')}" class="cat-link">${arrow()} ${esc(label)}</a></td>
-      <td>${leader ? esc(leader.participant) : '–'}</td>
+      <td>${leader ? nameWithTeam(leader) : '–'}</td>
       <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
       <td><strong>${scope.length}</strong></td>
       <td>${raceDone ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('results_word')}</a>`
@@ -1301,7 +1307,7 @@ function topFinishersTables(results, n) {
           <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('elapsed_col')}</th></tr></thead>
           <tbody>${scope.map((r, i) => `<tr class="top${i + 1}">
             <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
-            <td>${esc(r.participant)}</td>
+            <td>${nameWithTeam(r)}</td>
             <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td></tr>`).join('')}</tbody>
         </table>`;
     }).join('');
@@ -1329,13 +1335,13 @@ function fullResultsTable(results, editable) {
     };
     const finRows = finished.map((r, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
       <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
-      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td>
+      <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
       <td class="muted" style="font-variant-numeric:tabular-nums">${behindOf(r, i)}</td>${eCell(r)}</tr>`).join('');
     const otherRows = others.map((r) => `<tr>
       <td class="muted">–</td><td><strong>${esc(r.bib || '')}</strong></td>
-      <td>${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}</td>
+      <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td></td><td>${r.laps || ''}</td>
       <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td>${eCell(r)}</tr>`).join('');
     return `<div style="overflow-x:auto"><table class="board mt"><thead>
