@@ -297,3 +297,33 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] .stat-tile.oncourse { background: #322912; }
 :root[data-theme="dark"] .stat-tile.dns { background: #331b1f; }
 :root[data-theme="dark"] .stat-tile.dnf { background: #33251b; }
+
+/* ---- Detail modal (league team members / racer season card) ---- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 6vh 14px 14px; overflow-y: auto;
+  background: rgba(15, 20, 40, 0.55);
+}
+.modal {
+  width: 100%; max-width: 640px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { font-size: 1.1rem; }
+.modal-body { padding: 14px 16px; }
+.modal-close {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+}
+.modal-close:hover { background: var(--border); color: var(--text); }
+.lglink {
+  color: var(--primary); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.lglink:hover { color: var(--primary-dark); }

@@ -1650,6 +1650,7 @@ async function viewLeague(id, tab) {
   const data = await api(`/leagues/${id}/standings`).catch(() => null);
   if (!data) { main.innerHTML = `<div class="card">${t('league_not_found')}</div>`; return; }
   const { league, races, individual, teams } = data;
+  currentLeague = data; // drives the team-members / racer detail modals
   const provisional = races.some((r) => r.status !== 'finished');
 
   const tabs = [['teams', 'league_tab_teams'], ['individual', 'league_tab_individual'], ['races', 'league_tab_races']];
@@ -1666,6 +1667,7 @@ async function viewLeague(id, tab) {
         <button class="btn small secondary" id="lg-csv-ind">⬇ ${t('export_individual_csv')}</button>
         <button class="btn small secondary" id="lg-csv-team">⬇ ${t('export_team_csv')}</button>
       </div>
+      ${tab === 'races' ? '' : `<p class="muted" style="text-align:center;margin:0 0 8px;font-size:12.5px">${t('league_view_hint')}</p>`}
       <div id="lgbody"></div>
     </div>`;
   document.getElementById('lg-csv-ind').onclick = () =>
@@ -1677,6 +1679,7 @@ async function viewLeague(id, tab) {
   if (tab === 'teams') body.innerHTML = leagueTeamsTable(teams, races);
   else if (tab === 'races') body.innerHTML = leagueRacesTable(races);
   else body.innerHTML = leagueIndividualTables(individual, races);
+  wireLeagueLinks(body); // clickable racer / team names -> detail modals
 }
 
 // Per-race columns shared by the individual and team standings tables. Cells
@@ -1705,7 +1708,7 @@ function leagueIndividualTables(individual, races) {
         ${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
       <tbody>${g.rows.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
         <td><strong>${i + 1}</strong></td><td><strong>${esc(row.bib)}</strong></td>
-        <td>${esc(row.name || '')}</td><td>${esc(row.team || '')}</td>
+        <td>${racerLink(row.bib, row.name || row.bib)}</td><td>${teamLink(row.team)}</td>
         ${leaguePointCells(row, races)}
         <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -1718,7 +1721,7 @@ function leagueTeamsTable(teams, races) {
   return `<div style="overflow-x:auto"><table class="board winners mt"><thead>
     <tr><th>${t('place')}</th><th>${t('team')}</th>${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
     <tbody>${teams.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
-      <td><strong>${i + 1}</strong></td><td>${esc(row.team)}</td>
+      <td><strong>${i + 1}</strong></td><td>${teamLink(row.team)}</td>
       ${leaguePointCells(row, races)}
       <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>
     <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
@@ -1749,6 +1752,133 @@ function leagueRacesTable(races) {
       <td><span class="pill ${s.cls}">${s.label}</span></td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
+
+// ---------- league detail modals ----------
+// The standings payload already carries every rider (bib/name/team/per_race/
+// total) and each team's totals, so team-roster and racer season-card views are
+// built entirely client-side from `currentLeague` — no extra API calls.
+
+let currentLeague = null; // {league, races, individual, teams} of the open league page
+
+function racerLink(bib, label) {
+  if (!bib) return esc(label || ''); // no bib -> not tracked across the season, not clickable
+  return `<a class="lglink" role="button" tabindex="0" data-racer="${esc(bib)}">${esc(label || bib)}</a>`;
+}
+function teamLink(team) {
+  const name = String(team || '').trim();
+  if (!name) return '';
+  return `<a class="lglink" role="button" tabindex="0" data-team="${esc(name)}">${esc(name)}</a>`;
+}
+
+// Label for an individual scoring group (distance — gender — category).
+function groupLabelOf(g) {
+  return [g.distance, g.gender && t(g.gender === 'Female' ? 'female' : 'male'), g.category]
+    .filter(Boolean).join(' — ') || t('overall');
+}
+
+// Delegate clicks/keydowns on racer & team links within a container to the modals.
+function wireLeagueLinks(container) {
+  container.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-racer],[data-team]');
+    if (!el) return;
+    e.preventDefault();
+    if (el.dataset.racer) openRacerModal(el.dataset.racer);
+    else openTeamModal(el.dataset.team);
+  });
+  container.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = e.target.closest('[data-racer],[data-team]');
+    if (!el) return;
+    e.preventDefault();
+    if (el.dataset.racer) openRacerModal(el.dataset.racer);
+    else openTeamModal(el.dataset.team);
+  });
+}
+
+function closeModal() {
+  const ex = document.getElementById('modal-root');
+  if (ex) ex.remove();
+}
+
+function openModal(title, bodyHtml) {
+  closeModal(); // one modal at a time; opening a team from a racer card replaces it
+  const root = document.createElement('div');
+  root.id = 'modal-root';
+  root.className = 'modal-backdrop';
+  root.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <div class="modal-head"><h3>${title}</h3>
+        <button class="modal-close" aria-label="${t('close')}">✕</button></div>
+      <div class="modal-body">${bodyHtml}</div>
+    </div>`;
+  document.body.appendChild(root);
+  root.addEventListener('click', (e) => { if (e.target === root) closeModal(); });
+  root.querySelector('.modal-close').onclick = closeModal;
+  wireLeagueLinks(root); // members/team links inside the modal stay live
+  // Following a race link navigates away, so drop the modal first.
+  root.querySelectorAll('a[href^="#/"]').forEach((a) => a.addEventListener('click', closeModal));
+}
+
+// Team roster: every scoring member of `team`, with their category and season total.
+function openTeamModal(team) {
+  if (!currentLeague) return;
+  const members = [];
+  for (const g of currentLeague.individual) {
+    const group = groupLabelOf(g);
+    g.rows.forEach((row) => {
+      if (String(row.team || '').trim() === team) members.push({ ...row, group });
+    });
+  }
+  members.sort((a, b) => b.total - a.total);
+  const teamRow = currentLeague.teams.find((x) => x.team === team);
+  const rank = teamRow ? currentLeague.teams.indexOf(teamRow) + 1 : null;
+  const summary = teamRow
+    ? `<p class="muted" style="margin:0 0 10px">${t('league_rank')}: <strong>${rank}</strong> · ${t('league_total')}: <strong>${teamRow.total}</strong></p>`
+    : '';
+  const html = members.length
+    ? `${summary}<div style="overflow-x:auto"><table class="board mt"><thead>
+        <tr><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th><th>${t('league_total')}</th></tr></thead>
+        <tbody>${members.map((m) => `<tr>
+          <td><strong>${esc(m.bib)}</strong></td>
+          <td>${racerLink(m.bib, m.name || m.bib)}</td>
+          <td>${esc(m.group)}</td>
+          <td style="font-variant-numeric:tabular-nums"><strong>${m.total}</strong></td></tr>`).join('')}</tbody></table></div>`
+    : `<p class="muted">${t('league_no_members')}</p>`;
+  openModal(`👥 ${esc(team)}`, html);
+}
+
+// Racer season card: their group + rank + total, then points earned per race.
+function openRacerModal(bib) {
+  if (!currentLeague) return;
+  let rider = null, group = null, rank = null;
+  for (const g of currentLeague.individual) {
+    const idx = g.rows.findIndex((r) => r.bib === bib);
+    if (idx >= 0) { rider = g.rows[idx]; group = g; rank = idx + 1; break; }
+  }
+  if (!rider) return;
+  const teamHtml = rider.team ? teamLink(rider.team) : '<span class="muted">—</span>';
+  const header = `<p class="muted" style="margin:0 0 10px">
+      ${t('bib')} <strong>${esc(rider.bib)}</strong> · ${esc(groupLabelOf(group))} · ${t('team')}: ${teamHtml}<br>
+      ${t('league_rank')}: <strong>${rank}</strong> · ${t('league_total')}: <strong>${rider.total}</strong></p>`;
+  const rows = currentLeague.races.map((r) => {
+    const pts = rider.per_race[r.contest_id];
+    const has = pts !== undefined;
+    const counted = has && rider.counted_ids.includes(r.contest_id);
+    const style = 'font-variant-numeric:tabular-nums' + (has && !counted ? ';opacity:.45;text-decoration:line-through' : '');
+    return `<tr>
+      <td><strong>R${r.round}</strong></td>
+      <td><a href="#/results/${r.contest_id}">${esc(r.title)}</a></td>
+      <td style="${style}">${has ? pts : '–'}</td></tr>`;
+  }).join('');
+  const table = `<div style="overflow-x:auto"><table class="board mt"><thead>
+      <tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('league_points')}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+      <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
+  openModal(`🏃 ${esc(rider.name || rider.bib)}`, header + table);
+}
+
+// Global dismissals: Esc closes, and any route change tears the modal down.
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+window.addEventListener('hashchange', closeModal);
 
 // ---------- admin ----------
 
