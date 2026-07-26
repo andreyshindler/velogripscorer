@@ -343,6 +343,11 @@ paths:
       responses: { '200': { description: OK } }
   /contests/{id}/reads/{readId}:
     delete: { summary: 'Delete one crossing (organizer): results recompute without it', parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: readId, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: OK }, '404': { description: Read not found } } }
+    patch:
+      summary: 'Edit one crossing''s time (organizer): set `at` (ISO); the read becomes manual (exempt from suppression/lap-gap)'
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }, { name: readId, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [at], properties: { at: { type: string, format: date-time } } } } } }
+      responses: { '200': { description: OK }, '400': { description: Invalid at }, '404': { description: Read not found } }
   /contests/{id}/racer-status:
     patch:
       summary: 'Set a racer''s status override (organizer): ""=auto | DNS | DNF | DSQ, by bib (all chips) or epc'

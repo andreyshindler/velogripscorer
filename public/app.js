@@ -904,11 +904,19 @@ async function openResultEditor(c, row, refetch) {
     ${['', 'DNS', 'DNF', 'DSQ'].map((s) => `<option value="${s}" ${row.racer_status === s ? 'selected' : ''}>${s || t('status_ok')}</option>`).join('')}
   </select>`;
   const crossRows = mine.length
-    ? mine.map((x) => `<tr>
-        <td style="font-variant-numeric:tabular-nums"><strong>${waveStart ? esc(msToClock(Date.parse(x.read_at) - waveStart)) : '—'}</strong></td>
-        <td class="muted" style="font-size:.85em">${esc(x.reader_name || '')}${x.reader_location === 'manual' ? ` · ${t('result_manual')}` : ''}</td>
-        <td><button class="btn small danger re-del" data-readid="${x.id}" title="${t('result_del_crossing')}">🗑</button></td>
-      </tr>`).join('')
+    ? mine.map((x, i) => {
+        const el = waveStart ? msToClock(Date.parse(x.read_at) - waveStart) : '';
+        const timeCell = waveStart
+          ? `<input class="re-lap" data-readid="${x.id}" value="${esc(el)}" aria-label="${t('result_elapsed_col')} ${i + 1}" style="width:100px;font-variant-numeric:tabular-nums">`
+          : `<strong>—</strong>`;
+        const saveBtn = waveStart
+          ? `<button class="btn small re-lapsave" data-readid="${x.id}" title="${t('result_save_crossing')}">✓</button> ` : '';
+        return `<tr>
+          <td>${timeCell}</td>
+          <td class="muted" style="font-size:.85em">${esc(x.reader_name || '')}${x.reader_location === 'manual' ? ` · ${t('result_manual')}` : ''}</td>
+          <td style="white-space:nowrap">${saveBtn}<button class="btn small danger re-del" data-readid="${x.id}" title="${t('result_del_crossing')}">🗑</button></td>
+        </tr>`;
+      }).join('')
     : `<tr><td colspan="3" class="muted">${t('result_no_crossings')}</td></tr>`;
   const addRow = canAdd
     ? `<div style="display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap">
@@ -944,6 +952,19 @@ async function openResultEditor(c, row, refetch) {
       await api(`/contests/${c.id}/reads/${b.dataset.readid}`, { method: 'DELETE' });
       toast(t('result_saved')); await reopen();
     } catch (err) { toast(String(err.message || err), true); }
+  }));
+  const saveLap = async (readId, input) => {
+    const ms = parseClock(input.value);
+    if (ms == null) return toast(t('result_bad_elapsed'), true);
+    try {
+      await api(`/contests/${c.id}/reads/${readId}`, { method: 'PATCH', body: { at: new Date(waveStart + ms).toISOString() } });
+      toast(t('result_saved')); await reopen();
+    } catch (err) { toast(String(err.message || err), true); }
+  };
+  root.querySelectorAll('.re-lapsave').forEach((b) => (b.onclick = () =>
+    saveLap(b.dataset.readid, root.querySelector(`.re-lap[data-readid="${b.dataset.readid}"]`))));
+  root.querySelectorAll('.re-lap').forEach((inp) => (inp.onkeydown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveLap(inp.dataset.readid, inp); }
   }));
   const addBtn = root.querySelector('#re-add');
   if (addBtn) addBtn.onclick = async () => {

@@ -574,6 +574,17 @@ test('organizer edits results: delete a crossing and override status', async () 
   assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(other))).status, 403);
   assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/99999999`).set(auth(o))).status, 404);
 
+  // Edit the crossing's time in place: 2:00 -> 3:30, results recompute.
+  const badAt = await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o)).send({ at: 'nope' });
+  assert.equal(badAt.status, 400);
+  const edit = await request(app).patch(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o))
+    .send({ at: atOffset(210) });
+  assert.equal(edit.status, 200);
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  rider = res.body.results.find((r) => r.bib === '300');
+  assert.equal(rider.status, 'finished');
+  assert.equal(rider.elapsed, '3:30.0', 'edited crossing time drives the finish');
+
   // Delete the crossing -> recomputed with no finish. Race still active -> on_course.
   assert.equal((await request(app).delete(`/api/contests/${c.id}/reads/${mine.id}`).set(auth(o))).status, 200);
   res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));

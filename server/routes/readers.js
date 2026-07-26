@@ -960,6 +960,24 @@ router.delete('/contests/:id/reads/:readId', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Change one crossing's time (organizer): edit a lap/finish in place. `at` is an
+// ISO instant; the read is also marked manual so the corrected time is exempt
+// from the start-suppression window and lap-gap dedupe (a deliberate crossing).
+router.patch('/contests/:id/reads/:readId', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const readId = Number(req.params.readId);
+  const row = db.prepare('SELECT * FROM tag_reads WHERE id = ? AND contest_id = ?').get(readId, contest.id);
+  if (!row) return res.status(404).json({ error: 'read not found' });
+  const at = req.body?.at;
+  if (!at || Number.isNaN(Date.parse(at))) return res.status(400).json({ error: 'at must be an ISO date-time' });
+  const iso = new Date(at).toISOString();
+  db.prepare('UPDATE tag_reads SET read_at = ?, manual = 1 WHERE id = ?').run(iso, readId);
+  auditLog(req.user.id, 'read.edit', 'contest', contest.id, `read ${readId} epc ${row.epc} -> ${iso}`);
+  sseBroadcast(contest.id, 'tag_reads', { edited: [{ id: readId, read_at: iso }] });
+  res.json({ ok: true, read_at: iso });
+});
+
 // Set a racer's status override (''=auto | DNS | DNF | DSQ) without touching the
 // rest of their start-list row. Applies to every chip of a two-chip racer.
 router.patch('/contests/:id/racer-status', requireAuth, (req, res) => {
