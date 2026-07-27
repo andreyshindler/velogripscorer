@@ -335,41 +335,4 @@ function bestNote(teams) {
   return c ? `${c} ${H.counted}` : H.overall;
 }
 
-// ---------------------------------------------------------------------------
-// 4) Per-race individual standings: one race's laps/time/points shown next to
-//    the rider's season cumulative, grouped per category. `groups` =
-//    [{distance, gender, category, rows:[{place-order..., cumulative, name, bib,
-//    team, laps, time, points}]}] — laps/time/points are '' for riders who did
-//    not race this round (season-only rows).
-// ---------------------------------------------------------------------------
-async function raceIndividualPdf(contest, groups) {
-  const ctx = await newDoc(true);
-  addPage(ctx);
-  const columns = [
-    { header: H.place, width: 34, align: 'r', render: (r, i) => i + 1 },
-    { header: H.cumulative, width: 60, align: 'r', render: (r) => r.cumulative },
-    { header: H.name, width: 150, align: 'r', render: (r) => r.name },
-    { header: H.bib, width: 42, align: 'r', render: (r) => r.bib },
-    { header: H.team, width: 150, align: 'r', render: (r) => r.team },
-    { header: H.laps, width: 52, align: 'r', render: (r) => r.laps },
-    { header: H.time, width: 62, align: 'r', render: (r) => r.time },
-    { header: H.points, width: 44, align: 'r', render: (r) => r.points },
-  ];
-  const totalW = columns.reduce((s, c) => s + c.width, 0);
-  const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
-
-  drawTitle(ctx, contest.title || 'Race results', 15, x0, totalW);
-  drawSub(ctx, H.individualStandings, x0, totalW);
-
-  for (const group of groups) {
-    if (!group.rows.length) continue;
-    // RTL reading order: distance, then gender, then category.
-    const title = rtlTitle([group.distance, genderHe(group.gender, true), group.category]);
-    ctx.y -= 4;
-    drawTitle(ctx, title, 11, x0, totalW);
-    drawTable(ctx, columns, group.rows, x0);
-  }
-  return Buffer.from(await ctx.doc.save());
-}
-
-module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceIndividualPdf };
+module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf };

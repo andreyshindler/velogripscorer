@@ -9,8 +9,8 @@ const multer = require('multer');
 const { parseXlsx } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
 const { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('../race-results');
-const { normalizeSettings, computeLeagueStandings, scoreRace } = require('../league-scoring');
-const { raceResultsPdf, raceIndividualPdf, leagueTeamPdf } = require('../results-pdf');
+const { normalizeSettings, computeLeagueStandings } = require('../league-scoring');
+const { raceResultsPdf, leagueIndividualPdf, leagueTeamPdf } = require('../results-pdf');
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -621,40 +621,6 @@ function leagueContext(contestId) {
   return { league: { ...league, settings }, settings, individual, teams, raceList };
 }
 
-// Per-category rows for the individual PDF of ONE race: this race's laps/time/
-// points (finishers) shown next to each rider's season cumulative. Finishers
-// come first (by this-race place), then season-only riders (by cumulative desc).
-function raceIndividualGroups(contest, lc) {
-  const raceResults = computeRaceResults(contest);
-  const timing = new Map(); // bib -> {laps, time}
-  for (const r of raceResults) {
-    if (r.status === 'finished') timing.set(String(r.bib || '').trim(), { laps: r.laps, time: r.elapsed });
-  }
-  const raceScore = new Map(); // bib -> {place, points}
-  for (const r of scoreRace(raceResults, lc.settings).riders) raceScore.set(r.bib, { place: r.place, points: r.points });
-
-  return lc.individual.map((g) => {
-    const rows = g.rows.map((row) => {
-      const t = timing.get(row.bib);
-      const s = raceScore.get(row.bib);
-      const finishedHere = !!t;
-      return {
-        bib: row.bib, name: row.name, team: row.team, cumulative: row.total,
-        finishedHere, racePlace: s ? s.place : Infinity,
-        laps: finishedHere ? t.laps : '',
-        time: finishedHere ? t.time : '',
-        points: finishedHere && s ? s.points : '',
-      };
-    });
-    rows.sort((a, b) => {
-      if (a.finishedHere !== b.finishedHere) return a.finishedHere ? -1 : 1;
-      if (a.finishedHere) return a.racePlace - b.racePlace;
-      return b.cumulative - a.cumulative;
-    });
-    return { distance: g.distance, gender: g.gender, category: g.category, rows };
-  });
-}
-
 // ---- Race results: elapsed = first read after wave start + suppression ----
 // The computation lives in server/race-results.js (shared with league standings).
 router.get('/contests/:id/race-results', async (req, res) => {
@@ -685,7 +651,9 @@ router.get('/contests/:id/race-results', async (req, res) => {
           buf = await leagueTeamPdf(lc.league, lc.teams, lc.raceList);
           name = `team-standings-${contest.id}.pdf`;
         } else {
-          buf = await raceIndividualPdf(contest, raceIndividualGroups(contest, lc));
+          // Accumulated season standings across every round (R1..Rn + total),
+          // per category — same shape as the team PDF, not just this one race.
+          buf = await leagueIndividualPdf(lc.league, lc.individual, lc.raceList);
           name = `individual-standings-${contest.id}.pdf`;
         }
         return res.type('application/pdf')
