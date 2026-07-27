@@ -322,6 +322,12 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
   font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 8px;
 }
 .modal-close:hover { background: var(--border); color: var(--text); }
+.modal-back {
+  border: 0; background: transparent; color: var(--primary);
+  font-size: .95rem; font-weight: 600; line-height: 1; cursor: pointer;
+  padding: 4px 8px; border-radius: 8px;
+}
+.modal-back:hover { background: var(--border); }
 .lglink {
   color: var(--primary); cursor: pointer;
   text-decoration: underline; text-underline-offset: 2px;

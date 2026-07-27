@@ -1958,27 +1958,45 @@ function closeModal() {
   if (ex) ex.remove();
 }
 
-function openModal(title, bodyHtml) {
+// onBack (optional): when the modal was reached by drilling in (racer -> team ->
+// racer …), a "back" button in the header returns to the previous card.
+function openModal(title, bodyHtml, onBack) {
   closeModal(); // one modal at a time; opening a team from a racer card replaces it
+  const backGlyph = LANG === 'he' ? '→' : '←';
+  const backBtn = onBack ? `<button class="modal-back" aria-label="${t('back')}">${backGlyph} ${t('back')}</button>` : '';
   const root = document.createElement('div');
   root.id = 'modal-root';
   root.className = 'modal-backdrop';
   root.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-      <div class="modal-head"><h3>${title}</h3>
+      <div class="modal-head">${backBtn}<h3>${title}</h3>
         <button class="modal-close" aria-label="${t('close')}">✕</button></div>
       <div class="modal-body">${bodyHtml}</div>
     </div>`;
   document.body.appendChild(root);
   root.addEventListener('click', (e) => { if (e.target === root) closeModal(); });
   root.querySelector('.modal-close').onclick = closeModal;
-  wireLeagueLinks(root); // members/team links inside the modal stay live
+  if (onBack) root.querySelector('.modal-back').onclick = () => onBack();
   // Following a race link navigates away, so drop the modal first.
   root.querySelectorAll('a[href^="#/"]').forEach((a) => a.addEventListener('click', closeModal));
   return root;
 }
 
+// Wire the racer/team drill-in links inside a modal, passing `backToSelf` so the
+// opened card can return here. (Standings tables use wireLeagueLinks, top-level.)
+function wireModalLinks(root, backToSelf) {
+  const go = (el) => {
+    if (el.dataset.racer) openRacerModal(el.dataset.racer, backToSelf);
+    else if (el.dataset.team) openTeamModal(el.dataset.team, backToSelf);
+  };
+  root.querySelectorAll('[data-racer],[data-team]').forEach((el) => {
+    el.addEventListener('click', (e) => { e.preventDefault(); go(el); });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(el); } });
+  });
+}
+
 // Team roster: every scoring member of `team`, with their category and season total.
-function openTeamModal(team) {
+// `back` (optional): reopen the card we drilled in from.
+function openTeamModal(team, back) {
   if (!currentLeague) return;
   const members = [];
   for (const g of currentLeague.individual) {
@@ -2002,11 +2020,14 @@ function openTeamModal(team) {
           <td>${esc(m.group)}</td>
           <td style="font-variant-numeric:tabular-nums"><strong>${m.total}</strong></td></tr>`).join('')}</tbody></table></div>`
     : `<p class="muted">${t('league_no_members')}</p>`;
-  openModal(`👥 ${esc(team)}`, html);
+  // Always offer Back: to the card we came from, or to the standings (close).
+  const root = openModal(`👥 ${esc(team)}`, html, back || closeModal);
+  wireModalLinks(root, () => openTeamModal(team, back)); // members -> racer card, back here
 }
 
 // Racer season card: their group + rank + total, then points earned per race.
-function openRacerModal(bib) {
+// `back` (optional): reopen the card we drilled in from.
+function openRacerModal(bib, back) {
   if (!currentLeague) return;
   let rider = null, group = null, rank = null;
   for (const g of currentLeague.individual) {
@@ -2032,7 +2053,9 @@ function openRacerModal(bib) {
       <tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('league_points')}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
       <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
-  openModal(`🏃 ${esc(rider.name || rider.bib)}`, header + table);
+  // Always offer Back: to the card we came from, or to the standings (close).
+  const root = openModal(`🏃 ${esc(rider.name || rider.bib)}`, header + table, back || closeModal);
+  wireModalLinks(root, () => openRacerModal(bib, back)); // team link -> team card, back here
 }
 
 // Global dismissals: Esc closes, and any route change tears the modal down.
