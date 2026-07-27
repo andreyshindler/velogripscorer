@@ -279,6 +279,63 @@ test('league PDF buttons send PDF documents', async () => {
   }
 });
 
+test('email flow: pick a predefined recipient and the PDF is mailed', async () => {
+  // A dedicated core with an injected fake mailer captures what would be sent.
+  const mailed = [];
+  const fakeMailer = {
+    isConfigured: () => true,
+    recipients: () => [{ label: 'Race Committee', email: 'committee@club.org' }, { label: 'Coach', email: 'coach@club.org' }],
+    sendMail: async (m) => { mailed.push(m); },
+  };
+  const esend = makeSend();
+  const eh = createBotCore({ api, send: esend, mailer: fakeMailer }).handleUpdate;
+  const etap = (data) => eh({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: ALLOWED }, message: { chat: { id: ALLOWED } }, data } });
+
+  // /pdf offers an "Email results" button
+  esend.reset();
+  await eh({ update_id: ++uid, message: { from: { id: ALLOWED }, chat: { id: ALLOWED }, text: '/pdf' } });
+  const offer = esend.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(offer.includes(`emask:rr:${contestId}:results`), 'email-results button present');
+
+  // tapping it lists the predefined recipients as buttons
+  esend.reset();
+  await etap(`emask:rr:${contestId}:results`);
+  const recips = esend.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(recips.includes(`emto:rr:${contestId}:results:0`) && recips.includes(`emto:rr:${contestId}:results:1`));
+
+  // tapping a recipient mails the PDF to that address
+  esend.reset();
+  await etap(`emto:rr:${contestId}:results:0`);
+  assert.equal(mailed.length, 1, 'one email sent');
+  assert.equal(mailed[0].to, 'committee@club.org');
+  assert.equal(mailed[0].attachments[0].filename, `race-results-${contestId}.pdf`);
+  assert.ok(Buffer.isBuffer(mailed[0].attachments[0].content), 'PDF attached as a Buffer');
+  assert.match(esend.last('message').text, /Sent/);
+});
+
+test('email flow: reports when SMTP or recipients are not configured', async () => {
+  const esend = makeSend();
+  const off = createBotCore({ api, send: esend, mailer: { isConfigured: () => false, recipients: () => [], sendMail: async () => {} } }).handleUpdate;
+  await off({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: ALLOWED }, message: { chat: { id: ALLOWED } }, data: `emask:rr:${contestId}:results` } });
+  assert.match(esend.last('message').text, /configured/i);
+
+  const esend2 = makeSend();
+  const noRecips = createBotCore({ api, send: esend2, mailer: { isConfigured: () => true, recipients: () => [], sendMail: async () => {} } }).handleUpdate;
+  await noRecips({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: ALLOWED }, message: { chat: { id: ALLOWED } }, data: `emask:lg:1:individual` } });
+  assert.match(esend2.last('message').text, /recipient/i);
+});
+
+test('mailer parses EMAIL_RECIPIENTS into label/email pairs', () => {
+  const mailer = require('../server/mailer');
+  const saved = process.env.EMAIL_RECIPIENTS;
+  process.env.EMAIL_RECIPIENTS = 'Race Committee <committee@club.org>, coach@club.org, , not-an-email';
+  assert.deepEqual(mailer.recipients(), [
+    { label: 'Race Committee', email: 'committee@club.org' },
+    { label: 'coach@club.org', email: 'coach@club.org' },
+  ]);
+  process.env.EMAIL_RECIPIENTS = saved;
+});
+
 test('empty allowlist serves nobody (fail-safe)', async () => {
   const saved = process.env.TELEGRAM_ALLOWED_USER_IDS;
   process.env.TELEGRAM_ALLOWED_USER_IDS = '';

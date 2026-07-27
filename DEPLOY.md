@@ -132,6 +132,25 @@ bot). Useful on staging: set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`
 (your id) and `TELEGRAM_RUNNER_BOT_TOKEN` in the staging `.env`, then
 `docker compose -p velogrip-staging up -d --build app`.
 
+**Emailing results from the bot.** After `/pdf` (or on a league's standings), the
+operator bot shows 📧 Email buttons: tap one, pick a predefined recipient, and the
+PDF is mailed to that address. Configure SMTP and the recipient list in `.env`:
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587                 # 465 with SMTP_SECURE=true
+SMTP_SECURE=false            # true for implicit TLS
+SMTP_USER=postmaster@example.com
+SMTP_PASS=app-password
+EMAIL_FROM=Race Results <postmaster@example.com>
+# Comma-separated; each "a@b.com" or "Name <a@b.com>"
+EMAIL_RECIPIENTS=Race Committee <committee@club.org>, Coach <coach@club.org>
+```
+
+Without `SMTP_HOST`/`EMAIL_FROM` the bot replies that email isn't configured
+(nothing is ever sent silently); without `EMAIL_RECIPIENTS` it asks you to set
+the list. Only outbound SMTP to your provider is needed.
+
 ## Auto-deploy on merge to `main` (self-hosted runner)
 
 `.github/workflows/deploy.yml` redeploys the VPS on every push to `main`. It runs

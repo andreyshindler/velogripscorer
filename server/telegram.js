@@ -18,6 +18,7 @@ const { db, auditLog } = require('./db');
 const { signToken } = require('./auth');
 const { getContest, isOrganizer } = require('./routes/contests');
 const { computeRaceResults } = require('./race-results');
+const defaultMailer = require('./mailer');
 
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
 const FIELD_LABELS = {
@@ -296,7 +297,7 @@ const botSenders = { operator: null, runner: null };
 // `role` = 'operator' (the full admin bot, also serves runners) or 'runner'
 // (a second bot that serves ONLY the runner flow to everyone). `crossSend`
 // overrides the registry in tests.
-function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
+function createBotCore({ api, send, role = 'operator', crossSend, mailer = defaultMailer } = {}) {
   const adminSend = () => (crossSend && crossSend.operator) || botSenders.operator || send;
   const runnerBotSend = () => (crossSend && crossSend.runner) || botSenders.runner || send;
   const token = () => {
@@ -524,13 +525,14 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     const res = await A('GET', `/contests/${c.id}/race-results?format=pdf`);
     if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
     await send.document(chatId, `race-results-${c.id}.pdf`, res.buffer, `${c.title} — results`);
-    // When the race is part of a league, also offer the season standings PDFs.
+    // Offer to email these results, plus (for a league race) the season PDFs.
     const inLeague = db.prepare('SELECT 1 FROM league_races WHERE contest_id = ?').get(c.id);
+    const rows = [[btn('📧 Email results', `emask:rr:${c.id}:results`)]];
     if (inLeague) {
-      await send.message(chatId, 'League standings for this race:', {
-        reply_markup: kb([[btn('📑 Individual PDF', 'rpdf:individual'), btn('📑 Team PDF', 'rpdf:team')]]),
-      });
+      rows.unshift([btn('📑 Individual PDF', 'rpdf:individual'), btn('📑 Team PDF', 'rpdf:team')]);
+      rows.push([btn('📧 Email Individual', `emask:rr:${c.id}:individual`), btn('📧 Email Team', `emask:rr:${c.id}:team`)]);
     }
+    await send.message(chatId, inLeague ? 'League standings / email:' : 'Email these results:', { reply_markup: kb(rows) });
   }
 
   async function raceStandingsPdf(chatId, doc) {
@@ -582,6 +584,7 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
       reply_markup: kb([
         [btn('📄 Individual CSV', `lgcsv:${id}:individual`), btn('📄 Team CSV', `lgcsv:${id}:team`)],
         [btn('📑 Individual PDF', `lgpdf:${id}:individual`), btn('📑 Team PDF', `lgpdf:${id}:team`)],
+        [btn('📧 Email Individual', `emask:lg:${id}:individual`), btn('📧 Email Team', `emask:lg:${id}:team`)],
       ]),
     });
   }
@@ -598,6 +601,63 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     const res = await A('GET', `/leagues/${id}/standings?format=pdf&table=${which}`);
     if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
     await send.document(chatId, `league-${id}-${which}.pdf`, res.buffer, `League standings — ${which}`);
+  }
+
+  // ---- email a standings/results PDF to a predefined recipient ----
+
+  // A compact spec "<type>:<p1>:<p2>" -> how to build the PDF + its subject.
+  // type 'lg' = league standings (p1=league id, p2=table); 'rr' = a race
+  // (p1=contest id, p2=results|individual|team).
+  function emailDoc(type, p1, p2) {
+    if (type === 'lg') {
+      const which = p2 === 'team' ? 'team' : 'individual';
+      const lg = db.prepare('SELECT name, season FROM leagues WHERE id = ?').get(p1);
+      const name = lg ? `${lg.name}${lg.season ? ` — ${lg.season}` : ''}` : `League ${p1}`;
+      return { path: `/leagues/${p1}/standings?format=pdf&table=${which}`,
+        filename: `league-${p1}-${which}.pdf`, subject: `${name} — ${which} standings` };
+    }
+    const c = getContest(p1);
+    const title = c ? c.title : `Race ${p1}`;
+    if (p2 === 'team' || p2 === 'individual') {
+      return { path: `/contests/${p1}/race-results?format=pdf&doc=${p2}`,
+        filename: `${p2}-standings-${p1}.pdf`, subject: `${title} — ${p2} standings` };
+    }
+    return { path: `/contests/${p1}/race-results?format=pdf`,
+      filename: `race-results-${p1}.pdf`, subject: `${title} — results` };
+  }
+
+  // Show the predefined recipients as buttons; `spec` is the "type:p1:p2" tail.
+  async function emailAsk(chatId, spec) {
+    if (!mailer.isConfigured()) {
+      return send.message(chatId, '📧 Email isn’t configured on the server (set SMTP_HOST + EMAIL_FROM).');
+    }
+    const recips = mailer.recipients();
+    if (!recips.length) {
+      return send.message(chatId, '📧 No predefined recipients — set EMAIL_RECIPIENTS (comma-separated).');
+    }
+    const rows = recips.map((r, i) => [btn(`📧 ${r.label}`.slice(0, 60), `emto:${spec}:${i}`)]);
+    rows.push([btn('Cancel', 'emcancel')]);
+    return send.message(chatId, 'Send to which address?', { reply_markup: kb(rows) });
+  }
+
+  async function emailSend(chatId, type, p1, p2, ri) {
+    if (!mailer.isConfigured()) return send.message(chatId, '📧 Email isn’t configured on the server.');
+    const to = mailer.recipients()[Number(ri)];
+    if (!to) return send.message(chatId, '📧 That recipient is no longer available.');
+    const doc = emailDoc(type, p1, p2);
+    const res = await A('GET', doc.path);
+    if (res.status >= 400 || !res.buffer) return send.message(chatId, '⚠️ Could not build the PDF to email.');
+    try {
+      await mailer.sendMail({
+        to: to.email, subject: doc.subject,
+        text: `${doc.subject}\n\nSent from VeloGripScorer.`,
+        attachments: [{ filename: doc.filename, content: res.buffer }],
+      });
+    } catch (err) {
+      return send.message(chatId, `⚠️ Email failed: ${esc(String(err.message || err))}`);
+    }
+    auditLog(null, 'email.send', 'contest', type === 'rr' ? Number(p1) : null, `${doc.filename} -> ${to.email}`);
+    return send.message(chatId, `📧 Sent <b>${esc(doc.filename)}</b> to <b>${esc(to.label)}</b> (${esc(to.email)}).`);
   }
 
   // ---- wizard (guided /add) ----
@@ -693,6 +753,9 @@ function createBotCore({ api, send, role = 'operator', crossSend } = {}) {
     if (tag === 'lgcsv') return leagueCsv(chatId, a, b);
     if (tag === 'lgpdf') return leaguePdf(chatId, a, b);
     if (tag === 'rpdf') return raceStandingsPdf(chatId, a);
+    if (tag === 'emask') return emailAsk(chatId, data.split(':').slice(1).join(':'));
+    if (tag === 'emto') { const p = data.split(':'); return emailSend(chatId, p[1], p[2], p[3], p[4]); }
+    if (tag === 'emcancel') return send.message(chatId, 'Cancelled.');
     if (tag === 'edit') return cmdEdit(chatId, a);
     if (tag === 'del') return cmdDel(chatId, a);
     if (tag === 'delyes') return doDelete(chatId, a);
