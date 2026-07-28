@@ -271,7 +271,7 @@ function racerLine(r) {
 const HELP = [
   '<b>VeloGrip start-list bot</b>',
   '',
-  '/races [text] — pick a race to manage',
+  '/races — browse races by league (or /races &lt;text&gt; to search all)',
   '/list [text] — show racers (optionally filtered)',
   '/add — add a racer (guided), or one line:',
   '   <code>/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=E28011</code>',
@@ -342,10 +342,49 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
 
   async function cmdRaces(chatId, query) {
     const q = String(query || '').trim().toLowerCase();
-    let rows = db.prepare("SELECT id, title, status FROM contests WHERE kind = 'race' ORDER BY datetime(start_at) DESC LIMIT 60").all();
-    if (q) rows = rows.filter((r) => String(r.title).toLowerCase().includes(q));
-    if (!rows.length) { await send.message(chatId, 'No races found.'); return; }
-    const buttons = rows.slice(0, 20).map((r) => [btn(`${r.title} (${r.status})`.slice(0, 60), `use:${r.id}`)]);
+    if (q) { // "/races <text>" still searches every race by name
+      const rows = db.prepare("SELECT id, title, status FROM contests WHERE kind = 'race' ORDER BY datetime(start_at) DESC LIMIT 60").all()
+        .filter((r) => String(r.title).toLowerCase().includes(q));
+      if (!rows.length) { await send.message(chatId, 'No races match.'); return; }
+      const buttons = rows.slice(0, 20).map((r) => [btn(`${r.title} (${r.status})`.slice(0, 60), `use:${r.id}`)]);
+      await send.message(chatId, 'Pick a race:', { reply_markup: kb(buttons) });
+      return;
+    }
+    // No query: browse by league first, then drill into a league's races.
+    const leagues = db.prepare(
+      `SELECT l.id, l.name, l.season, COUNT(lr.contest_id) AS n
+         FROM leagues l JOIN league_races lr ON lr.league_id = l.id
+        WHERE l.status != 'archived'
+        GROUP BY l.id ORDER BY l.created_at DESC`).all();
+    const ungrouped = db.prepare(
+      "SELECT COUNT(*) AS n FROM contests WHERE kind = 'race' AND id NOT IN (SELECT contest_id FROM league_races)").get().n;
+    if (!leagues.length) return listRacesFlat(chatId, null); // no leagues yet -> flat list
+    const rows = leagues.map((l) => [btn(`🏆 ${l.name}${l.season ? ` (${l.season})` : ''} — ${l.n}`.slice(0, 60), `rl:${l.id}`)]);
+    if (ungrouped) rows.push([btn(`🏁 Races without a league (${ungrouped})`, 'rl:none')]);
+    await send.message(chatId, 'Pick a league:', { reply_markup: kb(rows) });
+  }
+
+  // The races for one league (rl:<id>), the ungrouped ones (rl:none), or all of
+  // them (leagueId null) — each row a `use:<id>` button.
+  async function listRacesFlat(chatId, leagueId) {
+    let rows;
+    if (leagueId === 'none') {
+      rows = db.prepare(
+        `SELECT id, title, status FROM contests
+          WHERE kind = 'race' AND id NOT IN (SELECT contest_id FROM league_races)
+          ORDER BY datetime(start_at) DESC LIMIT 40`).all().map((r) => ({ ...r, label: `${r.title} (${r.status})` }));
+    } else if (leagueId) {
+      rows = db.prepare(
+        `SELECT c.id, c.title, c.status, lr.round FROM league_races lr JOIN contests c ON c.id = lr.contest_id
+          WHERE lr.league_id = ? ORDER BY lr.round, datetime(c.start_at)`).all(leagueId)
+        .map((r) => ({ ...r, label: `R${r.round} · ${r.title} (${r.status})` }));
+    } else {
+      rows = db.prepare("SELECT id, title, status FROM contests WHERE kind = 'race' ORDER BY datetime(start_at) DESC LIMIT 40").all()
+        .map((r) => ({ ...r, label: `${r.title} (${r.status})` }));
+    }
+    if (!rows.length) { await send.message(chatId, 'No races here yet.'); return; }
+    const buttons = rows.slice(0, 25).map((r) => [btn(r.label.slice(0, 60), `use:${r.id}`)]);
+    if (leagueId) buttons.push([btn('🔙 Leagues', 'racesback')]); // back to the league picker
     await send.message(chatId, 'Pick a race:', { reply_markup: kb(buttons) });
   }
 
@@ -749,6 +788,8 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'rappr') return approveRunner(chatId, a, b, cq.from);
     if (tag === 'rrej') return rejectRunner(chatId, a, cq.from);
     if (tag === 'use') return useRace(chatId, a);
+    if (tag === 'rl') return listRacesFlat(chatId, a === 'none' ? 'none' : a);
+    if (tag === 'racesback') return cmdRaces(chatId, '');
     if (tag === 'lg') return showLeague(chatId, a);
     if (tag === 'lgcsv') return leagueCsv(chatId, a, b);
     if (tag === 'lgpdf') return leaguePdf(chatId, a, b);

@@ -243,6 +243,33 @@ test('/league lists leagues, shows standings, and sends CSVs', async () => {
   assert.equal(doc.filename, `league-${league.id}-team.csv`);
 });
 
+test('/races browses by league first, then lists that league’s races', async () => {
+  const admin = (await request(app).post('/api/auth/login')
+    .send({ email: 'admin@velogripscorer.local', password: 'change-me-please' })).body;
+  const league = (await request(app).get('/api/leagues')
+    .set({ Authorization: `Bearer ${admin.token}` })).body.leagues[0];
+
+  // /races (no query) now shows leagues, not the flat race list
+  send.reset();
+  await text(ALLOWED, '/races');
+  let btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.includes(`rl:${league.id}`), 'a league button is shown');
+  assert.ok(!btns.some((d) => d && d.startsWith('use:')), 'no race buttons at the league level');
+
+  // tapping the league lists its races (with a back button)
+  send.reset();
+  await tap(ALLOWED, `rl:${league.id}`);
+  btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.includes(`use:${contestId}`), 'the attached race appears');
+  assert.ok(btns.includes('racesback'), 'a back-to-leagues button is present');
+
+  // "/races <text>" still searches every race directly
+  send.reset();
+  await text(ALLOWED, '/races Telegram');
+  btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.includes(`use:${contestId}`), 'search still jumps straight to matching races');
+});
+
 test('/pdf sends a PDF document', async () => {
   send.reset();
   await text(ALLOWED, '/pdf');
