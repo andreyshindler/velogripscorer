@@ -17,6 +17,8 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       # Optional email: the operator bot's 📧 Email buttons mail a results/
       # standings PDF to a predefined recipient. Leave SMTP_HOST empty to disable.
+      # Editing these in .env requires recreating the container to take effect
+      # (docker compose up -d --force-recreate app).
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
       SMTP_SECURE: ${SMTP_SECURE:-}
