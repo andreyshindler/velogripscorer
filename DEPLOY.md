@@ -219,6 +219,41 @@ Typical loop: a feature is previewed by pushing it to `staging` → click throug
 at `/veloscorer-staging` → when approved, merge the feature to `main` → prod
 deploys. Staging has its **own** database, so test data never touches prod.
 
+### Manually (re)deploying staging — always pass `-p velogrip-staging`
+
+The auto-deploy runs `docker compose -p velogrip-staging up -d --build app`. If
+you ever run Compose by hand in `~/projects/velogripscorer-staging` (e.g. to pick
+up an `.env` edit), **use the same `-p velogrip-staging` project name**:
+
+```bash
+cd ~/projects/velogripscorer-staging
+docker compose -p velogrip-staging up -d --build app
+```
+
+A plain `docker compose up` there defaults the project name to the folder
+(`velogripscorer-staging`) and starts a **second, separate stack** — its own
+network, its own empty DB volume — that collides with the running one on
+`127.0.0.1:3001`:
+
+```
+Error response from daemon: ... Bind for 127.0.0.1:3001 failed: port is already allocated
+```
+
+If that happens, tear down the stray stack and keep the real one:
+
+```bash
+cd ~/projects/velogripscorer-staging
+docker compose down                                   # removes the default-project stack
+docker volume rm velogripscorer-staging_vgs_data 2>/dev/null || true   # its empty DB volume
+docker compose -p velogrip-staging ps                 # the real stack, app on :3001
+```
+
+> Staging blanks `TELEGRAM_BOT_TOKEN` (two pollers on one token clash), so the
+> bot doesn't run there. To exercise bot-only features (e.g. the 📧 Email
+> button) on staging, set a **separate** test bot token + your id in the staging
+> `.env`; otherwise test them on prod. `.env` edits in the staging clone persist
+> across auto-deploys (it's only seeded on the first bootstrap).
+
 ## Serving under a path prefix
 
 To host the app at `https://your-host/veloscorer` instead of the domain root
