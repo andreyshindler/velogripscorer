@@ -259,6 +259,16 @@ CREATE TABLE IF NOT EXISTS runners (
   decided_by TEXT
 );
 
+-- Predefined email recipients managed from the Telegram bot (in addition to
+-- the static EMAIL_RECIPIENTS env list). email is unique (case-insensitive).
+CREATE TABLE IF NOT EXISTS email_recipients (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  label      TEXT NOT NULL DEFAULT '',
+  email      TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_recipients ON email_recipients(lower(email));
+
 CREATE INDEX IF NOT EXISTS idx_league_races      ON league_races(league_id, round);
 CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);

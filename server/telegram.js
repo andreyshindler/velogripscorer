@@ -281,6 +281,7 @@ const HELP = [
   '/csv — download the results CSV',
   '/pdf — download the results PDF',
   '/league — season league standings + CSV/PDF',
+  '/emails — manage the email recipients (add / remove)',
   '/whoami — show your Telegram id',
   '/cancel — abort the current step',
 ].join('\n');
@@ -666,17 +667,44 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   }
 
   // Show the predefined recipients as buttons; `spec` is the "type:p1:p2" tail.
+  // An ➕ Add email button lets the operator add a new address on the spot.
   async function emailAsk(chatId, spec) {
     if (!mailer.isConfigured()) {
       return send.message(chatId, '📧 Email isn’t configured on the server (set SMTP_HOST + EMAIL_FROM).');
     }
     const recips = mailer.recipients();
-    if (!recips.length) {
-      return send.message(chatId, '📧 No predefined recipients — set EMAIL_RECIPIENTS (comma-separated).');
-    }
     const rows = recips.map((r, i) => [btn(`📧 ${r.label}`.slice(0, 60), `emto:${spec}:${i}`)]);
+    rows.push([btn('➕ Add email', `emadd:${spec}`)]);
     rows.push([btn('Cancel', 'emcancel')]);
-    return send.message(chatId, 'Send to which address?', { reply_markup: kb(rows) });
+    return send.message(chatId, recips.length ? 'Send to which address?' : 'No recipients yet — add one:',
+      { reply_markup: kb(rows) });
+  }
+
+  // Manage the saved recipient list (/emails): env entries are shown for
+  // reference; bot-added ones can be deleted; ➕ adds a new one.
+  async function emailList(chatId) {
+    const saved = mailer.savedRecipients();
+    const envOnly = mailer.recipients().filter((r) => !r.id);
+    const lines = ['<b>📧 Email recipients</b>'];
+    if (envOnly.length) {
+      lines.push('', 'From server config (read-only):');
+      envOnly.forEach((r) => lines.push(`• ${esc(r.label)} &lt;${esc(r.email)}&gt;`));
+    }
+    if (saved.length) lines.push('', 'Added here (tap 🗑 to remove):');
+    else if (!envOnly.length) lines.push('', 'None yet.');
+    const rows = saved.map((r) => [btn(`🗑 ${r.label} (${r.email})`.slice(0, 60), `emdel:${r.id}`)]);
+    rows.push([btn('➕ Add email', 'emadd:')]);
+    return send.message(chatId, lines.join('\n'), { reply_markup: kb(rows) });
+  }
+
+  // Validate + save a typed recipient. On success re-show the picker (if we came
+  // from one, `spec` is set) or the list; on failure keep the add-flow armed.
+  async function emailAdd(chatId, entry, spec) {
+    const r = mailer.addRecipient(entry);
+    if (!r.ok) { await send.message(chatId, `⚠️ ${r.error}. Send a valid address, or /cancel.`); return; }
+    setState(chatId, null);
+    await send.message(chatId, `📧 Added <b>${esc(r.recipient.label)}</b> (${esc(r.recipient.email)}).`);
+    return spec ? emailAsk(chatId, spec) : emailList(chatId);
   }
 
   async function emailSend(chatId, type, p1, p2, ri) {
@@ -748,6 +776,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (st && st.flow === 'add' && text === '/skip') { await wizardStep(chatId, st, ''); return; }
     // In a wizard and the user typed a value (not a new command)
     if (st && st.flow === 'add' && !text.startsWith('/')) { await wizardStep(chatId, st, text); return; }
+    if (st && st.flow === 'email_add' && !text.startsWith('/')) { await emailAdd(chatId, text, st.spec); return; }
     if (st && st.flow === 'editval' && !text.startsWith('/')) {
       const c = await activeContest(chatId);
       setState(chatId, null);
@@ -776,6 +805,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       case '/csv': return cmdCsv(chatId);
       case '/pdf': return cmdPdf(chatId);
       case '/league': return cmdLeague(chatId);
+      case '/emails': return emailList(chatId);
       default:
         return send.message(chatId, 'Unknown command. /help for the list.');
     }
@@ -796,6 +826,16 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'rpdf') return raceStandingsPdf(chatId, a);
     if (tag === 'emask') return emailAsk(chatId, data.split(':').slice(1).join(':'));
     if (tag === 'emto') { const p = data.split(':'); return emailSend(chatId, p[1], p[2], p[3], p[4]); }
+    if (tag === 'emadd') {
+      const spec = data.split(':').slice(1).join(':'); // '' when opened from /emails
+      setState(chatId, { flow: 'email_add', spec });
+      return send.message(chatId, 'Send an email address (or <code>Name &lt;a@b.com&gt;</code>). /cancel to abort.');
+    }
+    if (tag === 'emdel') {
+      const removed = mailer.removeRecipient(Number(a));
+      await send.message(chatId, removed ? '🗑 Removed.' : 'Not found.');
+      return emailList(chatId);
+    }
     if (tag === 'emcancel') return send.message(chatId, 'Cancelled.');
     if (tag === 'edit') return cmdEdit(chatId, a);
     if (tag === 'del') return cmdDel(chatId, a);

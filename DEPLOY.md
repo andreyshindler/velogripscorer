@@ -148,8 +148,10 @@ EMAIL_RECIPIENTS=Race Committee <committee@club.org>, Coach <coach@club.org>
 ```
 
 Without `SMTP_HOST`/`EMAIL_FROM` the bot replies that email isn't configured
-(nothing is ever sent silently); without `EMAIL_RECIPIENTS` it asks you to set
-the list. Only outbound SMTP to your provider is needed.
+(nothing is ever sent silently). `EMAIL_RECIPIENTS` seeds a read-only list, but
+you can also add/remove recipients from the bot itself — send **`/emails`**, or
+tap **➕ Add email** on any recipient picker — and those persist in the database
+(no redeploy). Only outbound SMTP to your provider is needed.
 
 ## Auto-deploy on merge to `main` (self-hosted runner)
 

@@ -352,6 +352,38 @@ test('email flow: reports when SMTP or recipients are not configured', async () 
   assert.match(esend2.last('message').text, /recipient/i);
 });
 
+test('/emails adds a recipient (persisted, merged into the picker) and removes it', async () => {
+  const mailer = require('../server/mailer');
+
+  send.reset();
+  await text(ALLOWED, '/emails');
+  assert.match(JSON.stringify(send.last('message').extra.reply_markup), /emadd:/);
+
+  // ➕ Add email -> prompted -> type an address
+  send.reset();
+  await tap(ALLOWED, 'emadd:');
+  assert.match(send.last('message').text, /email address/i);
+  send.reset();
+  await text(ALLOWED, 'Committee <committee@club.org>');
+  const rec = mailer.savedRecipients().find((r) => r.email === 'committee@club.org');
+  assert.ok(rec, 'recipient persisted to the DB');
+  assert.match(JSON.stringify(send.last('message').extra.reply_markup), new RegExp(`emdel:${rec.id}`));
+  assert.ok(mailer.recipients().some((r) => r.email === 'committee@club.org'), 'shows up in the send picker');
+
+  // an invalid address is rejected and the add-flow stays armed until /cancel
+  send.reset();
+  await tap(ALLOWED, 'emadd:');
+  send.reset();
+  await text(ALLOWED, 'nope');
+  assert.match(send.last('message').text, /valid address/i);
+  await text(ALLOWED, '/cancel');
+
+  // 🗑 removes it
+  send.reset();
+  await tap(ALLOWED, `emdel:${rec.id}`);
+  assert.ok(!mailer.savedRecipients().some((r) => r.email === 'committee@club.org'));
+});
+
 test('mailer parses EMAIL_RECIPIENTS into label/email pairs', () => {
   const mailer = require('../server/mailer');
   const saved = process.env.EMAIL_RECIPIENTS;
