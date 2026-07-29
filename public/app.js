@@ -1063,7 +1063,7 @@ function raceInfoPanel(c, results) {
   const waves = [...new Set(results.map((r) => r.wave).filter(Boolean))];
   const startType = waves.length > 1 ? t('waves_start') : t('mass_start');
   const loc = c.location
-    ? `${esc(c.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(c.location)}" target="_blank" rel="noopener" style="color:var(--brand,#2f8a57);font-weight:600">${t('view_on_map')}</a>`
+    ? `${esc(c.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(c.location)}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">${t('view_on_map')}</a>`
     : '–';
   const rows = [
     [t('sport'), esc(sportLabel(c.sport))],
@@ -1076,14 +1076,15 @@ function raceInfoPanel(c, results) {
     [t('updated_from'), t('app_label')],
     [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
   ];
-  const S = 290; // shared width; the photo stretches to the info box's height
+  // Responsive columns (flex-basis with shrink) so the panel never forces the
+  // page wider than the viewport; they wrap to one column on narrow screens.
   const photo = c.photo_url
-    ? `<div style="width:${S}px;min-height:${S}px;flex:0 0 auto;border-radius:8px;background:#000 center/cover no-repeat url('${c.photo_url}')"></div>` : '';
+    ? `<div style="flex:1 1 240px;max-width:320px;min-height:180px;border-radius:var(--r-md);background:#000 center/cover no-repeat url('${c.photo_url}')"></div>` : '';
   // align-items:stretch makes both columns share the taller height, and the info
   // box grows to fit its text (no inner scrollbar).
   return `<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:stretch;margin-bottom:16px">
     ${photo}
-    <div class="card" style="width:${S}px;flex:0 0 auto;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column">
+    <div class="card" style="flex:1 1 260px;max-width:340px;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column">
       <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:5px 10px;margin:-12px -12px 8px;border-radius:8px 8px 0 0;font-size:13px">${t('race_info')}</div>
       <table style="width:100%;border-collapse:collapse;font-size:12.5px">
         <tbody>${rows.map(([k, v]) => `<tr>
