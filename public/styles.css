@@ -291,6 +291,17 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .stat-num { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .stat-label { font-size: var(--fs-xs); color: var(--muted); }
 
+/* Phones: keep the 4 result tabs on one line, and shrink the winners/standings
+   summary table so it fits without sliding sideways. */
+@media (max-width: 560px) {
+  .pubtabs { flex-wrap: nowrap; gap: 5px; }
+  .pubtab { padding: 6px 9px; font-size: .68rem; white-space: nowrap; }
+  .board.winners { font-size: .78rem; }
+  .board.winners th { font-size: .6rem; letter-spacing: 0; padding: 8px 5px; }
+  .board.winners td { padding: 9px 5px; }
+  .board.winners .cat-link, .board.winners .live-link { font-size: .72rem; }
+}
+
 /* ---------- Dark theme (Clean Sport — deep navy, blue brand kept) ---------- */
 :root[data-theme="dark"] {
   --bg: #0f1320;
