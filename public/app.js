@@ -138,33 +138,14 @@ function renderChrome() {
   document.getElementById('bell').hidden = !state.user;
   if (state.user) {
     authArea.innerHTML = `
-      <a href="#/profile/${state.user.id}" style="font-weight:600;display:inline-flex;align-items:center;gap:6px">${avatar(state.user.avatar_url, state.user.name)} <span class="who-name">${esc(state.user.name)}</span></a>
+      <a href="#/profile/${state.user.id}" style="font-weight:600">${avatar(state.user.avatar_url, state.user.name)} ${esc(state.user.name)}</a>
       <button class="ghost" id="logout-btn">${t('logout')}</button>`;
     document.getElementById('logout-btn').onclick = () => { setSession(null, null); location.hash = '#/'; };
     pollNotifications();
   } else {
     authArea.innerHTML = `<a class="btn small" href="#/login">${t('login')}</a>`;
   }
-  // Mobile nav: the hamburger toggles the collapsed nav dropdown.
-  const navToggle = document.getElementById('nav-toggle');
-  const topbar = document.querySelector('.topbar');
-  if (navToggle && topbar) {
-    navToggle.onclick = () => {
-      const open = topbar.classList.toggle('nav-open');
-      navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    };
-  }
 }
-
-// Close the mobile nav dropdown whenever the route changes (link tapped).
-window.addEventListener('hashchange', () => {
-  const tb = document.querySelector('.topbar.nav-open');
-  if (tb) {
-    tb.classList.remove('nav-open');
-    const nt = document.getElementById('nav-toggle');
-    if (nt) nt.setAttribute('aria-expanded', 'false');
-  }
-});
 
 let notifTimer = null;
 async function pollNotifications() {
