@@ -1263,7 +1263,7 @@ function raceWinnersTables(id, results, raceDone) {
       <td style="padding-left:${indent}px"><a href="${seg('winners')}" class="cat-link">${arrow()} ${esc(label)}</a></td>
       <td>${leader ? nameWithTeam(leader) : '–'}</td>
       <td style="font-variant-numeric:tabular-nums">${leader ? leader.elapsed : '–'}</td>
-      <td><strong>${scope.length}</strong></td>
+      <td style="text-align:center"><strong>${scope.length}</strong></td>
       <td>${raceDone ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('results_word')}</a>`
         : scope.some((r) => r.wave_started_at) ? `<a href="${seg('live')}" class="live-link">${arrow()} ${t('live_race')}</a>`
         : `<span class="muted">${t('not_started_yet')}</span>`}</td>
@@ -1284,7 +1284,7 @@ function raceWinnersTables(id, results, raceDone) {
     <div style="overflow-x:auto"><table class="board winners mt">
       <thead><tr>
         <th>${t('category')}</th><th>${t('leader')}</th><th>${t('leading_time')}</th>
-        <th>${t('total_racers')}</th><th>${raceDone ? t('results_word') : t('progress_view')}</th>
+        <th style="text-align:center">${t('total_racers')}</th><th>${raceDone ? t('results_word') : t('progress_view')}</th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table></div>`;
