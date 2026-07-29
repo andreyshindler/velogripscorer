@@ -40,13 +40,21 @@ const SPORT_KEYS = {
   swimming: 'sport_swimming', swim: 'sport_swimming',
   triathlon: 'sport_triathlon', duathlon: 'sport_duathlon',
   trail: 'sport_trail', 'trail running': 'sport_trail',
-  mtb: 'sport_mtb', marathon: 'sport_marathon',
+  mtb: 'sport_mtb', 'cross-country': 'sport_mtb', 'cross country': 'sport_mtb', xco: 'sport_mtb',
+  marathon: 'sport_marathon',
 };
+// Keyword tokens tried longest-first so a specific one wins (e.g. "trail
+// running" before "run"), used to translate free-text sports.
+const SPORT_TOKENS = Object.keys(SPORT_KEYS).sort((a, b) => b.length - a.length);
 function sportLabel(sport) {
   const raw = String(sport ?? '').trim();
   if (!raw) return t('race_kind');
-  const key = SPORT_KEYS[raw.toLowerCase()];
-  return key ? t(key) : raw;
+  const low = raw.toLowerCase();
+  if (SPORT_KEYS[low]) return t(SPORT_KEYS[low]); // exact match
+  // Free-text values like "MTB — Cross-country (XCO)" — match a known keyword
+  // anywhere in the string so bike races read in Hebrew like running does.
+  for (const tok of SPORT_TOKENS) if (low.includes(tok)) return t(SPORT_KEYS[tok]);
+  return raw;
 }
 
 // ISO instant -> value for a <input type="datetime-local"> in the viewer's
