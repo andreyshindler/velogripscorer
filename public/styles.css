@@ -267,7 +267,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .pubtab:hover { color: var(--text); text-decoration: none; }
 .pubtab.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-sm); }
 .board.winners th:first-child, .board.winners td:first-child { text-align: start; }
-.board.winners .cat-link, .board.winners .live-link { color: var(--primary); font-weight: 700; text-decoration: none; }
+.board.winners .cat-link, .board.winners .live-link { color: var(--primary); font-weight: 700; text-decoration: none; white-space: nowrap; }
 .board.winners .cat-link:hover, .board.winners .live-link:hover { text-decoration: underline; }
 .board.winners tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
 .board tr.dist-sep td { background: var(--menu-section-bg); font-weight: 700; text-align: start; padding: 10px 10px; border-top: 2px solid var(--border-strong); }
