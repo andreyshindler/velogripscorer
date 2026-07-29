@@ -188,7 +188,7 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 
 /* ---------- tables / boards ---------- */
 table.board { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-table.board th { font-size: var(--fs-xs); letter-spacing: .3px; text-transform: uppercase; color: var(--faint); font-weight: 700; background: var(--surface-2); }
+table.board th { font-size: var(--fs-xs); letter-spacing: .3px; text-transform: uppercase; color: var(--muted); font-weight: 700; background: var(--surface-2); }
 table.board th, table.board td { padding: 11px 10px; text-align: start; border-bottom: 1px solid var(--border); }
 table.board tr.top1 td { background: #fffbef; }
 table.board tr.top2 td { background: #f5f7fc; }
