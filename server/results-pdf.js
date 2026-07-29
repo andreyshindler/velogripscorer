@@ -175,8 +175,8 @@ async function raceResultsPdf(contest, results) {
   const columns = [
     { header: H.place, width: 34, align: 'r' },
     { header: H.bib, width: 40, align: 'r' },
-    { header: H.name, width: 116, align: 'r' },
-    { header: H.team, width: 120, align: 'r' },
+    { header: H.name, width: 140, align: 'r' },
+    { header: H.team, width: 145, align: 'r' },
     { header: H.category, width: 64, align: 'r' },
     { header: H.gender, width: 42, align: 'r' },
     { header: H.time, width: 60, align: 'r' },
@@ -308,8 +308,8 @@ async function leagueIndividualPdf(league, individual, raceList) {
   const fixed = [
     { header: H.place, width: 34, align: 'r', render: (r, i) => i + 1 },
     { header: H.bib, width: 40, align: 'r', render: (r) => r.bib },
-    { header: H.name, width: 120, align: 'r', render: (r) => r.name },
-    { header: H.team, width: 120, align: 'r', render: (r) => r.team },
+    { header: H.name, width: 140, align: 'r', render: (r) => r.name },
+    { header: H.team, width: 140, align: 'r', render: (r) => r.team },
   ];
   const totalFixed = fixed.reduce((s, c) => s + c.width, 0) + 46; // + Total col
   const rounds = roundColumns(raceList, usable, totalFixed);
