@@ -261,7 +261,7 @@ async function loadRecentFinished() {
     const sorted = contests.slice().sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
     const list = q ? sorted : sorted.slice(0, 3);
     box.innerHTML = list.length
-      ? `<h2>${t('recently_finished')}</h2>
+      ? `<h2 class="page-title-center">${t('recently_finished')}</h2>
          <div class="grid">${list.map((c) => `
            <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
              <div><span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
