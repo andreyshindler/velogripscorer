@@ -208,10 +208,23 @@ function closeSse() {
   if (state.sse) { state.sse.close(); state.sse = null; }
 }
 
+// Highlight the top-nav link for the current page (Home / Finished races /
+// League / Start lists / Admin), like the standings tabs.
+function setActiveNav(page) {
+  const key = { '': 'home', finished: 'finished', leagues: 'leagues', league: 'leagues', startlists: 'startlists', admin: 'admin' }[page || ''];
+  const linkKey = { '#/': 'home', '#/finished': 'finished', '#/leagues': 'leagues', '#/startlists': 'startlists', '#/admin': 'admin' };
+  document.querySelectorAll('.topnav a').forEach((a) => {
+    const on = key && linkKey[a.getAttribute('href')] === key;
+    a.classList.toggle('active', !!on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+}
+
 async function route() {
   closeSse();
   const hash = location.hash.slice(1) || '/';
   const [, page, arg, sub] = hash.match(/^\/([^/]*)\/?([^/]*)\/?([^/]*)/) || [];
+  setActiveNav(page);
   try {
     if (!page) return viewHome();
     if (page === 'login') return viewLogin();

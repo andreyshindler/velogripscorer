@@ -110,6 +110,8 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 .topnav { display: flex; gap: 2px; }
 .topnav a { color: var(--muted); font-weight: 600; font-size: var(--fs-sm); padding: 7px 12px; border-radius: var(--r-sm); }
 .topnav a:hover { color: var(--text); background: var(--surface-2); text-decoration: none; }
+.topnav a.active, .topnav a.active:hover { background: var(--primary); color: #fff; }
+:root[data-theme="dark"] .topnav a.active, :root[data-theme="dark"] .topnav a.active:hover { color: #0d1120; }
 .topbar-right { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
 
 .container { flex: 1; width: 100%; max-width: 1080px; max-inline-size: 100%; margin: 0 auto; padding: 24px 16px 60px; }
