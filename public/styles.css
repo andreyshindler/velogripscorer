@@ -253,8 +253,16 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 @media (max-width: 760px) {
   .detail-grid, .row2 { grid-template-columns: 1fr; }
   .criterion-row { grid-template-columns: 1fr; }
-  .topbar { gap: 8px; }
   .container { padding: 14px 10px 50px; }
+  /* Header: brand + controls on the first row, then all nav tabs on their own
+     full-width centered band beneath — every tab visible, tidily. */
+  .topbar { gap: 8px 10px; row-gap: 8px; }
+  .brand { order: 1; }
+  .topbar-right { order: 2; }
+  .topnav {
+    order: 3; flex-basis: 100%; justify-content: center; flex-wrap: wrap;
+    gap: 2px 4px; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;
+  }
 }
 
 /* ---------- Public results page (the shareable race-results link) ---------- */
