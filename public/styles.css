@@ -315,6 +315,10 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
   .board.winners th { font-size: .6rem; letter-spacing: 0; padding: 8px 5px; }
   .board.winners td { padding: 9px 5px; }
   .board.winners .cat-link, .board.winners .live-link { font-size: .72rem; }
+  /* Shrink the card status pills on phones so the blue "View results" button
+     fits on the SAME row as the league / sport / Finished pills. */
+  .card-pills { gap: 4px; }
+  .card-pills .pill { font-size: 11px; padding: 2px 7px; gap: 3px; }
 }
 
 /* ---------- Dark theme (Clean Sport — deep navy, blue brand kept) ---------- */
