@@ -289,7 +289,8 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 }
 .board tr.row-blink td { animation: row-blink 0.55s ease-in-out 2; }
 @media (prefers-reduced-motion: reduce) { .board tr.row-blink td { animation: none; } }
-.league-section { font-size: var(--fs-lg); font-weight: 700; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
+.finished-title { text-align: center; }
+.league-section { font-size: var(--fs-lg); font-weight: 700; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--border); text-align: center; }
 .league-section:first-child { margin-top: 8px; }
 
 /* ---------- Live-race summary tiles ---------- */

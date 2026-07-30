@@ -279,7 +279,7 @@ async function loadRecentFinished() {
 // ---------- finished races (public results directory) ----------
 
 async function viewFinishedRaces() {
-  main.innerHTML = `<h1>🏁 ${t('nav_finished')}</h1><div id="finished-list"></div>`;
+  main.innerHTML = `<h1 class="finished-title">🏁 ${t('nav_finished')}</h1><div id="finished-list"></div>`;
   const { contests } = await api('/contests?status=finished');
   const races = (contests || []).filter((c) => c.kind === 'race');
   const box = document.getElementById('finished-list');
