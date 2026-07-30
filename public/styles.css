@@ -147,6 +147,8 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 .contest-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .contest-card h3 { margin: 0; font-size: var(--fs-md); }
 .contest-card .meta { color: var(--muted); font-size: var(--fs-xs); display: flex; gap: 12px; flex-wrap: wrap; }
+.contest-card .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.contest-card .card-foot .meta { margin: 0; }
 
 /* ---------- pills / badges (status = green; brand = blue; warm = tag) ---------- */
 .pill {

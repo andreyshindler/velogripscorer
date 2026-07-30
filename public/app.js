@@ -325,11 +325,11 @@ function finishedCard(c) {
         <span class="pill finished">${t('status_finished')}</span>
       </div>
       <h3>${esc(c.title)}</h3>
-      <div class="meta">
-        ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
-        <span>🗓 ${fmtDate(c.start_at)}</span>
+      ${c.location ? `<div class="meta"><span>📍 ${esc(c.location)}</span></div>` : ''}
+      <div class="card-foot">
+        <span class="meta">🗓 ${fmtDate(c.start_at)}</span>
+        <span class="pill tag">${t('view_results_link')} ❯</span>
       </div>
-      <div class="pill tag">${t('view_results_link')} ❯</div>
     </a>`;
 }
 
