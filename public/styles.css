@@ -254,11 +254,14 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
   .detail-grid, .row2 { grid-template-columns: 1fr; }
   .criterion-row { grid-template-columns: 1fr; }
   .container { padding: 14px 10px 50px; }
-  /* Header: brand + controls on the first row, then all nav tabs on their own
-     full-width centered band beneath — every tab visible, tidily. */
-  .topbar { gap: 8px 10px; row-gap: 8px; }
-  .brand { order: 1; }
-  .topbar-right { order: 2; }
+  /* Header: brand + all controls (connect / language / theme / bell) share the
+     first row; the nav tabs sit on their own full-width band beneath. The brand
+     shrinks so everything fits one row on a phone. */
+  .topbar { gap: 6px 8px; row-gap: 8px; padding: 10px 12px; }
+  .brand { order: 1; font-size: var(--fs-sm); gap: 7px; flex: 1 1 auto; min-width: 0; }
+  .brand span:not(.brand-mark) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brand .brand-mark { width: 26px; height: 26px; font-size: 12px; }
+  .topbar-right { order: 2; gap: 6px; flex: 0 0 auto; }
   .topnav {
     order: 3; flex-basis: 100%; justify-content: center; flex-wrap: wrap;
     gap: 2px 4px; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;
