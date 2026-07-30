@@ -147,8 +147,13 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 .contest-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .contest-card h3 { margin: 0; font-size: var(--fs-md); }
 .contest-card .meta { color: var(--muted); font-size: var(--fs-xs); display: flex; gap: 12px; flex-wrap: wrap; }
-.contest-card .card-pills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.pill.view-results { margin-inline-start: auto; background: var(--primary); color: #fff; }
+/* Card header: pills wrap within their own column while "View results" stays
+   pinned to the end and never wraps — stays aligned even when the league name
+   is long (the league pill then truncates with an ellipsis). */
+.contest-card .card-head { display: flex; align-items: flex-start; gap: 10px; }
+.contest-card .card-pills { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.card-pills .pill.tag { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill.view-results { flex: 0 0 auto; background: var(--primary); color: #fff; white-space: nowrap; }
 :root[data-theme="dark"] .pill.view-results { background: var(--primary); color: #0d1120; }
 
 /* ---------- pills / badges (status = green; brand = blue; warm = tag) ---------- */
@@ -315,10 +320,6 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
   .board.winners th { font-size: .6rem; letter-spacing: 0; padding: 8px 5px; }
   .board.winners td { padding: 9px 5px; }
   .board.winners .cat-link, .board.winners .live-link { font-size: .72rem; }
-  /* Shrink the card status pills on phones so the blue "View results" button
-     fits on the SAME row as the league / sport / Finished pills. */
-  .card-pills { gap: 4px; }
-  .card-pills .pill { font-size: 11px; padding: 2px 7px; gap: 3px; }
 }
 
 /* ---------- Dark theme (Clean Sport — deep navy, blue brand kept) ---------- */
