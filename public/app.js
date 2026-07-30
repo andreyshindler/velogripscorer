@@ -316,19 +316,19 @@ function finishedCard(c) {
   const league = String(c.league_names || '').trim();
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
-      <div>
+      <div class="card-pills">
         ${league ? (c.league_id
           ? `<span class="pill tag league-link" data-league="${c.league_id}" role="link" tabindex="0"
                title="${t('open_league')}" style="cursor:pointer;text-decoration:underline">🏆 ${esc(league)}</span>`
           : `<span class="pill tag">🏆 ${esc(league)}</span>`) : ''}
         <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
         <span class="pill finished">${t('status_finished')}</span>
+        <span class="pill view-results">${t('view_results_link')} ❯</span>
       </div>
       <h3>${esc(c.title)}</h3>
-      ${c.location ? `<div class="meta"><span>📍 ${esc(c.location)}</span></div>` : ''}
-      <div class="card-foot">
-        <span class="meta">🗓 ${fmtDate(c.start_at)}</span>
-        <span class="pill tag">${t('view_results_link')} ❯</span>
+      <div class="meta">
+        ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
+        <span>🗓 ${fmtDate(c.start_at)}</span>
       </div>
     </a>`;
 }
