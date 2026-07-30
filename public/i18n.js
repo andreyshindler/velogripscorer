@@ -102,7 +102,7 @@ const I18N = {
     status_finished_r: 'Finished', status_on_course: 'On course', status_not_started: 'Wave not started',
     manual_entry: 'Manual entry (bib)', record: 'Record', suppress: 'Start suppression (s)',
     lap_gap: 'Min lap gap (s)', save_settings: 'Save', restart_wave_confirm: 'Wave already started. Restart and reset its gun time?',
-    hero_title: 'Race timing & live results', hero_sub: 'RFID chip timing from the VeloGrip Android app — start lists, live results and race archive here.',
+    hero_title: 'Race timing', hero_sub: 'We time your race with RFID technology',
     create_race: 'Create race', races: 'Races', race_kind: 'Race (RFID timing)', voting_kind: 'Community voting',
     recently_finished: 'Recently finished',
     kind_label: 'Type', sport: 'Sport', location: 'Location', no_races: 'No races yet.',
