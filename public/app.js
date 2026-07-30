@@ -315,7 +315,7 @@ async function viewFinishedRaces() {
 function finishedCard(c) {
   const league = String(c.league_names || '').trim();
   return `
-    <a class="card contest-card outlined" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
+    <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div class="card-head">
         <div class="card-pills">
           ${league ? (c.league_id
