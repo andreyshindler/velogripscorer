@@ -276,7 +276,7 @@ const I18N = {
     status_finished_r: 'סיים', status_on_course: 'במסלול', status_not_started: 'המקצה לא זונק',
     manual_entry: 'הזנה ידנית (מספר חזה)', record: 'רשום', suppress: 'השהיית זינוק (שנ׳)',
     lap_gap: 'מרווח הקפה מזערי (שנ׳)', save_settings: 'שמור', restart_wave_confirm: 'המקצה כבר זונק. לזנק מחדש ולאפס את זמן הזינוק?',
-    hero_title: 'מדידת זמנים ותוצאות חיות', hero_sub: 'מודדים לכם את הזמן בטכנולוגיית RFID',
+    hero_title: 'מדידת זמנים', hero_sub: 'מודדים לכם את הזמן בטכנולוגיית RFID',
     create_race: 'צור מרוץ', races: 'מרוצים', race_kind: 'מרוץ (מדידת RFID)', voting_kind: 'הצבעת קהילה',
     recently_finished: 'הסתיימו לאחרונה',
     kind_label: 'סוג', sport: 'ענף ספורט', location: 'מיקום', no_races: 'אין מרוצים עדיין.',
