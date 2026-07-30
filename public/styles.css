@@ -155,6 +155,8 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 .card-pills .pill.tag { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pill.view-results { flex: 0 0 auto; background: var(--primary); color: #fff; white-space: nowrap; }
 :root[data-theme="dark"] .pill.view-results { background: var(--primary); color: #0d1120; }
+/* Blue outer line marking a finished-race card (matches the mockup). */
+.contest-card.outlined { outline: 2px solid var(--primary); outline-offset: 4px; }
 
 /* ---------- pills / badges (status = green; brand = blue; warm = tag) ---------- */
 .pill {
