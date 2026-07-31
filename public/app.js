@@ -211,8 +211,8 @@ function closeSse() {
 // Highlight the top-nav link for the current page (Home / Finished races /
 // League / Start lists / Admin), like the standings tabs.
 function setActiveNav(page) {
-  const key = { '': 'home', finished: 'finished', leagues: 'leagues', league: 'leagues', startlists: 'startlists', admin: 'admin' }[page || ''];
-  const linkKey = { '#/': 'home', '#/finished': 'finished', '#/leagues': 'leagues', '#/startlists': 'startlists', '#/admin': 'admin' };
+  const key = { '': 'home', finished: 'finished', leagues: 'leagues', league: 'leagues', contact: 'contact', startlists: 'startlists', admin: 'admin' }[page || ''];
+  const linkKey = { '#/': 'home', '#/finished': 'finished', '#/leagues': 'leagues', '#/contact': 'contact', '#/startlists': 'startlists', '#/admin': 'admin' };
   document.querySelectorAll('.topnav a').forEach((a) => {
     const on = key && linkKey[a.getAttribute('href')] === key;
     a.classList.toggle('active', !!on);
@@ -232,6 +232,7 @@ async function route() {
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'leagues') return viewLeagues();
+    if (page === 'contact') return viewContact();
     if (page === 'league') return viewLeague(Number(arg), sub || 'teams');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
@@ -346,6 +347,18 @@ function finishedCard(c) {
         <span>🗓 ${fmtDate(c.start_at)}</span>
       </div>
     </a>`;
+}
+
+// ---------- contact / about ----------
+
+function viewContact() {
+  const email = 'velogrip2025@gmail.com';
+  main.innerHTML = `
+    <h1 class="page-title-center">${t('nav_contact')}</h1>
+    <div class="card" style="max-width:640px;margin:0 auto">
+      <p style="margin:0 0 16px;line-height:1.7">${t('contact_about')}</p>
+      <p style="margin:0"><a class="btn" href="mailto:${email}">✉️ ${email}</a></p>
+    </div>`;
 }
 
 // ---------- auth ----------
