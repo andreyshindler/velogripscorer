@@ -360,7 +360,7 @@ function viewContact() {
     <div class="card" style="max-width:640px;margin:0 auto">
       <p style="margin:0 0 16px;line-height:1.7">${t('contact_about')}</p>
       <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
-        <a class="btn" href="mailto:${email}">✉️ ${email}</a>
+        <a class="btn secondary" href="mailto:${email}">✉️ ${email}</a>
         <a class="btn secondary" href="https://wa.me/${waLink}" target="_blank" rel="noopener">💬 ${waDisplay}</a>
       </div>
     </div>`;
