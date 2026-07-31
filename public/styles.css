@@ -261,7 +261,6 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .hero { text-align: center; padding: 30px 10px 22px; }
 .hero-logo {
   display: block; margin: 0 auto 16px; width: 150px; max-width: 45%; height: auto;
-  border-radius: var(--r-lg); box-shadow: var(--shadow-md);
 }
 .hero h1 { margin: 0 0 6px; font-size: var(--fs-2xl); font-weight: 800; letter-spacing: -.4px; text-wrap: balance; }
 .hero p { color: var(--muted); margin: 0 auto 18px; max-width: 46ch; }
