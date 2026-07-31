@@ -249,7 +249,7 @@ window.addEventListener('hashchange', route);
 async function viewHome() {
   main.innerHTML = `
     <div class="hero">
-      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="220" height="220">
+      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="150" height="150">
       <h1>🏁 ${t('hero_title')}</h1>
       <p>${t('hero_sub')}</p>
     </div>
