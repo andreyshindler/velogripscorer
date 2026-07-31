@@ -260,7 +260,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 .mt { margin-top: 16px; }
 .hero { text-align: center; padding: 12px 10px 22px; }
 .hero-logo {
-  display: block; margin: 0 auto 6px; width: 180px; max-width: 55%; height: auto;
+  display: block; margin: 0 auto 6px; width: 140px; max-width: 45%; height: auto;
 }
 .hero h1 { margin: 0 0 6px; font-size: var(--fs-2xl); font-weight: 800; letter-spacing: -.4px; text-wrap: balance; }
 .hero p { color: var(--muted); margin: 0 auto 18px; max-width: 46ch; }
