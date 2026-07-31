@@ -353,11 +353,16 @@ function finishedCard(c) {
 
 function viewContact() {
   const email = 'velogrip2025@gmail.com';
+  const waDisplay = '050-829-1600';
+  const waLink = '972508291600';
   main.innerHTML = `
     <h1 class="page-title-center">${t('nav_contact')}</h1>
     <div class="card" style="max-width:640px;margin:0 auto">
       <p style="margin:0 0 16px;line-height:1.7">${t('contact_about')}</p>
-      <p style="margin:0"><a class="btn" href="mailto:${email}">✉️ ${email}</a></p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
+        <a class="btn" href="mailto:${email}">✉️ ${email}</a>
+        <a class="btn secondary" href="https://wa.me/${waLink}" target="_blank" rel="noopener">💬 ${waDisplay}</a>
+      </div>
     </div>`;
 }
 
