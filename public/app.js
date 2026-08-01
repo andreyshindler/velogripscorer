@@ -1896,6 +1896,7 @@ async function viewLeagues() {
         <div class="meta">
           ${l.location ? `<span>📍 ${esc(l.location)}</span>` : ''}
           <span>${l.season ? esc(l.season) + ' · ' : ''}${t('league_rounds_count', { n: l.race_count })}</span>
+          <span>${t('league_races_finished', { done: l.finished_race_count, total: l.race_count })}</span>
         </div>
       </a>`;
     }).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
