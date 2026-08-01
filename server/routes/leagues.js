@@ -31,6 +31,18 @@ function leagueRaces(leagueId) {
   ).all(leagueId);
 }
 
+// Distinct-racer count for the Leagues list card: mirrors the /standings
+// route's individual-standings computation (racers are merged across rounds
+// there too), just discarding everything but the count.
+function leagueRacerCount(leagueRow) {
+  const settings = normalizeSettings(leagueRow.settings);
+  const races = leagueRaces(leagueRow.id).map((row) => {
+    const contest = db.prepare('SELECT * FROM contests WHERE id = ?').get(row.contest_id);
+    return { contest: { id: contest.id, status: contest.status }, round: row.round, results: computeRaceResults(contest) };
+  });
+  return computeLeagueStandings(races, settings).individual.length;
+}
+
 // ---- public reads ----
 
 router.get('/leagues', (req, res) => {
@@ -38,7 +50,7 @@ router.get('/leagues', (req, res) => {
   const status = req.query.status || '';
   const where = status === 'all' ? '1=1' : status ? 'l.status = ?' : "l.status != 'archived'";
   const rows = db.prepare(
-    `SELECT l.id, l.name, l.season, l.status, l.created_at,
+    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings,
             (SELECT COUNT(*) FROM league_races lr WHERE lr.league_id = l.id) AS race_count,
             (SELECT COUNT(*) FROM league_races lr JOIN contests c ON c.id = lr.contest_id
               WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count,
@@ -48,7 +60,8 @@ router.get('/leagues', (req, res) => {
               WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS location
        FROM leagues l WHERE ${where} ORDER BY l.created_at DESC`
   ).all(...(status && status !== 'all' ? [status] : []));
-  res.json({ leagues: rows });
+  const leagues = rows.map(({ settings, ...row }) => ({ ...row, racer_count: leagueRacerCount({ id: row.id, settings }) }));
+  res.json({ leagues });
 });
 
 router.get('/leagues/:id', (req, res) => {
