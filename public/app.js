@@ -296,7 +296,12 @@ async function loadRecentFinished() {
 // ---------- finished races (public results directory) ----------
 
 async function viewFinishedRaces() {
-  main.innerHTML = `<h1 class="page-title-center">🏁 ${t('nav_finished')}</h1><div id="finished-list"></div>`;
+  main.innerHTML = `
+    <div class="brand-row">
+      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
+      <h1 class="page-title-center">🏁 ${t('nav_finished')}</h1>
+    </div>
+    <div id="finished-list"></div>`;
   const { contests } = await api('/contests?status=finished');
   const races = (contests || []).filter((c) => c.kind === 'race');
   const box = document.getElementById('finished-list');
@@ -1842,7 +1847,10 @@ async function viewProfile(id) {
 async function viewLeagues() {
   const { leagues } = await api('/leagues');
   main.innerHTML = `
-    <h1 class="page-title-center">${t('leagues_title')}</h1>
+    <div class="brand-row">
+      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
+      <h1 class="page-title-center">${t('leagues_title')}</h1>
+    </div>
     ${leagues.length ? `<div class="grid">${leagues.map((l) => `
       <a class="card contest-card" href="#/league/${l.id}">
         <h3>${esc(l.name)}</h3>
