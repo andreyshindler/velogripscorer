@@ -66,12 +66,17 @@ function serializeContest(contest, user) {
     )
     .get(contest.id);
   const organizer = db.prepare('SELECT id, name, avatar_url FROM users WHERE id = ?').get(contest.organizer_id);
+  const readerNames = db
+    .prepare(`SELECT name FROM readers WHERE contest_id = ? AND name != 'Manual entry' ORDER BY id`)
+    .all(contest.id)
+    .map((r) => r.name);
   const out = {
     ...contest,
     tags: JSON.parse(contest.tags || '[]'),
     criteria,
     prizes,
     organizer,
+    reader_names: readerNames,
     ...counts,
     voting_open: votingOpen(contest),
     is_organizer: isOrganizer(contest, user),

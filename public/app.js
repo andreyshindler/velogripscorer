@@ -1124,6 +1124,7 @@ function raceInfoPanel(c, results) {
     [t('timed_on'), t('timed_on_value')],
     [t('timed_with'), 'VeloGripScorer'],
     [t('chip_timing'), 'RFID - LLRP'],
+    ...(c.reader_names && c.reader_names.length ? [[t('rfid_reader'), esc(c.reader_names.join(', '))]] : []),
     [t('updated_from'), t('app_label')],
     [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
   ];
