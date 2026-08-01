@@ -1851,12 +1851,16 @@ async function viewLeagues() {
       <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
       <h1 class="page-title-center">${t('leagues_title')}</h1>
     </div>
-    ${leagues.length ? `<div class="grid">${leagues.map((l) => `
+    ${leagues.length ? `<div class="grid">${leagues.map((l) => {
+      const allRacesDone = l.race_count > 0 && l.finished_race_count === l.race_count;
+      const isFinished = l.status === 'finished' || allRacesDone;
+      return `
       <a class="card contest-card" href="#/league/${l.id}">
         <h3>${esc(l.name)}</h3>
         <p class="muted">${l.season ? esc(l.season) + ' · ' : ''}${t('league_rounds_count', { n: l.race_count })}</p>
-        <span class="pill ${l.status === 'finished' ? 'finished' : 'live'}">${l.status === 'finished' ? t('status_finished') : t('status_active')}</span>
-      </a>`).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
+        <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
+      </a>`;
+    }).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
 }
 
 async function viewLeague(id, tab) {
