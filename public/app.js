@@ -251,7 +251,7 @@ async function viewHome() {
     <div class="hero">
       <div class="brand-row">
         <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
-        <h1>🏁 ${t('hero_title')}</h1>
+        <h1>${t('hero_title')}</h1>
       </div>
       <p>${t('hero_sub')}</p>
     </div>
@@ -299,7 +299,7 @@ async function viewFinishedRaces() {
   main.innerHTML = `
     <div class="brand-row">
       <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
-      <h1 class="page-title-center">🏁 ${t('nav_finished')}</h1>
+      <h1 class="page-title-center">${t('nav_finished')}</h1>
     </div>
     <div id="finished-list"></div>`;
   const { contests } = await api('/contests?status=finished');
