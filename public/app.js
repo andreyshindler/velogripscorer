@@ -356,6 +356,7 @@ function viewContact() {
   const email = 'velogrip2025@gmail.com';
   const waLink = '972508291600';
   main.innerHTML = `
+    <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
     <h1 class="page-title-center">${t('nav_contact')}</h1>
     <div class="card" style="max-width:640px;margin:0 auto">
       <p style="margin:0 0 16px;line-height:1.7">${t('contact_about')}</p>
