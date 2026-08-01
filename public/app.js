@@ -248,9 +248,11 @@ window.addEventListener('hashchange', route);
 
 async function viewHome() {
   main.innerHTML = `
-    <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
     <div class="hero">
-      <h1>🏁 ${t('hero_title')}</h1>
+      <div class="brand-row">
+        <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
+        <h1>🏁 ${t('hero_title')}</h1>
+      </div>
       <p>${t('hero_sub')}</p>
     </div>
     <form class="searchbar" id="search-form" role="search">
@@ -356,8 +358,10 @@ function viewContact() {
   const email = 'velogrip2025@gmail.com';
   const waLink = '972508291600';
   main.innerHTML = `
-    <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
-    <h1 class="page-title-center">${t('nav_contact')}</h1>
+    <div class="brand-row">
+      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
+      <h1 class="page-title-center">${t('nav_contact')}</h1>
+    </div>
     <div class="card" style="max-width:640px;margin:0 auto">
       <p style="margin:0 0 16px;line-height:1.7">${t('contact_about')}</p>
       <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
