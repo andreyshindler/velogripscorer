@@ -1888,9 +1888,15 @@ async function viewLeagues() {
       const isFinished = l.status === 'finished' || allRacesDone;
       return `
       <a class="card contest-card" href="#/league/${l.id}">
+        <div class="card-pills">
+          ${l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : ''}
+          <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
+        </div>
         <h3>${esc(l.name)}</h3>
-        <p class="muted">${l.season ? esc(l.season) + ' · ' : ''}${t('league_rounds_count', { n: l.race_count })}</p>
-        <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
+        <div class="meta">
+          ${l.location ? `<span>📍 ${esc(l.location)}</span>` : ''}
+          <span>${l.season ? esc(l.season) + ' · ' : ''}${t('league_rounds_count', { n: l.race_count })}</span>
+        </div>
       </a>`;
     }).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
 }

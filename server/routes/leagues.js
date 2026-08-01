@@ -41,7 +41,11 @@ router.get('/leagues', (req, res) => {
     `SELECT l.id, l.name, l.season, l.status, l.created_at,
             (SELECT COUNT(*) FROM league_races lr WHERE lr.league_id = l.id) AS race_count,
             (SELECT COUNT(*) FROM league_races lr JOIN contests c ON c.id = lr.contest_id
-              WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count
+              WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count,
+            (SELECT c.sport FROM league_races lr JOIN contests c ON c.id = lr.contest_id
+              WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS sport,
+            (SELECT c.location FROM league_races lr JOIN contests c ON c.id = lr.contest_id
+              WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS location
        FROM leagues l WHERE ${where} ORDER BY l.created_at DESC`
   ).all(...(status && status !== 'all' ? [status] : []));
   res.json({ leagues: rows });
