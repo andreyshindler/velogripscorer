@@ -1166,7 +1166,7 @@ function leagueInfoPanel(league, meta) {
     [t('series_races'), meta.race_count],
     [t('completed_races'), meta.finished_race_count],
     [t('racers'), meta.racer_count],
-    [t('updated_label'), fmtDate(new Date().toISOString())],
+    [t('updated_label'), fmtDate(meta.updated_at)],
   ];
   return `<div style="display:flex;justify-content:center;margin-bottom:16px">
     <div class="card" style="flex:1 1 260px;max-width:340px;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column">

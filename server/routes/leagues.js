@@ -85,6 +85,10 @@ router.get('/leagues/:id/standings', async (req, res) => {
   const locations = [...new Set(raceContests.map((c) => c.location).filter(Boolean))];
   const organizerId = raceContests.map((c) => c.organizer_id).find(Boolean);
   const organizer = organizerId ? db.prepare('SELECT name FROM users WHERE id = ?').get(organizerId) : null;
+  const lastRaceAt = raceContests
+    .map((c) => c.start_at)
+    .filter(Boolean)
+    .reduce((max, d) => (!max || new Date(d) > new Date(max) ? d : max), null);
   const meta = {
     sport: sports.length === 1 ? sports[0] : null,
     location: locations.length === 1 ? locations[0] : null,
@@ -92,6 +96,7 @@ router.get('/leagues/:id/standings', async (req, res) => {
     race_count: raceList.length,
     finished_race_count: raceContests.filter((c) => c.status === 'finished').length,
     racer_count: individual.length,
+    updated_at: lastRaceAt,
   };
 
   if (req.query.format === 'csv') {
