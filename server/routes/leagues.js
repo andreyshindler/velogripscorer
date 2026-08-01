@@ -62,7 +62,10 @@ router.get('/leagues/:id/standings', async (req, res) => {
   const races = attached.map((row) => {
     const contest = db.prepare('SELECT * FROM contests WHERE id = ?').get(row.contest_id);
     return {
-      contest: { id: contest.id, title: contest.title, start_at: contest.start_at, end_at: contest.end_at, status: contest.status },
+      contest: {
+        id: contest.id, title: contest.title, start_at: contest.start_at, end_at: contest.end_at,
+        status: contest.status, sport: contest.sport, location: contest.location, organizer_id: contest.organizer_id,
+      },
       round: row.round,
       results: computeRaceResults(contest),
     };
@@ -73,6 +76,23 @@ router.get('/leagues/:id/standings', async (req, res) => {
     contest_id: r.contest.id, round: r.round, title: r.contest.title,
     start_at: r.contest.start_at, end_at: r.contest.end_at, status: r.contest.status,
   }));
+
+  // Summary panel: sport/location shown only when every race agrees; the
+  // organizer is taken from the first round (leagues are typically run by one
+  // club/organizer).
+  const raceContests = races.map((r) => r.contest);
+  const sports = [...new Set(raceContests.map((c) => c.sport).filter(Boolean))];
+  const locations = [...new Set(raceContests.map((c) => c.location).filter(Boolean))];
+  const organizerId = raceContests.map((c) => c.organizer_id).find(Boolean);
+  const organizer = organizerId ? db.prepare('SELECT name FROM users WHERE id = ?').get(organizerId) : null;
+  const meta = {
+    sport: sports.length === 1 ? sports[0] : null,
+    location: locations.length === 1 ? locations[0] : null,
+    organizer_name: organizer ? organizer.name : null,
+    race_count: raceList.length,
+    finished_race_count: raceContests.filter((c) => c.status === 'finished').length,
+    racer_count: individual.length,
+  };
 
   if (req.query.format === 'csv') {
     const table = req.query.table === 'team' ? 'team' : 'individual';
@@ -95,7 +115,7 @@ router.get('/leagues/:id/standings', async (req, res) => {
     }
   }
 
-  res.json({ league: leagueJson(league), races: raceList, individual, teams });
+  res.json({ league: leagueJson(league), races: raceList, individual, teams, meta });
 });
 
 // ---- admin writes ----

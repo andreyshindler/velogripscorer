@@ -1150,6 +1150,39 @@ function raceInfoPanel(c, results) {
   </div>`;
 }
 
+// League summary card (sport, location, series type, race counts, racers,
+// last-updated, organizer) — the league-page equivalent of raceInfoPanel.
+function leagueInfoPanel(league, meta) {
+  const loc = meta.location
+    ? `${esc(meta.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(meta.location)}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">${t('view_on_map')}</a>`
+    : null;
+  const seriesType = league.settings && league.settings.individual_best_n
+    ? t('series_type_points_n', { n: league.settings.individual_best_n, m: meta.race_count })
+    : t('series_type_points');
+  const rows = [
+    ...(meta.sport ? [[t('sport'), esc(sportLabel(meta.sport))]] : []),
+    ...(loc ? [[t('location'), loc]] : []),
+    [t('series_type'), seriesType],
+    [t('series_races'), meta.race_count],
+    [t('completed_races'), meta.finished_race_count],
+    [t('racers'), meta.racer_count],
+    [t('updated_label'), fmtDate(new Date().toISOString())],
+  ];
+  return `<div style="display:flex;justify-content:center;margin-bottom:16px">
+    <div class="card" style="flex:1 1 260px;max-width:340px;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column">
+      <div style="background:var(--menu-section-bg,#eee);font-weight:700;padding:5px 10px;margin:-12px -12px 8px;border-radius:8px 8px 0 0;font-size:13px">${t('league_info')}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <tbody>${rows.map(([k, v]) => `<tr>
+          <td style="text-align:right;color:var(--muted);padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top">${k}:</td>
+          <td style="font-weight:600">${v}</td></tr>`).join('')}</tbody>
+      </table>
+      ${meta.organizer_name ? `<div style="border-top:1px solid var(--border);margin-top:auto;padding-top:6px;color:var(--muted);font-size:12.5px">
+        ${t('organized_by')}: <strong style="color:var(--text)">${esc(meta.organizer_name)}</strong>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
 // One table per multi-lap distance: each finisher with a column per lap split.
 function lapTimesTables(results) {
   const byDist = groupByDistance(results);
@@ -1867,7 +1900,7 @@ async function viewLeagues() {
 async function viewLeague(id, tab) {
   const data = await api(`/leagues/${id}/standings`).catch(() => null);
   if (!data) { main.innerHTML = `<div class="card">${t('league_not_found')}</div>`; return; }
-  const { league, races, individual, teams } = data;
+  const { league, races, individual, teams, meta } = data;
   currentLeague = data; // drives the team-members / racer detail modals
   const provisional = races.some((r) => r.status !== 'finished');
 
@@ -1878,6 +1911,7 @@ async function viewLeague(id, tab) {
       <p style="text-align:center;margin:0 0 12px;color:var(--muted)">
         ${league.season ? esc(league.season) + ' — ' : ''}${t('league_rounds_count', { n: races.length })}
         ${provisional ? ` · ${t('league_provisional')}` : ''}</p>
+      ${meta ? leagueInfoPanel(league, meta) : ''}
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/league/${id}/${k}">${t(key)}</a>`).join('')}
       </div>
