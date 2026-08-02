@@ -307,6 +307,7 @@
 
     <string name="reader_idle">Reader: off</string>
     <string name="reader_line">Reader: %1$s</string>
+    <string name="reader_network">Network: %1$s</string>
     <string name="connect_reader">▶ Connect reader</string>
     <string name="disconnect_reader">■ Disconnect</string>
     <string name="reader_needs_config">Set the reader IP in Settings first.</string>

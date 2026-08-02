@@ -124,13 +124,22 @@ public class RaceActivity extends BaseActivity {
     private TextView readerStatus;
     private Button connectButton;
     private boolean bridgeRunning = false;
+    private String lastLog = "";
     private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
         @Override
         public void onReceive(android.content.Context context, android.content.Intent intent) {
             bridgeRunning = intent.getBooleanExtra(BridgeService.EXTRA_RUNNING, false);
             boolean connected = intent.getBooleanExtra(BridgeService.EXTRA_READER_CONNECTED, false);
-            readerStatus.setText(getString(R.string.reader_line, getString(
-                    connected ? R.string.connected : bridgeRunning ? R.string.disconnected : R.string.off)));
+            String log = intent.getStringExtra(BridgeService.EXTRA_LOG);
+            if (log != null && !log.isEmpty()) lastLog = log;
+            String netState = intent.getStringExtra(BridgeService.EXTRA_WIFI_STATE);
+            String text = getString(R.string.reader_line, getString(
+                    connected ? R.string.connected : bridgeRunning ? R.string.disconnected : R.string.off));
+            if (!connected && bridgeRunning) {
+                if (netState != null && !netState.isEmpty()) text += "\n" + getString(R.string.reader_network, netState);
+                if (!lastLog.isEmpty()) text += "\n" + lastLog;
+            }
+            readerStatus.setText(text);
             connectButton.setText(bridgeRunning ? R.string.disconnect_reader : R.string.connect_reader);
             refresh();
         }
