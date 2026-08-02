@@ -5,6 +5,7 @@ import android.net.ConnectivityManager;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -54,8 +55,12 @@ public final class ReaderNet {
 
     /**
      * The /24 prefix (e.g. "192.168.0.") to sweep when scanning for the reader:
-     * the subnet of the reader IP already entered, else of whichever network is
-     * actually active (an Ethernet/WiFi hold, else the OS default), else null.
+     * the subnet of the reader IP already entered, else — with no IP typed —
+     * the wired Ethernet interface's subnet (where the reader almost always
+     * sits), else whichever network is active (an Ethernet/WiFi hold, else the
+     * OS default), else null. Preferring Ethernet is what stops an empty-field
+     * scan from sweeping the tablet's WiFi subnet (192.168.1.x) when the reader
+     * is on the cable's LAN (192.168.0.x).
      */
     public static String subnetPrefix(Context ctx, String hintIp) {
         // A typed reader IP is the operator telling us the reader's subnet.
@@ -65,6 +70,8 @@ public final class ReaderNet {
                 ctx.getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return null;
         try {
+            String eth = ethernetSubnet(cm);
+            if (eth != null) return eth;
             Network net = ReaderEthernet.getNetwork();
             if (net == null) net = ReaderWifi.getNetwork();
             if (net == null) net = cm.getActiveNetwork();
@@ -72,6 +79,18 @@ public final class ReaderNet {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /** The /24 of the first wired-Ethernet interface the device has, or null. */
+    private static String ethernetSubnet(ConnectivityManager cm) {
+        for (Network net : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(net);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                String s = subnetOf(cm, net);
+                if (s != null) return s;
+            }
+        }
+        return null;
     }
 
     /** First non-loopback IPv4 /24 prefix on the given network, or null. */
