@@ -80,8 +80,9 @@ public final class ReaderScanner {
 
     /**
      * Steps sequentially through the WiFi subnet so the UI can show the address
-     * being probed, reporting each reader it finds. Runs on its own thread;
-     * callbacks fire on that thread — marshal to the UI thread in the listener.
+     * being probed, stopping at the first reader it finds. Runs on its own
+     * thread; callbacks fire on that thread — marshal to the UI thread in the
+     * listener.
      */
     public static Handle scanProgressive(Context ctx, String hintIp, int port,
                                          int timeoutMs, ScanListener listener) {
@@ -100,6 +101,7 @@ public final class ReaderScanner {
                 try {
                     socket.connect(new InetSocketAddress(ip, port), timeoutMs);
                     listener.onFound(ip);
+                    break; // reader found — no need to sweep the rest of the subnet
                 } catch (Exception ignored) {
                     // closed or unreachable: not the reader
                 } finally {
