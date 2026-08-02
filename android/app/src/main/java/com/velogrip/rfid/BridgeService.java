@@ -172,8 +172,7 @@ public class BridgeService extends Service {
         // then a held Ethernet adapter (automatic, no setup needed); only fall
         // back to the ambiguous "default network" when neither is held — e.g.
         // the tablet is already sitting on the reader's WiFi as its only network.
-        Network network = ReaderWifi.getNetwork();
-        if (network == null) network = ReaderEthernet.getNetwork();
+        Network network = ReaderNet.pickForHost(this, prefs.readerHost());
         Socket socket = network != null
                 ? network.getSocketFactory().createSocket()
                 : new Socket();

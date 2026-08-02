@@ -58,7 +58,7 @@ public class ProgramChipsActivity extends BaseActivity {
     private void connect() {
         status.setText(R.string.connecting);
         status.setTextColor(0xFFC0392B);
-        programmer = new ChipProgrammer(prefs, (message, connected) -> runOnUiThread(() -> {
+        programmer = new ChipProgrammer(this, prefs, (message, connected) -> runOnUiThread(() -> {
             status.setText(connected ? getString(R.string.connected_reader, message) : message);
             status.setTextColor(connected ? 0xFF3F7A16 : 0xFFC0392B);
             readBtn.setEnabled(connected);

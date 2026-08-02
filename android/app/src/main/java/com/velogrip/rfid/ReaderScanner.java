@@ -1,13 +1,8 @@
 package com.velogrip.rfid;
 
 import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.LinkAddress;
-import android.net.LinkProperties;
 import android.net.Network;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -32,8 +27,12 @@ public final class ReaderScanner {
 
     /** Returns the first IP with the port open, or null. Blocks; call off the UI thread. */
     public static String scan(Context ctx, String hintIp, int port) {
-        String prefix = subnetPrefix(ctx, hintIp);
+        String prefix = ReaderNet.subnetPrefix(ctx, hintIp);
         if (prefix == null) return null;
+        // Probe over the interface actually on that subnet (Ethernet included),
+        // not the OS default — a bare socket would sweep the reader's addresses
+        // from the WiFi side and reach nothing.
+        final Network bindNet = ReaderNet.pickForHost(ctx, prefix + "1");
 
         ExecutorService pool = Executors.newFixedThreadPool(THREADS);
         AtomicReference<String> found = new AtomicReference<>(null);
@@ -42,7 +41,7 @@ public final class ReaderScanner {
             final String ip = prefix + host;
             probes.add(() -> {
                 if (found.get() != null) return;
-                Socket socket = new Socket();
+                Socket socket = newSocket(bindNet);
                 try {
                     socket.connect(new InetSocketAddress(ip, port), CONNECT_TIMEOUT_MS);
                     found.compareAndSet(null, ip);
@@ -87,7 +86,8 @@ public final class ReaderScanner {
     public static Handle scanProgressive(Context ctx, String hintIp, int port,
                                          int timeoutMs, ScanListener listener) {
         final Handle handle = new Handle();
-        final String prefix = subnetPrefix(ctx, hintIp);
+        final String prefix = ReaderNet.subnetPrefix(ctx, hintIp);
+        final Network bindNet = prefix == null ? null : ReaderNet.pickForHost(ctx, prefix + "1");
         new Thread(() -> {
             if (prefix == null) {
                 listener.onFinished(false, true);
@@ -96,7 +96,7 @@ public final class ReaderScanner {
             for (int host = 1; host <= 254 && !handle.cancelled; host++) {
                 final String ip = prefix + host;
                 listener.onProgress(ip);
-                Socket socket = new Socket();
+                Socket socket = newSocket(bindNet);
                 try {
                     socket.connect(new InetSocketAddress(ip, port), timeoutMs);
                     listener.onFound(ip);
@@ -113,42 +113,15 @@ public final class ReaderScanner {
         return handle;
     }
 
-    private static String subnetPrefix(Context ctx, String hintIp) {
-        // Prefer whichever network the reader socket itself would bind to (an
-        // explicit WiFi/Ethernet hold), else the OS default network — checked
-        // via ConnectivityManager/LinkProperties so it reflects the network
-        // that's actually active right now, Ethernet included. (The old
-        // WifiManager-only lookup could report a stale WiFi address even while
-        // connected over Ethernet, scanning the wrong subnet entirely.)
-        try {
-            ConnectivityManager cm = (ConnectivityManager)
-                    ctx.getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
-            Network net = ReaderEthernet.getNetwork();
-            if (net == null) net = ReaderWifi.getNetwork();
-            if (net == null && cm != null) net = cm.getActiveNetwork();
-            String prefix = subnetPrefixOf(cm, net);
-            if (prefix != null) return prefix;
-        } catch (Exception ignored) { }
-        // Fall back to the subnet of whatever IP is already typed in.
-        if (hintIp != null && hintIp.matches("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) {
-            return hintIp.substring(0, hintIp.lastIndexOf('.') + 1);
-        }
-        return null;
-    }
-
-    /** First IPv4 /24 prefix (e.g. "192.168.0.") on the given network, or null. */
-    private static String subnetPrefixOf(ConnectivityManager cm, Network net) {
-        if (cm == null || net == null) return null;
-        LinkProperties lp = cm.getLinkProperties(net);
-        if (lp == null) return null;
-        for (LinkAddress la : lp.getLinkAddresses()) {
-            InetAddress addr = la.getAddress();
-            if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
-                String ip = addr.getHostAddress();
-                int lastDot = ip.lastIndexOf('.');
-                if (lastDot > 0) return ip.substring(0, lastDot + 1);
+    /** A socket bound to the reader's network when one is held, else a plain one. */
+    private static Socket newSocket(Network bindNet) {
+        if (bindNet != null) {
+            try {
+                return bindNet.getSocketFactory().createSocket();
+            } catch (Exception ignored) {
+                // fall through to a plain socket
             }
         }
-        return null;
+        return new Socket();
     }
 }

@@ -1,5 +1,6 @@
 package com.velogrip.rfid;
 
+import android.content.Context;
 import android.net.Network;
 
 import com.velogrip.rfid.protocol.LlrpEngine;
@@ -26,6 +27,7 @@ public final class ChipProgrammer {
         void onStatus(String message, boolean connected);
     }
 
+    private final Context appContext;
     private final String host;
     private final int port;
     private final String protocol;
@@ -37,7 +39,8 @@ public final class ChipProgrammer {
     private LlrpEngine engine;
     private volatile boolean connected;
 
-    public ChipProgrammer(Prefs prefs, Listener listener) {
+    public ChipProgrammer(Context ctx, Prefs prefs, Listener listener) {
+        this.appContext = ctx.getApplicationContext();
         this.host = prefs.readerHost();
         this.port = prefs.readerPort();
         this.protocol = prefs.protocol();
@@ -51,10 +54,10 @@ public final class ChipProgrammer {
         if (isDemo()) { connected = true; listener.onStatus("Demo reader", true); return; }
         if (host.isEmpty()) { listener.onStatus("No reader IP set", false); return; }
         try {
-            // Same network the background bridge uses: an explicit WiFi/Ethernet
-            // hold if one is active, else the OS default network.
-            Network network = ReaderWifi.getNetwork();
-            if (network == null) network = ReaderEthernet.getNetwork();
+            // Bind to whichever interface is actually on the reader's subnet
+            // (Ethernet included), not the OS default — which on a tablet with
+            // WiFi/cellular rides right past a reader on an internet-less LAN.
+            Network network = ReaderNet.pickForHost(appContext, host);
             socket = network != null ? network.getSocketFactory().createSocket() : new Socket();
             socket.connect(new InetSocketAddress(host, port), 5000);
             socket.setSoTimeout(1500);
