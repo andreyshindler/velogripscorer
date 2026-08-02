@@ -7,12 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.net.ConnectivityManager;
 import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.net.NetworkRequest;
-import android.net.wifi.WifiNetworkSpecifier;
-import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 
@@ -34,17 +29,18 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Foreground service that bridges the RFID reader to the scoring platform:
  *
- *   [RFID reader] --TCP over reader WiFi--> [this service] --HTTPS--> [server]
+ *   [RFID reader] --TCP over reader WiFi/Ethernet--> [this service] --HTTPS--> [server]
  *
- * When a WiFi SSID is configured (Android 10+), the service requests that
- * network with a WifiNetworkSpecifier and binds only the reader socket to it,
- * so the phone keeps cellular/internet for uploads while talking to the
- * reader's router on a network that has no internet access.
+ * When a WiFi SSID is configured (Android 10+), the operator's explicit
+ * Connect in Settings ({@link ReaderWifi}) requests that network and binds
+ * only the reader socket to it. A wired Ethernet adapter needs no such
+ * configuration, so {@link ReaderEthernet} holds it automatically. Either way
+ * the phone keeps cellular/WiFi for uploads while talking to the reader's
+ * router on a network that may have no internet access of its own.
  */
 public class BridgeService extends Service {
 
@@ -70,8 +66,6 @@ public class BridgeService extends Service {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean readerConnected = new AtomicBoolean(false);
     private final AtomicLong uploadedTotal = new AtomicLong(0);
-    private final AtomicReference<Network> readerNetwork = new AtomicReference<>(null);
-    private final AtomicReference<String> wifiState = new AtomicReference<>("default");
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
@@ -84,7 +78,6 @@ public class BridgeService extends Service {
     private RaceStore store;
     private Thread readerThread;
     private Thread uploadThread;
-    private ConnectivityManager.NetworkCallback wifiCallback;
     private PowerManager.WakeLock wakeLock;
     private volatile Socket readerSocket;
 
@@ -116,7 +109,10 @@ public class BridgeService extends Service {
         wakeLock.acquire();
         // Reader WiFi is (re)connected from the foreground console on each race
         // start (RaceTimingActivity.startReader) — more reliable than from a
-        // background service — and the reader socket binds to it here.
+        // background service — and the reader socket binds to it here. Ethernet
+        // needs no such per-race setup: hold it automatically the whole time
+        // the bridge runs, so a wired adapter (if any) just works.
+        ReaderEthernet.start(this);
 
         readerThread = new Thread(this::readerLoop, "reader");
         readerThread.start();
@@ -130,67 +126,12 @@ public class BridgeService extends Service {
         closeSocket();
         if (readerThread != null) readerThread.interrupt();
         if (uploadThread != null) uploadThread.interrupt();
-        if (wifiCallback != null) {
-            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            try {
-                cm.unregisterNetworkCallback(wifiCallback);
-            } catch (IllegalArgumentException ignored) { }
-            wifiCallback = null;
-        }
+        ReaderEthernet.stop(this);
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (tone != null) { tone.release(); tone = null; }
         readerConnected.set(false);
         broadcastStatus(getString(R.string.log_stopped));
         stopForeground(true);
-    }
-
-    // ---- Reader WiFi binding (local-only network, phone keeps internet) ----
-
-    private void requestReaderWifi() {
-        String ssid = prefs.wifiSsid();
-        if (ssid.isEmpty()) {
-            wifiState.set("default");
-            return;
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            // Pre-Android 10: user must join the reader WiFi manually in system settings.
-            wifiState.set("manual");
-            broadcastStatus(getString(R.string.log_wifi_manual, ssid));
-            return;
-        }
-        wifiState.set("requesting");
-        WifiNetworkSpecifier.Builder spec = new WifiNetworkSpecifier.Builder().setSsid(ssid);
-        if (!prefs.wifiPass().isEmpty()) spec.setWpa2Passphrase(prefs.wifiPass());
-        NetworkRequest request = new NetworkRequest.Builder()
-                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .setNetworkSpecifier(spec.build())
-                .build();
-        final ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        wifiCallback = new ConnectivityManager.NetworkCallback() {
-            @Override
-            public void onAvailable(Network network) {
-                readerNetwork.set(network);
-                wifiState.set("connected");
-                broadcastStatus(getString(R.string.log_wifi_connected, prefs.wifiSsid()));
-                closeSocket(); // force reconnect through the reader network
-            }
-
-            @Override
-            public void onLost(Network network) {
-                readerNetwork.compareAndSet(network, null);
-                wifiState.set("lost");
-                broadcastStatus(getString(R.string.log_wifi_lost));
-                closeSocket();
-            }
-
-            @Override
-            public void onUnavailable() {
-                wifiState.set("unavailable");
-                broadcastStatus(getString(R.string.log_wifi_unavailable));
-            }
-        };
-        cm.requestNetwork(request, wifiCallback);
     }
 
     // ---- Reader connection loop ----
@@ -203,7 +144,7 @@ public class BridgeService extends Service {
         int backoffMs = 1000;
         while (running.get()) {
             try {
-                connectAndRead();   // binds to the reader WiFi if held, else default network
+                connectAndRead();   // binds to reader WiFi/Ethernet if held, else default network
                 backoffMs = 1000;
             } catch (InterruptedException e) {
                 return;
@@ -227,9 +168,12 @@ public class BridgeService extends Service {
                 : Prefs.PROTOCOL_UHF.equals(prefs.protocol()) ? new UhfFrameParser()
                 : new AsciiLineParser();
 
-        // Bind to the reader WiFi when held (keeps cellular for uploads); when
-        // it isn't, use the default network (phone already on the reader network).
+        // Prefer an explicit reader-WiFi hold (operator-configured in Settings),
+        // then a held Ethernet adapter (automatic, no setup needed); only fall
+        // back to the ambiguous "default network" when neither is held — e.g.
+        // the tablet is already sitting on the reader's WiFi as its only network.
         Network network = ReaderWifi.getNetwork();
+        if (network == null) network = ReaderEthernet.getNetwork();
         Socket socket = network != null
                 ? network.getSocketFactory().createSocket()
                 : new Socket();
@@ -410,12 +354,19 @@ public class BridgeService extends Service {
 
     // ---- Status plumbing ----
 
+    /** Which network the reader socket is actually bound to right now. */
+    private static String networkState() {
+        if (ReaderWifi.isConnected()) return "wifi";
+        if (ReaderEthernet.isConnected()) return "ethernet";
+        return "default";
+    }
+
     private Intent statusIntent(String log) {
         Intent intent = new Intent(ACTION_STATUS);
         intent.setPackage(getPackageName());
         intent.putExtra(EXTRA_RUNNING, running.get());
         intent.putExtra(EXTRA_READER_CONNECTED, readerConnected.get());
-        intent.putExtra(EXTRA_WIFI_STATE, wifiState.get());
+        intent.putExtra(EXTRA_WIFI_STATE, networkState());
         intent.putExtra(EXTRA_PENDING, store.pendingCount());
         intent.putExtra(EXTRA_UPLOADED, uploadedTotal.get());
         if (log != null) intent.putExtra(EXTRA_LOG, log);
