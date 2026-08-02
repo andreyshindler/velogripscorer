@@ -1,9 +1,13 @@
 package com.velogrip.rfid;
 
 import android.content.Context;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -14,10 +18,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * "Scan for reader": sweeps the /24 of the phone's current WiFi network (or of
- * the currently entered reader IP as a fallback) probing the reader TCP port,
- * mirroring the reader-discovery flow of commercial timing apps. Join the RFID
- * router's WiFi before scanning.
+ * "Scan for reader": sweeps the /24 of the phone's current reader network (or
+ * of the currently entered reader IP as a fallback) probing the reader TCP
+ * port, mirroring the reader-discovery flow of commercial timing apps. Connect
+ * to the RFID router — WiFi or Ethernet — before scanning.
  */
 public final class ReaderScanner {
 
@@ -110,18 +114,40 @@ public final class ReaderScanner {
     }
 
     private static String subnetPrefix(Context ctx, String hintIp) {
-        // Prefer the phone's current WiFi address (the RFID router's subnet).
+        // Prefer whichever network the reader socket itself would bind to (an
+        // explicit WiFi/Ethernet hold), else the OS default network — checked
+        // via ConnectivityManager/LinkProperties so it reflects the network
+        // that's actually active right now, Ethernet included. (The old
+        // WifiManager-only lookup could report a stale WiFi address even while
+        // connected over Ethernet, scanning the wrong subnet entirely.)
         try {
-            WifiManager wifi = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            WifiInfo info = wifi != null ? wifi.getConnectionInfo() : null;
-            int ip = info != null ? info.getIpAddress() : 0;
-            if (ip != 0) {
-                return (ip & 0xFF) + "." + ((ip >> 8) & 0xFF) + "." + ((ip >> 16) & 0xFF) + ".";
-            }
+            ConnectivityManager cm = (ConnectivityManager)
+                    ctx.getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network net = ReaderEthernet.getNetwork();
+            if (net == null) net = ReaderWifi.getNetwork();
+            if (net == null && cm != null) net = cm.getActiveNetwork();
+            String prefix = subnetPrefixOf(cm, net);
+            if (prefix != null) return prefix;
         } catch (Exception ignored) { }
         // Fall back to the subnet of whatever IP is already typed in.
         if (hintIp != null && hintIp.matches("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) {
             return hintIp.substring(0, hintIp.lastIndexOf('.') + 1);
+        }
+        return null;
+    }
+
+    /** First IPv4 /24 prefix (e.g. "192.168.0.") on the given network, or null. */
+    private static String subnetPrefixOf(ConnectivityManager cm, Network net) {
+        if (cm == null || net == null) return null;
+        LinkProperties lp = cm.getLinkProperties(net);
+        if (lp == null) return null;
+        for (LinkAddress la : lp.getLinkAddresses()) {
+            InetAddress addr = la.getAddress();
+            if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+                String ip = addr.getHostAddress();
+                int lastDot = ip.lastIndexOf('.');
+                if (lastDot > 0) return ip.substring(0, lastDot + 1);
+            }
         }
         return null;
     }

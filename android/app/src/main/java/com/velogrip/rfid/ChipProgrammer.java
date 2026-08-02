@@ -1,5 +1,7 @@
 package com.velogrip.rfid;
 
+import android.net.Network;
+
 import com.velogrip.rfid.protocol.LlrpEngine;
 
 import java.io.InputStream;
@@ -49,7 +51,11 @@ public final class ChipProgrammer {
         if (isDemo()) { connected = true; listener.onStatus("Demo reader", true); return; }
         if (host.isEmpty()) { listener.onStatus("No reader IP set", false); return; }
         try {
-            socket = new Socket();
+            // Same network the background bridge uses: an explicit WiFi/Ethernet
+            // hold if one is active, else the OS default network.
+            Network network = ReaderWifi.getNetwork();
+            if (network == null) network = ReaderEthernet.getNetwork();
+            socket = network != null ? network.getSocketFactory().createSocket() : new Socket();
             socket.connect(new InetSocketAddress(host, port), 5000);
             socket.setSoTimeout(1500);
             in = socket.getInputStream();
