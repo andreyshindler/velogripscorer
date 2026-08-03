@@ -208,11 +208,17 @@ function closeSse() {
   if (state.sse) { state.sse.close(); state.sse = null; }
 }
 
+// The Live-results tab polls for newly-started races; stop it on navigation.
+let livePollTimer = null;
+function stopLivePoll() {
+  if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+}
+
 // Highlight the top-nav link for the current page (Home / Finished races /
 // League / Start lists / Admin), like the standings tabs.
 function setActiveNav(page) {
-  const key = { '': 'home', finished: 'finished', leagues: 'leagues', league: 'leagues', contact: 'contact', startlists: 'startlists', admin: 'admin' }[page || ''];
-  const linkKey = { '#/': 'home', '#/finished': 'finished', '#/leagues': 'leagues', '#/contact': 'contact', '#/startlists': 'startlists', '#/admin': 'admin' };
+  const key = { '': 'home', live: 'live', finished: 'finished', leagues: 'leagues', league: 'leagues', contact: 'contact', startlists: 'startlists', admin: 'admin' }[page || ''];
+  const linkKey = { '#/': 'home', '#/live': 'live', '#/finished': 'finished', '#/leagues': 'leagues', '#/contact': 'contact', '#/startlists': 'startlists', '#/admin': 'admin' };
   document.querySelectorAll('.topnav a').forEach((a) => {
     const on = key && linkKey[a.getAttribute('href')] === key;
     a.classList.toggle('active', !!on);
@@ -222,12 +228,14 @@ function setActiveNav(page) {
 
 async function route() {
   closeSse();
+  stopLivePoll();
   const hash = location.hash.slice(1) || '/';
   const [, page, arg, sub] = hash.match(/^\/([^/]*)\/?([^/]*)\/?([^/]*)/) || [];
   setActiveNav(page);
   try {
     if (!page) return viewHome();
     if (page === 'login') return viewLogin();
+    if (page === 'live') return viewLiveRaces();
     if (page === 'finished') return viewFinishedRaces();
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
@@ -355,6 +363,70 @@ function finishedCard(c) {
         <span>🗓 ${fmtDate(c.start_at)}</span>
       </div>
     </a>`;
+}
+
+// ---------- live results (active races, auto-refreshing) ----------
+
+async function viewLiveRaces() {
+  main.innerHTML = `
+    <div class="brand-row">
+      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
+      <h1 class="page-title-center">${t('nav_live')}</h1>
+    </div>
+    <p class="muted" style="text-align:center;margin:-10px 0 18px">${t('live_updates_note')}</p>
+    <div id="live-list"></div>`;
+  await loadLiveRaces();
+  // Poll so a race that goes live (or finishes) shows up without a reload.
+  livePollTimer = setInterval(loadLiveRaces, 15000);
+}
+
+async function loadLiveRaces() {
+  const box = document.getElementById('live-list');
+  if (!box) { stopLivePoll(); return; }
+  try {
+    const { contests } = await api('/contests?status=active');
+    const races = (contests || []).filter((c) => c.kind === 'race');
+    setLiveDot(races.length > 0);
+    box.innerHTML = races.length
+      ? `<div class="grid">${races
+          .slice()
+          .sort((a, b) => new Date(b.start_at) - new Date(a.start_at))
+          .map(liveCard)
+          .join('')}</div>`
+      : `<p class="muted" style="text-align:center">${t('no_live_races')}</p>`;
+  } catch { /* transient: keep the last render */ }
+}
+
+function liveCard(c) {
+  const league = String(c.league_names || '').trim();
+  return `
+    <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
+      <div class="card-head">
+        <div class="card-pills">
+          ${league ? `<span class="pill tag">🏆 ${esc(league)}</span>` : ''}
+          <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
+          <span class="pill live"><span class="live-dot"></span>${t('hero_live')}</span>
+        </div>
+        <span class="pill view-results">${t('view_results_link')} ❯</span>
+      </div>
+      <h3>${esc(c.title)}</h3>
+      <div class="meta">
+        ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
+        <span>🗓 ${fmtDate(c.start_at)}</span>
+      </div>
+    </a>`;
+}
+
+// Light the ● on the nav tab whenever a race is live, from any page.
+function setLiveDot(on) {
+  const dot = document.querySelector('#nav-live .live-dot');
+  if (dot) dot.hidden = !on;
+}
+async function refreshLiveDot() {
+  try {
+    const { contests } = await api('/contests?status=active');
+    setLiveDot((contests || []).some((c) => c.kind === 'race'));
+  } catch { /* ignore */ }
 }
 
 // ---------- contact / about ----------
@@ -2415,3 +2487,7 @@ if (rr) {
 setLang(LANG);
 renderChrome();
 route();
+// Keep the nav's live ● in sync from any page (the Live tab drives its own
+// refresh while open; this covers everywhere else).
+refreshLiveDot();
+setInterval(() => { if (!livePollTimer) refreshLiveDot(); }, 30000);
