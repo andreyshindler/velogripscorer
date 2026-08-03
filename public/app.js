@@ -467,7 +467,10 @@ function viewLogin() {
         <label for="f-email">${t('email')}</label>
         <input id="f-email" type="email" required autocomplete="email">
         <label for="f-password">${t('password')}</label>
-        <input id="f-password" type="password" required minlength="8" autocomplete="current-password">
+        <div class="pw-wrap">
+          <input id="f-password" type="password" required minlength="8" autocomplete="current-password">
+          <button type="button" class="pw-toggle" data-target="f-password" aria-label="${t('show_password')}" aria-pressed="false">👁</button>
+        </div>
         <button class="btn mt" type="submit" id="auth-submit">${t('login')}</button>
       </form>
     </div>`;
@@ -481,6 +484,7 @@ function viewLogin() {
   };
   document.getElementById('tab-login').onclick = () => setMode('login');
   document.getElementById('tab-register').onclick = () => setMode('register');
+  wirePasswordToggles(main);
   document.getElementById('auth-form').onsubmit = async (e) => {
     e.preventDefault();
     try {
@@ -494,6 +498,22 @@ function viewLogin() {
       location.hash = '#/';
     } catch (err) { toast(err.message, true); }
   };
+}
+
+// Show/hide toggle for any password field wrapped in .pw-wrap (the 👁 button
+// carries data-target="<input id>").
+function wirePasswordToggles(root) {
+  (root || document).querySelectorAll('.pw-toggle').forEach((btn) => {
+    btn.onclick = () => {
+      const input = document.getElementById(btn.dataset.target);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-pressed', String(show));
+      btn.setAttribute('aria-label', t(show ? 'hide_password' : 'show_password'));
+      btn.classList.toggle('on', show);
+    };
+  });
 }
 
 // ---------- my start lists ----------
