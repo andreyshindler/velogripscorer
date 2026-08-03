@@ -63,10 +63,18 @@ router.get('/leagues', (req, res) => {
             (SELECT c.sport FROM league_races lr JOIN contests c ON c.id = lr.contest_id
               WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS sport,
             (SELECT c.location FROM league_races lr JOIN contests c ON c.id = lr.contest_id
-              WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS location
+              WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS location,
+            (SELECT u.name FROM users u WHERE u.id = l.created_by) AS creator_name,
+            (SELECT u.role FROM users u WHERE u.id = l.created_by) AS creator_role
        FROM leagues l WHERE ${where} ORDER BY l.created_at DESC`
   ).all(...(status && status !== 'all' ? [status] : []));
-  const leagues = rows.map(({ settings, ...row }) => ({ ...row, racer_count: leagueRacerCount({ id: row.id, settings }) }));
+  const leagues = rows.map(({ settings, creator_name, creator_role, ...row }) => ({
+    ...row,
+    racer_count: leagueRacerCount({ id: row.id, settings }),
+    // Who to credit: the creator's name, or the brand for the admin account /
+    // legacy leagues whose creator was removed.
+    organizer: creator_role && creator_role !== 'admin' && creator_name ? creator_name : 'VeloGrip',
+  }));
   res.json({ leagues });
 });
 
@@ -108,6 +116,9 @@ router.get('/leagues/:id/standings', async (req, res) => {
     .map((c) => c.start_at)
     .filter(Boolean)
     .reduce((max, d) => (!max || new Date(d) > new Date(max) ? d : max), null);
+  const creator = league.created_by
+    ? db.prepare('SELECT name, role FROM users WHERE id = ?').get(league.created_by)
+    : null;
   const meta = {
     sport: sports.length === 1 ? sports[0] : null,
     location: locations.length === 1 ? locations[0] : null,
@@ -115,6 +126,7 @@ router.get('/leagues/:id/standings', async (req, res) => {
     finished_race_count: raceContests.filter((c) => c.status === 'finished').length,
     racer_count: individual.length,
     updated_at: lastRaceAt,
+    organizer: creator && creator.role !== 'admin' && creator.name ? creator.name : 'VeloGrip',
   };
 
   if (req.query.format === 'csv') {

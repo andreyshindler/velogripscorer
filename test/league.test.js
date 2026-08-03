@@ -282,6 +282,9 @@ test('any signed-in user can create & manage their own league; not others races'
   // ...but cannot attach a race they don't organise (the admin's races).
   assert.equal((await request(app).post(`/api/leagues/${ownId}/races`).set(auth(user))
     .send({ contest_id: races[0].contest.id })).status, 403);
+  // The public list credits the league to its creator's name.
+  const listed = (await request(app).get('/api/leagues?status=all')).body.leagues;
+  assert.equal(listed.find((l) => l.id === ownId).organizer, 'Regular Runner');
   // Clean up so it doesn't affect later league listings.
   assert.equal((await request(app).delete(`/api/leagues/${ownId}`).set(auth(user))).status, 200);
 });
@@ -320,6 +323,7 @@ test('league CRUD: create with defaults, patch settings, validation', async () =
   const listed = await request(app).get('/api/leagues');
   assert.equal(listed.status, 200);
   assert.equal(listed.body.leagues.length, 2); // running + MTB
+  assert.equal(listed.body.leagues[0].organizer, 'VeloGrip', 'admin-created leagues credit the brand');
 });
 
 test('a non-owner (non-admin) cannot manage someone else\'s league', async () => {

@@ -1317,7 +1317,7 @@ function leagueInfoPanel(league, meta) {
     [t('completed_races'), meta.finished_race_count],
     [t('racers'), meta.racer_count],
     [t('updated_label'), fmtDate(meta.updated_at)],
-    [t('organized_by'), 'VeloGrip'],
+    [t('organized_by'), esc(meta.organizer || 'VeloGrip')],
   ];
   return `<div style="display:flex;justify-content:center;margin-bottom:16px">
     <div class="card" style="flex:1 1 260px;max-width:340px;margin:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column">
@@ -2050,20 +2050,36 @@ async function viewLeagues() {
     ${leagues.length ? `<div class="grid">${leagues.map((l) => {
       const allRacesDone = l.race_count > 0 && l.finished_race_count === l.race_count;
       const isFinished = l.status === 'finished' || allRacesDone;
+      const canDelete = state.user && (state.user.role === 'admin' || l.created_by === state.user.id);
       return `
-      <a class="card contest-card" href="#/league/${l.id}">
-        <div class="card-pills">
-          ${l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : ''}
-          <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
+      <a class="card contest-card" href="#/league/${l.id}" style="color:inherit;text-decoration:none">
+        <div class="card-head">
+          <div class="card-pills">
+            ${l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : ''}
+            <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
+          </div>
+          ${canDelete ? `<button class="btn small danger league-del" data-id="${l.id}" data-name="${esc(l.name)}">${t('delete')}</button>` : ''}
         </div>
         <h3>${esc(l.name)}</h3>
         <div class="meta">
           ${l.location ? `<span>📍 ${esc(l.location)}</span>` : ''}
           <span>${l.season ? esc(l.season) + ' · ' : ''}${t('league_races_finished', { done: l.finished_race_count, total: l.race_count })}</span>
           <span>👥 ${l.racer_count} ${t('racers')}</span>
+          <span>🏳️ ${t('organized_by')}: ${esc(l.organizer || 'VeloGrip')}</span>
         </div>
       </a>`;
     }).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
+
+  // Delete buttons live inside the card link — intercept so they don't navigate.
+  main.querySelectorAll('.league-del').forEach((btn) => {
+    const handler = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!confirm(t('league_confirm_delete', { name: btn.dataset.name }))) return;
+      try { await api(`/leagues/${btn.dataset.id}`, { method: 'DELETE' }); toast(t('league_deleted')); viewLeagues(); }
+      catch (err) { toast(err.message, true); }
+    };
+    btn.addEventListener('click', handler);
+  });
 }
 
 async function viewLeague(id, tab) {
