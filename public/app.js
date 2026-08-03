@@ -884,8 +884,8 @@ async function viewContest(id, tab) {
         <div class="muted">
           <span class="pill">🏁 ${esc(sportLabel(c.sport))}</span>
           ${c.location ? `<span class="pill tag">📍 ${esc(c.location)}</span>` : ''}
-          <span class="pill ${c.status === 'finished' ? 'finished' : 'live'}">
-            ${c.status === 'finished' ? t('status_finished') : '● ' + t('hero_live')}
+          <span class="pill ${c.status === 'finished' ? 'finished' : c.started ? 'live' : 'tag'}">
+            ${c.status === 'finished' ? t('status_finished') : c.started ? '● ' + t('hero_live') : t('not_started_yet')}
           </span>
           ${t('by')} <a href="#/profile/${c.organizer.id}">${esc(c.organizer.name)}</a>
         </div>
@@ -954,7 +954,7 @@ async function renderDetails(box, c) {
       <ul class="stat-list">
         <li><span>${t('starts')}</span><strong>${fmtDate(c.start_at)}</strong></li>
         <li><span>${t('ends')}</span><strong>${fmtDate(c.end_at)}</strong></li>
-        <li><span>${t('status')}</span><strong>${c.status === 'finished' ? t('status_finished') : t('hero_live')}</strong></li>
+        <li><span>${t('status')}</span><strong>${c.status === 'finished' ? t('status_finished') : c.started ? t('hero_live') : t('not_started_yet')}</strong></li>
         ${c.invite_code ? `<li><span>${t('invite_code')}</span><strong><code>${esc(c.invite_code)}</code></strong></li>` : ''}
       </ul>
       ${c.description ? `<p style="white-space:pre-wrap;margin-top:8px">${esc(c.description)}</p>` : ''}
@@ -981,7 +981,8 @@ async function renderRaceResults(box, c) {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <h3 style="margin:0">${t('race_results')} ${c.status === 'finished'
           ? `<span class="pill finished">${t('final_results_label')}</span>`
-          : `<span class="live-indicator">● ${t('live')}</span>`}</h3>
+          : c.started ? `<span class="live-indicator">● ${t('live')}</span>`
+          : `<span class="pill">${t('not_started_yet')}</span>`}</h3>
         <div style="display:flex;gap:8px;align-items:center">
           ${categories.length ? `<select id="cat-filter" aria-label="${t('category')}">
             <option value="">${t('all_cats')}</option>
@@ -2501,8 +2502,10 @@ async function renderLeagueManager(box, scope, refresh) {
     card.className = 'card mt';
     card.innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <h3 style="margin:0"><a href="#/league/${league.id}">${esc(league.name)}</a></h3>
-        <span class="muted">${esc(league.season || '')}</span>
+        <input data-f="name" value="${esc(league.name)}" aria-label="${t('league_name')}" maxlength="80"
+               style="font-weight:700;font-size:1.02rem;flex:1 1 150px;min-width:140px">
+        <input data-f="season" value="${esc(league.season || '')}" placeholder="2026" aria-label="${t('league_season')}" style="width:90px">
+        <a href="#/league/${league.id}" class="btn small secondary" title="${t('league_tab_teams')}">↗</a>
         <select data-f="status">
           ${['active', 'finished', 'archived'].map((st) => `<option value="${st}" ${league.status === st ? 'selected' : ''}>${st}</option>`).join('')}
         </select>
@@ -2545,6 +2548,21 @@ async function renderLeagueManager(box, scope, refresh) {
       try { await api(`/leagues/${league.id}`, { method: 'PATCH', body: { status: e.target.value } }); toast(t('league_saved')); }
       catch (err) { toast(err.message, true); }
     };
+    // Rename / re-season: save on blur; an empty name reverts.
+    const nameInp = card.querySelector('[data-f="name"]');
+    const seasonInp = card.querySelector('[data-f="season"]');
+    const saveMeta = async () => {
+      const name = nameInp.value.trim();
+      if (!name) { nameInp.value = league.name; return; }
+      if (name === league.name && seasonInp.value.trim() === (league.season || '')) return;
+      try {
+        await api(`/leagues/${league.id}`, { method: 'PATCH', body: { name, season: seasonInp.value.trim() } });
+        league.name = name; league.season = seasonInp.value.trim();
+        toast(t('league_saved'));
+      } catch (err) { toast(err.message, true); }
+    };
+    nameInp.onchange = saveMeta;
+    seasonInp.onchange = saveMeta;
     card.querySelector('[data-act="delete"]').onclick = async () => {
       if (!confirm(t('league_confirm_delete', { name: league.name }))) return;
       try { await api(`/leagues/${league.id}`, { method: 'DELETE' }); toast(t('league_deleted')); refresh(); }

@@ -650,3 +650,15 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   res = await request(app).get('/api/contests/live');
   assert.ok(!res.body.contests.map((c) => c.id).includes(live.id), 'finished race is not live');
 });
+
+test('a contest is only "started" once a wave has a gun time', async () => {
+  // `contest` had wave1 started earlier in this file.
+  const started = await request(app).get(`/api/contests/${contest.id}`).set(auth(org));
+  assert.equal(started.body.started, true);
+
+  const fresh = (await request(app).post('/api/contests').set(auth(org)).send({
+    title: 'Unstarted race', kind: 'race', category: 'other', start_at: past, end_at: future,
+  })).body;
+  const notStarted = await request(app).get(`/api/contests/${fresh.id}`).set(auth(org));
+  assert.equal(notStarted.body.started, false, 'no gun fired yet');
+});

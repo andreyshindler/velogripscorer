@@ -70,6 +70,10 @@ function serializeContest(contest, user) {
     .prepare(`SELECT name FROM readers WHERE contest_id = ? AND name != 'Manual entry' ORDER BY id`)
     .all(contest.id)
     .map((r) => r.name);
+  // A race is only "live" once its gun has fired — i.e. some wave has a start.
+  const started = !!db
+    .prepare('SELECT 1 FROM waves WHERE contest_id = ? AND started_at IS NOT NULL LIMIT 1')
+    .get(contest.id);
   const out = {
     ...contest,
     tags: JSON.parse(contest.tags || '[]'),
@@ -77,6 +81,7 @@ function serializeContest(contest, user) {
     prizes,
     organizer,
     reader_names: readerNames,
+    started,
     ...counts,
     voting_open: votingOpen(contest),
     is_organizer: isOrganizer(contest, user),
