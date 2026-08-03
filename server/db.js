@@ -306,6 +306,10 @@ for (const stmt of [
   // Self-declared runner name (typed during onboarding), shown to the admin
   // for confirmation. Distinct from tg_name (the Telegram profile name).
   `ALTER TABLE runners ADD COLUMN name TEXT NOT NULL DEFAULT ''`,
+  // New self-registrations wait for admin approval before they can log in.
+  // Default 1 so every existing account (and the seeded admin) stays approved;
+  // the register route inserts 0 for new sign-ups.
+  `ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1`,
 ]) {
   try {
     db.exec(stmt);

@@ -4,6 +4,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db, auditLog } = require('../db');
 const { signToken, requireAuth, rateLimit } = require('../auth');
+const { notify } = require('../events');
 
 const router = express.Router();
 
@@ -28,13 +29,23 @@ router.post('/auth/register', rateLimit({ max: 20 }), (req, res) => {
   }
   if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
 
+  // New sign-ups need admin approval before they can log in. Set
+  // OPEN_REGISTRATION=1 to keep the old self-service behaviour (used by tests).
+  const approved = process.env.OPEN_REGISTRATION === '1' ? 1 : 0;
   const hash = bcrypt.hashSync(password, 10);
   try {
     const info = db
-      .prepare('INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)')
-      .run(email.toLowerCase(), hash, name.trim());
+      .prepare('INSERT INTO users (email, password_hash, name, approved) VALUES (?, ?, ?, ?)')
+      .run(email.toLowerCase(), hash, name.trim(), approved);
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     auditLog(user.id, 'user.register', 'user', user.id);
+    if (!approved) {
+      // Surface the request to every admin (bell + admin "Users" tab).
+      for (const admin of db.prepare(`SELECT id FROM users WHERE role = 'admin'`).all()) {
+        notify(admin.id, 'registration', `New registration awaiting approval: ${user.name} (${user.email})`, { user_id: user.id });
+      }
+      return res.status(201).json({ pending: true });
+    }
     res.status(201).json({ token: signToken(user), user: publicUser(user, user) });
   } catch (err) {
     if (String(err.message).includes('UNIQUE')) {
@@ -51,6 +62,9 @@ router.post('/auth/login', rateLimit({ max: 20 }), (req, res) => {
     return res.status(401).json({ error: 'invalid credentials' });
   }
   if (user.is_banned) return res.status(403).json({ error: 'account is banned' });
+  if (!user.approved && user.role !== 'admin') {
+    return res.status(403).json({ error: 'account pending approval' });
+  }
   auditLog(user.id, 'user.login', 'user', user.id);
   res.json({ token: signToken(user), user: publicUser(user, user) });
 });

@@ -8,6 +8,7 @@ const path = require('path');
 
 process.env.DATA_DIR = process.env.DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'vgs-tg-'));
 process.env.DISABLE_RATE_LIMIT = '1';
+process.env.OPEN_REGISTRATION = '1'; // tests use self-service accounts; approval flow covered in approval.test.js
 process.env.TELEGRAM_ALLOWED_USER_IDS = '42'; // only user 42 may talk to the bot
 
 const request = require('supertest');

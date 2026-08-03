@@ -9,6 +9,7 @@ const path = require('path');
 // Isolated database per test run.
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'vgs-test-'));
 process.env.DISABLE_RATE_LIMIT = '1';
+process.env.OPEN_REGISTRATION = '1'; // tests use self-service accounts; approval flow covered in approval.test.js
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password-1';
 

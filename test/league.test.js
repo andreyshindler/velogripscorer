@@ -8,6 +8,7 @@ const path = require('path');
 
 process.env.DATA_DIR = process.env.DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'vgs-league-'));
 process.env.DISABLE_RATE_LIMIT = '1';
+process.env.OPEN_REGISTRATION = '1'; // tests use self-service accounts; approval flow covered in approval.test.js
 process.env.ADMIN_EMAIL = 'league-admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-secret-1';
 

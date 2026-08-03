@@ -96,9 +96,28 @@ router.post('/admin/users/:id/ban', (req, res) => {
 
 router.get('/admin/users', (req, res) => {
   const rows = db
-    .prepare('SELECT id, email, name, role, reputation, is_banned, created_at FROM users ORDER BY id DESC LIMIT 200')
+    .prepare('SELECT id, email, name, role, reputation, is_banned, approved, created_at FROM users ORDER BY id DESC LIMIT 200')
     .all();
   res.json({ users: rows });
+});
+
+// Approve a pending self-registration so the account can log in.
+router.post('/admin/users/:id/approve', (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'user not found' });
+  db.prepare('UPDATE users SET approved = 1 WHERE id = ?').run(user.id);
+  auditLog(req.user.id, 'admin.approve_user', 'user', user.id);
+  notify(user.id, 'account_approved', 'Your account has been approved — you can now log in.');
+  res.json({ ok: true });
+});
+
+// Reject (and remove) a still-pending registration. Guarded to approved = 0 so
+// it can never delete an active account.
+router.post('/admin/users/:id/reject', (req, res) => {
+  const info = db.prepare('DELETE FROM users WHERE id = ? AND approved = 0').run(req.params.id);
+  if (!info.changes) return res.status(404).json({ error: 'no pending registration with that id' });
+  auditLog(req.user.id, 'admin.reject_user', 'user', Number(req.params.id));
+  res.json({ ok: true });
 });
 
 // Immutable audit trail (req 3.9)

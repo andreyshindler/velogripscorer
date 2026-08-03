@@ -494,9 +494,19 @@ function viewLogin() {
       };
       if (mode === 'register') body.name = document.getElementById('f-name').value;
       const data = await api(`/auth/${mode}`, { method: 'POST', body });
+      if (data.pending) {
+        // New registration awaiting admin approval — no session yet.
+        toast(t('registration_pending'));
+        setMode('login');
+        document.getElementById('auth-form').reset();
+        return;
+      }
       setSession(data.token, data.user);
       location.hash = '#/';
-    } catch (err) { toast(err.message, true); }
+    } catch (err) {
+      const pending = /pending approval/i.test(err.message || '');
+      toast(pending ? t('account_pending') : err.message, true);
+    }
   };
 }
 
@@ -2280,12 +2290,39 @@ async function viewAdmin(section) {
 
   if (section === 'users') {
     const { users } = await api('/admin/users');
-    box.innerHTML = `<div class="card mt" style="overflow-x:auto"><table class="board">
+    const pending = users.filter((u) => !u.approved);
+    const pendingHtml = `
+      <div class="card mt">
+        <h3 style="margin-top:0">${t('pending_registrations')}${pending.length ? ` <span class="pill tag">${pending.length}</span>` : ''}</h3>
+        ${pending.length ? `<div style="overflow-x:auto"><table class="board">
+          <thead><tr><th>${t('display_name')}</th><th>${t('email')}</th><th>${t('start_date')}</th><th></th></tr></thead>
+          <tbody>${pending.map((u) => `
+            <tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td class="muted">${fmtDate(u.created_at)}</td>
+            <td style="white-space:nowrap;display:flex;gap:6px">
+              <button class="btn small" data-approve="${u.id}">${t('approve')}</button>
+              <button class="btn small danger" data-reject="${u.id}" data-name="${esc(u.name)}">${t('reject')}</button>
+            </td></tr>`).join('')}</tbody></table></div>`
+          : `<p class="muted" style="margin:0">${t('no_pending_registrations')}</p>`}
+      </div>`;
+    box.innerHTML = pendingHtml + `<div class="card mt" style="overflow-x:auto"><table class="board">
       <thead><tr><th>ID</th><th>${t('display_name')}</th><th>${t('email')}</th><th>Role</th><th>Rep</th><th></th></tr></thead>
       <tbody>${users.map((u) => `
         <tr><td>${u.id}</td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${u.reputation}</td>
         <td><button class="btn small ${u.is_banned ? 'secondary' : 'danger'}" data-ban="${u.id}" data-to="${u.is_banned ? 0 : 1}">
           ${u.is_banned ? 'Unban' : t('ban_user')}</button></td></tr>`).join('')}</tbody></table></div>`;
+    box.querySelectorAll('[data-approve]').forEach((btn) => {
+      btn.onclick = async () => {
+        try { await api(`/admin/users/${btn.dataset.approve}/approve`, { method: 'POST' }); toast(t('user_approved')); viewAdmin('users'); }
+        catch (err) { toast(err.message, true); }
+      };
+    });
+    box.querySelectorAll('[data-reject]').forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm(t('reject_confirm', { name: btn.dataset.name }))) return;
+        try { await api(`/admin/users/${btn.dataset.reject}/reject`, { method: 'POST' }); viewAdmin('users'); }
+        catch (err) { toast(err.message, true); }
+      };
+    });
     box.querySelectorAll('[data-ban]').forEach((btn) => {
       btn.onclick = async () => {
         await api(`/admin/users/${btn.dataset.ban}/ban`, { method: 'POST', body: { banned: btn.dataset.to === '1' } });
