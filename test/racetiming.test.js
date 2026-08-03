@@ -612,3 +612,40 @@ test('admin-only result editing: delete/edit a crossing and override status', as
   res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
   assert.equal(res.body.results.find((r) => r.bib === '300').status, 'on_course');
 });
+
+test('GET /contests/live lists only started, recently active, unfinished races', async () => {
+  const o = await register('live-org@test.co', 'Live Organizer');
+  const mk = (title) => request(app).post('/api/contests').set(auth(o)).send({
+    title, kind: 'race', category: 'other', start_at: past, end_at: future,
+  }).then((r) => r.body);
+
+  // A: gun fired + a recent read => live
+  const live = await mk('Live now');
+  const rd = (await request(app).post(`/api/contests/${live.id}/readers`).set(auth(o)).send({ name: 'Finish' })).body;
+  const w = (await request(app).post(`/api/contests/${live.id}/waves`).set(auth(o)).send({ name: 'A' })).body;
+  await request(app).post(`/api/contests/${live.id}/waves/${w.id}/start`).set(auth(o))
+    .send({ at: new Date(Date.now() - 300_000).toISOString() });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', rd.token)
+    .send({ reads: [{ epc: 'AAAA0200', read_at: new Date(Date.now() - 60_000).toISOString() }] });
+
+  // B: created but never started (no gun) => not live
+  const notStarted = await mk('Never started');
+
+  // C: started long ago, no activity since => idle, not live
+  const idle = await mk('Idle race');
+  const iw = (await request(app).post(`/api/contests/${idle.id}/waves`).set(auth(o)).send({ name: 'A' })).body;
+  await request(app).post(`/api/contests/${idle.id}/waves/${iw.id}/start`).set(auth(o))
+    .send({ at: new Date(Date.now() - 20 * 3600 * 1000).toISOString() });
+
+  let res = await request(app).get('/api/contests/live');
+  assert.equal(res.status, 200);
+  let ids = res.body.contests.map((c) => c.id);
+  assert.ok(ids.includes(live.id), 'started + recently active race is live');
+  assert.ok(!ids.includes(notStarted.id), 'never-started race is not live');
+  assert.ok(!ids.includes(idle.id), 'idle race (no activity for hours) is not live');
+
+  // Finishing the race drops it from live.
+  assert.equal((await request(app).post(`/api/contests/${live.id}/finish`).set(auth(o)).send({})).status, 200);
+  res = await request(app).get('/api/contests/live');
+  assert.ok(!res.body.contests.map((c) => c.id).includes(live.id), 'finished race is not live');
+});

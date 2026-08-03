@@ -148,6 +148,45 @@ router.get('/contests', (req, res) => {
   });
 });
 
+// Races that are actually live right now — the single source of truth for the
+// public "Live results" tab. A race's end_at is only its scheduled date (a race
+// is finished when the organizer posts results, not when the clock passes
+// end_at), so we don't use the window here. Instead a race is live when it's
+// active, a start gun has been fired, and timing has been active recently — so
+// a race someone created but never started never shows, one that's had results
+// posted (status flips to finished) drops off, and one left active but idle for
+// hours auto-expires as a safety net.
+const LIVE_IDLE_MS = 8 * 60 * 60 * 1000; // 8h with no gun/read → treat as over
+router.get('/contests/live', (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.*, u.name AS organizer_name,
+        (SELECT GROUP_CONCAT(l.name, ', ') FROM league_races lr
+           JOIN leagues l ON l.id = lr.league_id WHERE lr.contest_id = c.id) AS league_names,
+        (SELECT lr.league_id FROM league_races lr WHERE lr.contest_id = c.id LIMIT 1) AS league_id,
+        (SELECT MAX(w.started_at) FROM waves w WHERE w.contest_id = c.id AND w.started_at IS NOT NULL) AS last_wave_start,
+        (SELECT MAX(r.received_at) FROM tag_reads r WHERE r.contest_id = c.id) AS last_read_at
+       FROM contests c JOIN users u ON u.id = c.organizer_id
+       WHERE c.kind = 'race' AND c.status = 'active'`
+    )
+    .all()
+    .filter((c) => canView(c, req.user, null));
+
+  const now = Date.now();
+  const live = rows
+    .filter((c) => {
+      if (!c.last_wave_start) return false; // gun never fired: not started
+      const acts = [c.last_wave_start, c.last_read_at]
+        .filter(Boolean)
+        .map((s) => Date.parse(s))
+        .filter((n) => !Number.isNaN(n));
+      const lastActivity = acts.length ? Math.max(...acts) : 0;
+      return now - lastActivity <= LIVE_IDLE_MS;
+    })
+    .map((c) => ({ ...c, tags: JSON.parse(c.tags || '[]') }));
+  res.json({ contests: live });
+});
+
 // Recommended contests based on tags of contests the user follows/entered (req 3.7)
 router.get('/contests/recommended', requireAuth, (req, res) => {
   const myTags = new Set();

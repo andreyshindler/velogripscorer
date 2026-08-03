@@ -380,24 +380,14 @@ async function viewLiveRaces() {
   livePollTimer = setInterval(loadLiveRaces, 15000);
 }
 
-// A race is live only while it's active AND inside its scheduled
-// [start_at, end_at] window — mirrors leagueRaceStatus. Without the window a
-// race that already ran but was never marked "finished" stays 'active' forever
-// and would otherwise show here as live.
-function raceIsLive(c) {
-  if (c.kind !== 'race' || c.status !== 'active') return false;
-  const now = Date.now();
-  const start = new Date(c.start_at).getTime();
-  const end = c.end_at ? new Date(c.end_at).getTime() : start;
-  return now >= start && now <= end;
-}
-
 async function loadLiveRaces() {
   const box = document.getElementById('live-list');
   if (!box) { stopLivePoll(); return; }
   try {
-    const { contests } = await api('/contests?status=active');
-    const races = (contests || []).filter(raceIsLive);
+    // The server decides what "live" means (started + recently active, not
+    // finished) — see GET /contests/live.
+    const { contests } = await api('/contests/live');
+    const races = contests || [];
     setLiveDot(races.length > 0);
     box.innerHTML = races.length
       ? `<div class="grid">${races
@@ -436,8 +426,8 @@ function setLiveDot(on) {
 }
 async function refreshLiveDot() {
   try {
-    const { contests } = await api('/contests?status=active');
-    setLiveDot((contests || []).some(raceIsLive));
+    const { contests } = await api('/contests/live');
+    setLiveDot((contests || []).length > 0);
   } catch { /* ignore */ }
 }
 
