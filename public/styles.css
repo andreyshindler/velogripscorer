@@ -397,6 +397,13 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select,
 :root[data-theme="dark"] textarea { background-color: var(--surface-2); border-color: var(--border); }
+/* The native date/time calendar icon renders near-black — invert it so it's
+   visible on the dark fields. */
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1); opacity: 0.8; cursor: pointer;
+}
 :root[data-theme="dark"] input::placeholder,
 :root[data-theme="dark"] textarea::placeholder { color: var(--faint); }
 
