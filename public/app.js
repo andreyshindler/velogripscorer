@@ -244,7 +244,7 @@ async function route() {
     if (page === 'league') return viewLeague(Number(arg), sub || 'teams');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
     if (page === 'profile') return viewProfile(Number(arg));
-    if (page === 'admin') return viewAdmin(arg || 'reports');
+    if (page === 'admin') return viewAdmin(arg || 'leagues');
     viewHome();
   } catch (err) {
     main.innerHTML = `<div class="card">${esc(err.message)}</div>`;
@@ -2272,32 +2272,13 @@ async function viewAdmin(section) {
   if (!state.user || state.user.role !== 'admin') { main.innerHTML = `<div class="card">${t('need_login')}</div>`; return; }
   main.innerHTML = `
     <div class="tabs" role="tablist">
-      ${['reports', 'users', 'leagues', 'audit'].map((s) => `<button role="tab" aria-selected="${s === section}" data-s="${s}">${t('admin_' + s)}</button>`).join('')}
+      ${['leagues', 'users', 'audit'].map((s) => `<button role="tab" aria-selected="${s === section}" data-s="${s}">${t('admin_' + s)}</button>`).join('')}
     </div>
     <div id="admin-box"></div>`;
   main.querySelectorAll('[data-s]').forEach((b) => (b.onclick = () => { location.hash = `#/admin/${b.dataset.s}`; }));
   const box = document.getElementById('admin-box');
 
-  if (section === 'reports') {
-    const { reports } = await api('/admin/reports');
-    box.innerHTML = reports.length ? reports.map((r) => `
-      <div class="card mt">
-        <div><strong>${esc(r.target_type)} #${r.target_id}</strong> — ${t('reported_by')} ${esc(r.reporter_name)} <time class="muted">${fmtDate(r.created_at)}</time></div>
-        <div>${t('reason')}: ${esc(r.reason)}</div>
-        ${r.target ? `<pre style="background:var(--bg);padding:8px;border-radius:6px;overflow-x:auto;max-height:140px">${esc(JSON.stringify(r.target, null, 1).slice(0, 800))}</pre>` : ''}
-        <div style="display:flex;gap:8px">
-          <button class="btn small secondary" data-act="dismiss" data-id="${r.id}">${t('dismiss')}</button>
-          <button class="btn small danger" data-act="remove" data-id="${r.id}">${t('remove_content')}</button>
-          <button class="btn small danger" data-act="ban" data-id="${r.id}">${t('ban_user')}</button>
-        </div>
-      </div>`).join('') : `<p class="muted mt">${t('no_reports')}</p>`;
-    box.querySelectorAll('[data-act]').forEach((btn) => {
-      btn.onclick = async () => {
-        try { await api(`/admin/reports/${btn.dataset.id}/resolve`, { method: 'POST', body: { action: btn.dataset.act } }); viewAdmin('reports'); }
-        catch (err) { toast(err.message, true); }
-      };
-    });
-  } else if (section === 'users') {
+  if (section === 'users') {
     const { users } = await api('/admin/users');
     box.innerHTML = `<div class="card mt" style="overflow-x:auto"><table class="board">
       <thead><tr><th>ID</th><th>${t('display_name')}</th><th>${t('email')}</th><th>Role</th><th>Rep</th><th></th></tr></thead>
