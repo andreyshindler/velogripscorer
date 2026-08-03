@@ -37,16 +37,17 @@ function leagueRaces(leagueId) {
   ).all(leagueId);
 }
 
-// Distinct-racer count for the Leagues list card: mirrors the /standings
-// route's individual-standings computation (racers are merged across rounds
-// there too), just discarding everything but the count.
-function leagueRacerCount(leagueRow) {
-  const settings = normalizeSettings(leagueRow.settings);
-  const races = leagueRaces(leagueRow.id).map((row) => {
-    const contest = db.prepare('SELECT * FROM contests WHERE id = ?').get(row.contest_id);
-    return { contest: { id: contest.id, status: contest.status }, round: row.round, results: computeRaceResults(contest) };
-  });
-  return computeLeagueStandings(races, settings).individual.length;
+// How many distinct racers take part in the league — the roster across all of
+// its races' start lists, not just the finishers who scored (so a league whose
+// races haven't finished still shows its real racer count). A racer is
+// identified by bib (else EPC), the same identity used across rounds, so
+// someone entered in several rounds is counted once.
+function leagueRacerCount(leagueId) {
+  return db.prepare(
+    `SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END) AS n
+       FROM tag_assignments a
+      WHERE a.contest_id IN (SELECT lr.contest_id FROM league_races lr WHERE lr.league_id = ?)`
+  ).get(leagueId).n;
 }
 
 // ---- public reads ----
@@ -70,7 +71,7 @@ router.get('/leagues', (req, res) => {
   ).all(...(status && status !== 'all' ? [status] : []));
   const leagues = rows.map(({ settings, creator_name, creator_role, ...row }) => ({
     ...row,
-    racer_count: leagueRacerCount({ id: row.id, settings }),
+    racer_count: leagueRacerCount(row.id),
     // Who to credit: the creator's name, or the brand for the admin account /
     // legacy leagues whose creator was removed.
     organizer: creator_role && creator_role !== 'admin' && creator_name ? creator_name : 'VeloGrip',
@@ -124,7 +125,7 @@ router.get('/leagues/:id/standings', async (req, res) => {
     location: locations.length === 1 ? locations[0] : null,
     race_count: raceList.length,
     finished_race_count: raceContests.filter((c) => c.status === 'finished').length,
-    racer_count: individual.length,
+    racer_count: leagueRacerCount(league.id),
     updated_at: lastRaceAt,
     organizer: creator && creator.role !== 'admin' && creator.name ? creator.name : 'VeloGrip',
   };

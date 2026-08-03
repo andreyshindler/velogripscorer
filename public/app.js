@@ -2506,10 +2506,10 @@ async function renderLeagueManager(box, scope, refresh) {
                style="font-weight:700;font-size:1.02rem;flex:1 1 150px;min-width:140px">
         <input data-f="season" value="${esc(league.season || '')}" placeholder="2026" aria-label="${t('league_season')}" style="width:90px">
         <a href="#/league/${league.id}" class="btn small secondary" title="${t('league_tab_teams')}">↗</a>
-        <select data-f="status">
+        <select data-f="status" style="width:auto;flex:0 0 auto;min-width:120px">
           ${['active', 'finished', 'archived'].map((st) => `<option value="${st}" ${league.status === st ? 'selected' : ''}>${st}</option>`).join('')}
         </select>
-        <button class="btn small danger" data-act="delete" style="margin-inline-start:auto">${t('delete')}</button>
+        <button class="btn small danger" data-act="delete" style="margin-inline-start:auto;flex:0 0 auto">${t('delete')}</button>
       </div>
 
       <table class="board mt"><thead><tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('status_word')}</th><th></th></tr></thead>
