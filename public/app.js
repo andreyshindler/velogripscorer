@@ -2058,7 +2058,10 @@ async function viewLeagues() {
             ${l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : ''}
             <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
           </div>
-          ${canDelete ? `<button class="btn small danger league-del" data-id="${l.id}" data-name="${esc(l.name)}">${t('delete')}</button>` : ''}
+          ${canDelete ? `<span style="display:flex;gap:6px;margin-inline-start:auto">
+            <button class="btn small secondary league-manage">${t('league_manage')}</button>
+            <button class="btn small danger league-del" data-id="${l.id}" data-name="${esc(l.name)}">${t('delete')}</button>
+          </span>` : ''}
         </div>
         <h3>${esc(l.name)}</h3>
         <div class="meta">
@@ -2070,15 +2073,18 @@ async function viewLeagues() {
       </a>`;
     }).join('')}</div>` : `<p class="muted">${t('league_no_leagues')}</p>`}`;
 
-  // Delete buttons live inside the card link — intercept so they don't navigate.
+  // The manage/delete buttons live inside the card link — intercept their
+  // clicks so they act instead of following the card to the standings page.
+  main.querySelectorAll('.league-manage').forEach((btn) => {
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); location.hash = '#/myleagues'; });
+  });
   main.querySelectorAll('.league-del').forEach((btn) => {
-    const handler = async (e) => {
+    btn.addEventListener('click', async (e) => {
       e.preventDefault(); e.stopPropagation();
       if (!confirm(t('league_confirm_delete', { name: btn.dataset.name }))) return;
       try { await api(`/leagues/${btn.dataset.id}`, { method: 'DELETE' }); toast(t('league_deleted')); viewLeagues(); }
       catch (err) { toast(err.message, true); }
-    };
-    btn.addEventListener('click', handler);
+    });
   });
 }
 
@@ -2096,6 +2102,8 @@ async function viewLeague(id, tab) {
       <p style="text-align:center;margin:0 0 12px;color:var(--muted)">
         ${league.season ? esc(league.season) + ' — ' : ''}${t('league_rounds_count', { n: races.length })}
         ${provisional ? ` · ${t('league_provisional')}` : ''}</p>
+      ${state.user && (state.user.role === 'admin' || league.created_by === state.user.id)
+        ? `<div style="text-align:center;margin:0 0 12px"><a class="btn secondary" href="#/myleagues">⚙️ ${t('league_manage')}</a></div>` : ''}
       ${meta ? leagueInfoPanel(league, meta) : ''}
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/league/${id}/${k}">${t(key)}</a>`).join('')}
