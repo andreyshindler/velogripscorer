@@ -676,7 +676,7 @@ async function viewStartLists() {
             <select id="l-sport">${SPORT_OPTIONS.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
         </div>
         <label for="l-organizer">${t('organizer')}</label>
-        <input id="l-organizer" value="VeloGrip" maxlength="80">
+        <input id="l-organizer" value="${esc(state.user && state.user.role !== 'admin' ? state.user.name : 'VeloGrip')}" maxlength="80">
         <label for="l-location">${t('location')}</label>
         <div style="display:flex;gap:8px">
           <input id="l-location" placeholder="${t('location_hint')}" style="flex:1">
