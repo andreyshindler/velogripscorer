@@ -37,7 +37,18 @@ app.use('/api', leagues.router);
 
 app.get('/openapi.yaml', (_req, res) => res.sendFile(path.join(__dirname, '..', 'openapi.yaml')));
 app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads')));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(
+  express.static(path.join(__dirname, '..', 'public'), {
+    setHeaders(res, filePath) {
+      // The SPA shell and its scripts/styles have no content-hashed filenames,
+      // so tell the browser to revalidate them every load (ETag → 304 when
+      // unchanged, fresh copy right after a deploy). Fonts keep the default
+      // long-lived caching. Without this a server-side change can leave clients
+      // running a stale app.js.
+      if (/\.(html|js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    },
+  })
+);
 // Public results deep link -> the spectator results view. Redirecting (rather
 // than serving the shell here) keeps the app's relative asset URLs correct and
 // works whether or not a BASE_PATH prefix is in use.
@@ -47,6 +58,7 @@ app.get('/race-results/:id', (req, res) => {
 });
 // SPA fallback: any non-API GET serves the app shell.
 app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache'); // always revalidate the shell
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
