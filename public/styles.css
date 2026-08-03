@@ -261,6 +261,8 @@ tr.flash td { background: #e4f6ee !important; }
 .notif { padding: 9px; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
 .notif.unread { background: var(--primary-tint); border-radius: 6px; }
 .notif time { color: var(--muted); font-size: var(--fs-xs); display: block; }
+.notif-link { display: block; color: inherit; font-weight: 600; }
+.notif-link:hover { color: var(--primary); text-decoration: none; }
 
 .form-narrow { max-width: 560px; margin: 0 auto; }
 /* Inline auth feedback under the Log in / Sign up button. */

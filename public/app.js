@@ -147,6 +147,14 @@ function renderChrome() {
   }
 }
 
+// Where a notification should take you when clicked, by type/payload.
+function notifHref(n) {
+  if (n.type === 'registration') return '#/admin/users';        // a sign-up to approve
+  if (n.type === 'account_approved') return '#/';               // your account was approved
+  if (n.data && n.data.contest_id) return `#/contest/${n.data.contest_id}`;
+  return null;
+}
+
 let notifTimer = null;
 async function pollNotifications() {
   clearTimeout(notifTimer);
@@ -159,12 +167,17 @@ async function pollNotifications() {
     const menu = document.getElementById('bell-menu');
     menu.innerHTML = notifications.length
       ? `<button class="btn small secondary" id="mark-read" style="margin:4px">${t('mark_all_read')}</button>` +
-        notifications.map((n) => `
-          <div class="notif ${n.read ? '' : 'unread'}">
-            ${n.data.contest_id ? `<a href="#/contest/${n.data.contest_id}">${esc(n.message)}</a>` : esc(n.message)}
+        notifications.map((n) => {
+          const href = notifHref(n);
+          const label = esc(n.message);
+          return `<div class="notif ${n.read ? '' : 'unread'}">
+            ${href ? `<a href="${href}" class="notif-link">${label}</a>` : label}
             <time>${fmtDate(n.created_at)}</time>
-          </div>`).join('')
+          </div>`;
+        }).join('')
       : `<div class="notif">${t('no_notifications')}</div>`;
+    // Following a notification closes the bell menu.
+    menu.querySelectorAll('.notif-link').forEach((a) => a.addEventListener('click', () => { menu.hidden = true; }));
     const markBtn = document.getElementById('mark-read');
     if (markBtn) markBtn.onclick = async () => { await api('/notifications/read', { method: 'POST', body: {} }); pollNotifications(); };
   } catch { /* not fatal */ }
