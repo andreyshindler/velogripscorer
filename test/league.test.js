@@ -371,9 +371,9 @@ test('standings: per-race points, best-N totals, bib identity, teams', async () 
   assert.equal(res.status, 200);
   const { individual, teams, races: raceList } = res.body;
   assert.equal(raceList.length, 3);
-  // Racer count is the largest single race's start list (round 1 has bibs
-  // 1-13, 50, 60 = 15), including the DNF rider — not the finishers who scored.
-  assert.equal(res.body.meta.racer_count, 15, 'largest race field (round 1 = 15 racers)');
+  // Racer count is the roster across all rounds (distinct bibs 1-13, 50, 60 =
+  // 15), including the DNF rider — not just the finishers who scored.
+  assert.equal(res.body.meta.racer_count, 15, 'counts every assigned racer, deduped across rounds');
   // Each race carries its full time window so the client can label live status.
   assert.ok(raceList.every((r) => r.start_at && r.end_at), 'races expose start_at and end_at');
 
