@@ -268,12 +268,22 @@ test('setup: admin + regular user + three races', async () => {
   ], 1000_000));
 });
 
-test('league write endpoints require admin', async () => {
-  assert.equal((await request(app).post('/api/leagues').send({ name: 'X' })).status, 401);
-  assert.equal((await request(app).post('/api/leagues').set(auth(user)).send({ name: 'X' })).status, 403);
-  assert.equal((await request(app).patch('/api/leagues/1').set(auth(user)).send({ name: 'X' })).status, 403);
-  assert.equal((await request(app).delete('/api/leagues/1').set(auth(user))).status, 403);
-  assert.equal((await request(app).post('/api/leagues/1/races').set(auth(user)).send({ contest_id: 1 })).status, 403);
+test('any signed-in user can create & manage their own league; not others races', async () => {
+  assert.equal((await request(app).post('/api/leagues').send({ name: 'X' })).status, 401); // anonymous
+
+  // A regular user creates their own league and becomes its owner.
+  const own = await request(app).post('/api/leagues').set(auth(user)).send({ name: 'User League', season: '2026' });
+  assert.equal(own.status, 201);
+  const ownId = own.body.league.id;
+  assert.equal(own.body.league.created_by, user.user.id);
+
+  // They can edit it...
+  assert.equal((await request(app).patch(`/api/leagues/${ownId}`).set(auth(user)).send({ season: '2027' })).status, 200);
+  // ...but cannot attach a race they don't organise (the admin's races).
+  assert.equal((await request(app).post(`/api/leagues/${ownId}/races`).set(auth(user))
+    .send({ contest_id: races[0].contest.id })).status, 403);
+  // Clean up so it doesn't affect later league listings.
+  assert.equal((await request(app).delete(`/api/leagues/${ownId}`).set(auth(user))).status, 200);
 });
 
 test('league CRUD: create with defaults, patch settings, validation', async () => {
@@ -310,6 +320,13 @@ test('league CRUD: create with defaults, patch settings, validation', async () =
   const listed = await request(app).get('/api/leagues');
   assert.equal(listed.status, 200);
   assert.equal(listed.body.leagues.length, 2); // running + MTB
+});
+
+test('a non-owner (non-admin) cannot manage someone else\'s league', async () => {
+  assert.equal((await request(app).patch(`/api/leagues/${league.id}`).set(auth(user)).send({ name: 'hijack' })).status, 403);
+  assert.equal((await request(app).delete(`/api/leagues/${league.id}`).set(auth(user))).status, 403);
+  assert.equal((await request(app).post(`/api/leagues/${league.id}/races`).set(auth(user))
+    .send({ contest_id: races[0].contest.id })).status, 403);
 });
 
 test('attach races: rounds, duplicates, non-race contests', async () => {

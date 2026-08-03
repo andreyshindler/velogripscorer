@@ -241,7 +241,7 @@ function stopLivePoll() {
 // Highlight the top-nav link for the current page (Home / Finished races /
 // League / Start lists / Admin), like the standings tabs.
 function setActiveNav(page) {
-  const key = { '': 'home', live: 'live', finished: 'finished', leagues: 'leagues', league: 'leagues', contact: 'contact', startlists: 'startlists', admin: 'admin' }[page || ''];
+  const key = { '': 'home', live: 'live', finished: 'finished', leagues: 'leagues', league: 'leagues', myleagues: 'leagues', contact: 'contact', startlists: 'startlists', admin: 'admin' }[page || ''];
   const linkKey = { '#/': 'home', '#/live': 'live', '#/finished': 'finished', '#/leagues': 'leagues', '#/contact': 'contact', '#/startlists': 'startlists', '#/admin': 'admin' };
   document.querySelectorAll('.topnav a').forEach((a) => {
     const on = key && linkKey[a.getAttribute('href')] === key;
@@ -264,6 +264,7 @@ async function route() {
     if (page === 'startlists') return viewStartLists();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'leagues') return viewLeagues();
+    if (page === 'myleagues') return viewMyLeagues();
     if (page === 'contact') return viewContact();
     if (page === 'league') return viewLeague(Number(arg), sub || 'teams');
     if (page === 'contest') return viewContest(Number(arg), sub || '');
@@ -2025,6 +2026,18 @@ async function viewProfile(id) {
 
 // ---------- league standings ----------
 
+// League management for the signed-in user (their own leagues + own races).
+async function viewMyLeagues() {
+  if (!state.user) { location.hash = '#/login'; return; }
+  main.innerHTML = `
+    <div class="brand-row">
+      <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
+      <h1 class="page-title-center">${t('my_leagues_title')}</h1>
+    </div>
+    <div id="ml-box"></div>`;
+  await renderLeagueManager(document.getElementById('ml-box'), 'mine', viewMyLeagues);
+}
+
 async function viewLeagues() {
   const { leagues } = await api('/leagues');
   main.innerHTML = `
@@ -2032,6 +2045,8 @@ async function viewLeagues() {
       <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
       <h1 class="page-title-center">${t('leagues_title')}</h1>
     </div>
+    ${state.user ? `<div style="text-align:center;margin:0 0 18px">
+      <a class="btn secondary" href="#/myleagues">➕ ${t('my_leagues_title')}</a></div>` : ''}
     ${leagues.length ? `<div class="grid">${leagues.map((l) => {
       const allRacesDone = l.race_count > 0 && l.finished_race_count === l.race_count;
       const isFinished = l.status === 'finished' || allRacesDone;
@@ -2373,7 +2388,7 @@ async function viewAdmin(section) {
       };
     });
   } else if (section === 'leagues') {
-    await renderAdminLeagues(box);
+    await renderLeagueManager(box, 'admin', () => viewAdmin('leagues'));
   } else {
     const { audit_log } = await api('/admin/audit-log');
     box.innerHTML = `<div class="card mt" style="overflow-x:auto"><table class="board">
@@ -2384,13 +2399,18 @@ async function viewAdmin(section) {
   }
 }
 
-// Admin > Leagues: create leagues, attach races as rounds, tune scoring rules.
-async function renderAdminLeagues(box) {
-  const [{ leagues }, { contests }] = await Promise.all([
+// League manager — create leagues, attach races as rounds, tune scoring rules.
+// scope 'admin' manages every league and can attach any race; scope 'mine'
+// manages only the current user's leagues and offers only their own races.
+// refresh() re-renders after a mutation.
+async function renderLeagueManager(box, scope, refresh) {
+  const mine = scope === 'mine';
+  const [{ leagues: allLeagues }, racesResp] = await Promise.all([
     api('/leagues?status=all'), // admin sees archived leagues too
-    api('/contests'),
+    mine ? api('/my/races') : api('/contests'),
   ]);
-  const allRaces = (contests || []).filter((c) => c.kind === 'race');
+  const leagues = mine ? allLeagues.filter((l) => l.created_by === state.user.id) : allLeagues;
+  const allRaces = mine ? (racesResp.races || []) : (racesResp.contests || []).filter((c) => c.kind === 'race');
 
   box.innerHTML = `
     <div class="card mt form-narrow">
@@ -2416,7 +2436,7 @@ async function renderAdminLeagues(box) {
         preset: document.getElementById('lg-preset').value,
       }});
       toast(t('league_saved'));
-      viewAdmin('leagues');
+      refresh();
     } catch (err) { toast(err.message, true); }
   };
 
@@ -2503,12 +2523,12 @@ async function renderAdminLeagues(box) {
     };
     card.querySelector('[data-act="delete"]').onclick = async () => {
       if (!confirm(t('league_confirm_delete', { name: league.name }))) return;
-      try { await api(`/leagues/${league.id}`, { method: 'DELETE' }); toast(t('league_deleted')); viewAdmin('leagues'); }
+      try { await api(`/leagues/${league.id}`, { method: 'DELETE' }); toast(t('league_deleted')); refresh(); }
       catch (err) { toast(err.message, true); }
     };
     card.querySelectorAll('[data-detach]').forEach((btn) => {
       btn.onclick = async () => {
-        try { await api(`/leagues/${league.id}/races/${btn.dataset.detach}`, { method: 'DELETE' }); viewAdmin('leagues'); }
+        try { await api(`/leagues/${league.id}/races/${btn.dataset.detach}`, { method: 'DELETE' }); refresh(); }
         catch (err) { toast(err.message, true); }
       };
     });
@@ -2526,7 +2546,7 @@ async function renderAdminLeagues(box) {
       try {
         await api(`/leagues/${league.id}/races`, { method: 'POST',
           body: { contest_id: Number(attachForm.querySelector('[data-f="contest"]').value) } });
-        viewAdmin('leagues');
+        refresh();
       } catch (err) { toast(err.message, true); }
     };
     // Show only the team-points field that applies to the selected mode.

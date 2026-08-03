@@ -8,7 +8,7 @@
 
 const express = require('express');
 const { db, auditLog } = require('../db');
-const { requireAuth, requireAdmin } = require('../auth');
+const { requireAuth } = require('../auth');
 const { computeRaceResults } = require('../race-results');
 const { normalizeSettings, computeLeagueStandings, presetSettings } = require('../league-scoring');
 const { leagueTeamPdf, leagueIndividualPdf } = require('../results-pdf');
@@ -21,6 +21,12 @@ function getLeague(id) {
 
 function leagueJson(league) {
   return { ...league, settings: normalizeSettings(league.settings) };
+}
+
+// Any logged-in user may create a league; only its creator (or an admin) may
+// manage it afterwards.
+function canManageLeague(league, user) {
+  return !!user && (user.role === 'admin' || league.created_by === user.id);
 }
 
 function leagueRaces(leagueId) {
@@ -50,7 +56,7 @@ router.get('/leagues', (req, res) => {
   const status = req.query.status || '';
   const where = status === 'all' ? '1=1' : status ? 'l.status = ?' : "l.status != 'archived'";
   const rows = db.prepare(
-    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings,
+    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings, l.created_by,
             (SELECT COUNT(*) FROM league_races lr WHERE lr.league_id = l.id) AS race_count,
             (SELECT COUNT(*) FROM league_races lr JOIN contests c ON c.id = lr.contest_id
               WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count,
@@ -137,7 +143,7 @@ router.get('/leagues/:id/standings', async (req, res) => {
 
 // ---- admin writes ----
 
-router.post('/leagues', requireAuth, requireAdmin, (req, res) => {
+router.post('/leagues', requireAuth, (req, res) => {
   const { name, season, settings, preset } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   let normalized;
@@ -156,9 +162,10 @@ router.post('/leagues', requireAuth, requireAdmin, (req, res) => {
   res.status(201).json({ league: leagueJson(getLeague(info.lastInsertRowid)) });
 });
 
-router.patch('/leagues/:id', requireAuth, requireAdmin, (req, res) => {
+router.patch('/leagues/:id', requireAuth, (req, res) => {
   const league = getLeague(req.params.id);
   if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
   const { name, season, status, settings } = req.body || {};
   if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'name cannot be empty' });
   if (status !== undefined && !['active', 'finished', 'archived'].includes(status)) {
@@ -181,21 +188,27 @@ router.patch('/leagues/:id', requireAuth, requireAdmin, (req, res) => {
   res.json({ league: leagueJson(getLeague(league.id)) });
 });
 
-router.delete('/leagues/:id', requireAuth, requireAdmin, (req, res) => {
+router.delete('/leagues/:id', requireAuth, (req, res) => {
   const league = getLeague(req.params.id);
   if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
   db.prepare('DELETE FROM leagues WHERE id = ?').run(league.id); // league_races cascades
   auditLog(req.user.id, 'league.delete', 'league', league.id, league.name);
   res.json({ ok: true });
 });
 
-router.post('/leagues/:id/races', requireAuth, requireAdmin, (req, res) => {
+router.post('/leagues/:id/races', requireAuth, (req, res) => {
   const league = getLeague(req.params.id);
   if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
   const { contest_id, round } = req.body || {};
   const contest = db.prepare('SELECT * FROM contests WHERE id = ?').get(contest_id);
   if (!contest) return res.status(400).json({ error: 'contest not found' });
   if (contest.kind !== 'race') return res.status(400).json({ error: 'only races can join a league' });
+  // A non-admin may only add races they organise.
+  if (req.user.role !== 'admin' && contest.organizer_id !== req.user.id) {
+    return res.status(403).json({ error: 'you can only add your own races' });
+  }
   const nextRound = Number.isInteger(round) && round >= 1
     ? round
     : (db.prepare('SELECT COALESCE(MAX(round), 0) + 1 AS r FROM league_races WHERE league_id = ?').get(league.id)).r;
@@ -212,7 +225,10 @@ router.post('/leagues/:id/races', requireAuth, requireAdmin, (req, res) => {
   res.status(201).json({ races: leagueRaces(league.id) });
 });
 
-router.patch('/leagues/:id/races/:contestId', requireAuth, requireAdmin, (req, res) => {
+router.patch('/leagues/:id/races/:contestId', requireAuth, (req, res) => {
+  const league = getLeague(req.params.id);
+  if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
   const { round } = req.body || {};
   if (!Number.isInteger(round) || round < 1) return res.status(400).json({ error: 'round must be an integer >= 1' });
   const info = db.prepare('UPDATE league_races SET round = ? WHERE league_id = ? AND contest_id = ?')
@@ -221,7 +237,10 @@ router.patch('/leagues/:id/races/:contestId', requireAuth, requireAdmin, (req, r
   res.json({ races: leagueRaces(req.params.id) });
 });
 
-router.delete('/leagues/:id/races/:contestId', requireAuth, requireAdmin, (req, res) => {
+router.delete('/leagues/:id/races/:contestId', requireAuth, (req, res) => {
+  const league = getLeague(req.params.id);
+  if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
   const info = db.prepare('DELETE FROM league_races WHERE league_id = ? AND contest_id = ?')
     .run(req.params.id, req.params.contestId);
   if (!info.changes) return res.status(404).json({ error: 'race not in league' });
