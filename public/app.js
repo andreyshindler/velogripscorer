@@ -469,7 +469,7 @@ function viewLogin() {
         <label for="f-password">${t('password')}</label>
         <div class="pw-wrap">
           <input id="f-password" type="password" required minlength="8" autocomplete="current-password">
-          <button type="button" class="pw-toggle" data-target="f-password" aria-label="${t('show_password')}" aria-pressed="false">👁</button>
+          <button type="button" class="pw-toggle" data-target="f-password" tabindex="-1" aria-label="${t('show_password')}" aria-pressed="false">${eyeSvg(false)}</button>
         </div>
         <button class="btn mt" type="submit" id="auth-submit">${t('login')}</button>
       </form>
@@ -500,8 +500,18 @@ function viewLogin() {
   };
 }
 
-// Show/hide toggle for any password field wrapped in .pw-wrap (the 👁 button
-// carries data-target="<input id>").
+// Eye / eye-off icon (stroke uses currentColor so it stays visible in both
+// themes). `shown` = the password is currently visible → show the crossed-out eye.
+function eyeSvg(shown) {
+  const common = 'viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  return shown
+    ? `<svg ${common}><path d="M17.94 17.94A10.5 10.5 0 0 1 12 19c-6.5 0-10-7-10-7a18.5 18.5 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.6 9.6 0 0 1 12 4c6.5 0 10 7 10 7a18.3 18.3 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>`
+    : `<svg ${common}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+}
+
+// Show/hide toggle for any password field wrapped in .pw-wrap (the eye button
+// carries data-target="<input id>"). tabindex=-1 keeps it out of the tab order
+// so it never interferes with typing in the field.
 function wirePasswordToggles(root) {
   (root || document).querySelectorAll('.pw-toggle').forEach((btn) => {
     btn.onclick = () => {
@@ -509,6 +519,7 @@ function wirePasswordToggles(root) {
       if (!input) return;
       const show = input.type === 'password';
       input.type = show ? 'text' : 'password';
+      btn.innerHTML = eyeSvg(show);
       btn.setAttribute('aria-pressed', String(show));
       btn.setAttribute('aria-label', t(show ? 'hide_password' : 'show_password'));
       btn.classList.toggle('on', show);
