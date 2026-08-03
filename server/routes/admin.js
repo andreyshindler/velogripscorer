@@ -120,6 +120,42 @@ router.post('/admin/users/:id/reject', (req, res) => {
   res.json({ ok: true });
 });
 
+// Permanently delete a user account. Refuses to delete yourself, another admin,
+// or anyone who owns races (those must be removed/reassigned first, so results
+// are never destroyed implicitly). Other dependent rows are cleaned up in a
+// transaction since the schema has no ON DELETE CASCADE from users.
+router.delete('/admin/users/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'user not found' });
+  if (id === req.user.id) return res.status(400).json({ error: 'you cannot delete your own account' });
+  if (user.role === 'admin') return res.status(400).json({ error: 'cannot delete an admin account' });
+  const owned = db.prepare('SELECT COUNT(*) AS n FROM contests WHERE organizer_id = ?').get(id).n;
+  if (owned > 0) return res.status(409).json({ error: 'this user owns races — delete or reassign those races first' });
+
+  try {
+    db.transaction(() => {
+      db.prepare('DELETE FROM votes WHERE voter_id = ?').run(id);
+      db.prepare('DELETE FROM comments WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM awards WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM entries WHERE user_id = ?').run(id); // cascades votes/comments on them
+      db.prepare('DELETE FROM participants WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM follows WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM reports WHERE reporter_id = ?').run(id);
+      db.prepare('UPDATE reports SET resolved_by = NULL WHERE resolved_by = ?').run(id);
+      db.prepare('DELETE FROM notifications WHERE user_id = ?').run(id);
+      db.prepare('UPDATE tag_assignments SET user_id = NULL WHERE user_id = ?').run(id);
+      db.prepare('UPDATE leagues SET created_by = NULL WHERE created_by = ?').run(id);
+      db.prepare('UPDATE audit_log SET user_id = NULL WHERE user_id = ?').run(id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    })();
+  } catch (err) {
+    return res.status(409).json({ error: 'could not delete: user still has associated data' });
+  }
+  auditLog(req.user.id, 'admin.delete_user', 'user', id);
+  res.json({ ok: true });
+});
+
 // Immutable audit trail (req 3.9)
 router.get('/admin/audit-log', (req, res) => {
   const rows = db

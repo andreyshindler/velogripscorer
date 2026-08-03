@@ -83,3 +83,38 @@ test('non-admins cannot reach the approval endpoints', async () => {
   const res = await request(app).post('/api/admin/users/1/approve').set('Authorization', `Bearer ${token}`);
   assert.equal(res.status, 403);
 });
+
+test('admin can delete a plain user; self and admins are protected', async () => {
+  // A fresh user with no data.
+  await request(app).post('/api/auth/register')
+    .send({ email: 'deleteme@test.co', password: 'password123', name: 'Delete Me' });
+  let users = (await request(app).get('/api/admin/users').set('Authorization', `Bearer ${adminToken}`)).body.users;
+  const delId = users.find((u) => u.email === 'deleteme@test.co').id;
+  const adminId = users.find((u) => u.role === 'admin').id;
+
+  // cannot delete yourself or another admin
+  assert.equal((await request(app).delete(`/api/admin/users/${adminId}`).set('Authorization', `Bearer ${adminToken}`)).status, 400);
+
+  const ok = await request(app).delete(`/api/admin/users/${delId}`).set('Authorization', `Bearer ${adminToken}`);
+  assert.equal(ok.status, 200);
+  users = (await request(app).get('/api/admin/users').set('Authorization', `Bearer ${adminToken}`)).body.users;
+  assert.ok(!users.find((u) => u.email === 'deleteme@test.co'), 'user is gone');
+});
+
+test('deleting a user who owns races is refused', async () => {
+  // Approve a user, let them create a race, then deletion must be blocked.
+  await request(app).post('/api/auth/register')
+    .send({ email: 'owner@test.co', password: 'password123', name: 'Race Owner' });
+  let users = (await request(app).get('/api/admin/users').set('Authorization', `Bearer ${adminToken}`)).body.users;
+  const ownerId = users.find((u) => u.email === 'owner@test.co').id;
+  await request(app).post(`/api/admin/users/${ownerId}/approve`).set('Authorization', `Bearer ${adminToken}`);
+  const ownerToken = (await login('owner@test.co', 'password123')).body.token;
+
+  const now = new Date().toISOString();
+  const later = new Date(Date.now() + 3600_000).toISOString();
+  await request(app).post('/api/contests').set('Authorization', `Bearer ${ownerToken}`)
+    .send({ title: 'Owned race', kind: 'race', category: 'other', start_at: now, end_at: later });
+
+  const res = await request(app).delete(`/api/admin/users/${ownerId}`).set('Authorization', `Bearer ${adminToken}`);
+  assert.equal(res.status, 409, 'cannot delete a user who owns races');
+});

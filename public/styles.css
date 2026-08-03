@@ -263,6 +263,10 @@ tr.flash td { background: #e4f6ee !important; }
 .notif time { color: var(--muted); font-size: var(--fs-xs); display: block; }
 
 .form-narrow { max-width: 560px; margin: 0 auto; }
+/* Inline auth feedback under the Log in / Sign up button. */
+.auth-msg { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; font-size: var(--fs-sm); }
+.auth-msg.error { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); }
+.auth-msg.notice { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .criteria-editor .crit-line { display: grid; grid-template-columns: 2fr 90px 36px; gap: 8px; margin-bottom: 8px; align-items: center; }
 .sum-indicator { font-weight: 700; }

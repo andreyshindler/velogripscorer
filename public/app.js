@@ -171,11 +171,22 @@ async function pollNotifications() {
   notifTimer = setTimeout(pollNotifications, 30000);
 }
 
-document.getElementById('bell').addEventListener('click', () => {
+document.getElementById('bell').addEventListener('click', async () => {
   const menu = document.getElementById('bell-menu');
   const bell = document.getElementById('bell');
+  const opening = menu.hidden;
   menu.hidden = !menu.hidden;
   bell.setAttribute('aria-expanded', String(!menu.hidden));
+  // Opening the bell counts as "seen": clear the unread badge now and mark them
+  // read on the server, so it stays clear until a new notification arrives.
+  if (opening) {
+    const count = document.getElementById('bell-count');
+    if (count && !count.hidden) {
+      count.hidden = true;
+      try { await api('/notifications/read', { method: 'POST', body: {} }); } catch { /* not fatal */ }
+      pollNotifications();
+    }
+  }
 });
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.bell-wrap')) document.getElementById('bell-menu').hidden = true;
@@ -472,8 +483,15 @@ function viewLogin() {
           <button type="button" class="pw-toggle" data-target="f-password" tabindex="-1" aria-label="${t('show_password')}" aria-pressed="false">${eyeSvg(false)}</button>
         </div>
         <button class="btn mt" type="submit" id="auth-submit">${t('login')}</button>
+        <p id="auth-msg" class="auth-msg" role="status" hidden></p>
       </form>
     </div>`;
+  const authMsg = document.getElementById('auth-msg');
+  const showAuthMsg = (text, kind) => {
+    authMsg.textContent = text;
+    authMsg.className = `auth-msg ${kind}`;
+    authMsg.hidden = !text;
+  };
   let mode = 'login';
   const setMode = (m) => {
     mode = m;
@@ -481,12 +499,15 @@ function viewLogin() {
     document.getElementById('auth-submit').textContent = t(m);
     document.getElementById('tab-login').setAttribute('aria-selected', String(m === 'login'));
     document.getElementById('tab-register').setAttribute('aria-selected', String(m === 'register'));
+    showAuthMsg('', ''); // clear any message when switching tabs
   };
   document.getElementById('tab-login').onclick = () => setMode('login');
   document.getElementById('tab-register').onclick = () => setMode('register');
   wirePasswordToggles(main);
   document.getElementById('auth-form').onsubmit = async (e) => {
     e.preventDefault();
+    showAuthMsg('', '');
+    const wasRegister = mode === 'register';
     try {
       const body = {
         email: document.getElementById('f-email').value,
@@ -496,16 +517,16 @@ function viewLogin() {
       const data = await api(`/auth/${mode}`, { method: 'POST', body });
       if (data.pending) {
         // New registration awaiting admin approval — no session yet.
-        toast(t('registration_pending'));
         setMode('login');
-        document.getElementById('auth-form').reset();
+        showAuthMsg(t('registration_pending'), 'notice');
         return;
       }
       setSession(data.token, data.user);
       location.hash = '#/';
     } catch (err) {
+      // Show every auth message inline under the button, not as a bottom toast.
       const pending = /pending approval/i.test(err.message || '');
-      toast(pending ? t('account_pending') : err.message, true);
+      showAuthMsg(pending ? t('account_pending') : err.message, pending && !wasRegister ? 'notice' : 'error');
     }
   };
 }
@@ -2306,10 +2327,12 @@ async function viewAdmin(section) {
       </div>`;
     box.innerHTML = pendingHtml + `<div class="card mt" style="overflow-x:auto"><table class="board">
       <thead><tr><th>ID</th><th>${t('display_name')}</th><th>${t('email')}</th><th>Role</th><th>Rep</th><th></th></tr></thead>
-      <tbody>${users.map((u) => `
+      <tbody>${users.filter((u) => u.approved).map((u) => `
         <tr><td>${u.id}</td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${u.reputation}</td>
-        <td><button class="btn small ${u.is_banned ? 'secondary' : 'danger'}" data-ban="${u.id}" data-to="${u.is_banned ? 0 : 1}">
-          ${u.is_banned ? 'Unban' : t('ban_user')}</button></td></tr>`).join('')}</tbody></table></div>`;
+        <td style="white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">
+          <button class="btn small ${u.is_banned ? 'secondary' : 'danger'}" data-ban="${u.id}" data-to="${u.is_banned ? 0 : 1}">${u.is_banned ? 'Unban' : t('ban_user')}</button>
+          ${u.role === 'admin' ? '' : `<button class="btn small danger" data-del="${u.id}" data-name="${esc(u.name)}">${t('delete_user')}</button>`}
+        </td></tr>`).join('')}</tbody></table></div>`;
     box.querySelectorAll('[data-approve]').forEach((btn) => {
       btn.onclick = async () => {
         try { await api(`/admin/users/${btn.dataset.approve}/approve`, { method: 'POST' }); toast(t('user_approved')); viewAdmin('users'); }
@@ -2327,6 +2350,13 @@ async function viewAdmin(section) {
       btn.onclick = async () => {
         await api(`/admin/users/${btn.dataset.ban}/ban`, { method: 'POST', body: { banned: btn.dataset.to === '1' } });
         viewAdmin('users');
+      };
+    });
+    box.querySelectorAll('[data-del]').forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm(t('delete_user_confirm', { name: btn.dataset.name }))) return;
+        try { await api(`/admin/users/${btn.dataset.del}`, { method: 'DELETE' }); toast(t('user_deleted')); viewAdmin('users'); }
+        catch (err) { toast(err.message, true); }
       };
     });
   } else if (section === 'leagues') {
