@@ -85,6 +85,18 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   outline: 3px solid var(--focus); outline-offset: 2px;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+/* Custom dropdown chevron — the native <select> arrow renders black and is
+   invisible on the dark theme. Draw our own (muted grey, visible on both
+   themes) on the inline-end side. */
+select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2398a1b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-inline-end: 34px;
+}
+:root[dir="rtl"] select { background-position: left 12px center; }
+select::-ms-expand { display: none; }
 /* Password field with a show/hide eye button at the inline end. */
 .pw-wrap { position: relative; display: block; }
 .pw-wrap input { padding-inline-end: 42px; }
@@ -378,7 +390,7 @@ html[dir="rtl"] #toast { transform: translateX(50%); }
 }
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select,
-:root[data-theme="dark"] textarea { background: var(--surface-2); border-color: var(--border); }
+:root[data-theme="dark"] textarea { background-color: var(--surface-2); border-color: var(--border); }
 :root[data-theme="dark"] input::placeholder,
 :root[data-theme="dark"] textarea::placeholder { color: var(--faint); }
 
