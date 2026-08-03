@@ -37,17 +37,19 @@ function leagueRaces(leagueId) {
   ).all(leagueId);
 }
 
-// How many distinct racers take part in the league — the roster across all of
-// its races' start lists, not just the finishers who scored (so a league whose
-// races haven't finished still shows its real racer count). A racer is
-// identified by bib (else EPC), the same identity used across rounds, so
-// someone entered in several rounds is counted once.
+// The league's racer count = the largest start list among its races (its
+// biggest field), not the finishers who scored nor the union across rounds.
+// Racers are counted by bib (else EPC) within each race.
 function leagueRacerCount(leagueId) {
-  return db.prepare(
-    `SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END) AS n
-       FROM tag_assignments a
-      WHERE a.contest_id IN (SELECT lr.contest_id FROM league_races lr WHERE lr.league_id = ?)`
-  ).get(leagueId).n;
+  const row = db.prepare(
+    `SELECT COALESCE(MAX(cnt), 0) AS n FROM (
+       SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END) AS cnt
+         FROM tag_assignments a
+        WHERE a.contest_id IN (SELECT lr.contest_id FROM league_races lr WHERE lr.league_id = ?)
+        GROUP BY a.contest_id
+     )`
+  ).get(leagueId);
+  return row.n;
 }
 
 // ---- public reads ----
