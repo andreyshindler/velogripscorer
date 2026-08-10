@@ -269,6 +269,18 @@ CREATE TABLE IF NOT EXISTS email_recipients (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_email_recipients ON email_recipients(lower(email));
 
+-- Checkpoint operators: registered users the organizer authorizes to help time a
+-- race. They can view the race and its checkpoint join code inside their own
+-- account (so they can pair a checkpoint phone) but cannot edit the race.
+CREATE TABLE IF NOT EXISTS contest_collaborators (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  contest_id INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (contest_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_collab_user ON contest_collaborators(user_id);
+
 CREATE INDEX IF NOT EXISTS idx_league_races      ON league_races(league_id, round);
 CREATE INDEX IF NOT EXISTS idx_reads_contest     ON tag_reads(contest_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_reads_epc         ON tag_reads(contest_id, epc);

@@ -133,6 +133,11 @@ const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 function renderChrome() {
   const authArea = document.getElementById('auth-area');
   document.getElementById('nav-startlists').hidden = !state.user;
+  // The Checkpoints nav appears only for users a race has shared a checkpoint
+  // with (organizers reach it from the race's Manage tab instead).
+  const navCp = document.getElementById('nav-checkpoints');
+  if (!state.user) navCp.hidden = true;
+  else api('/my/checkpoints').then((r) => { navCp.hidden = !(r.races && r.races.length); }).catch(() => { navCp.hidden = true; });
   document.getElementById('nav-admin').hidden = !(state.user && state.user.role === 'admin');
   document.getElementById('footer-api').hidden = !(state.user && state.user.role === 'admin');
   document.getElementById('bell').hidden = !state.user;
@@ -151,6 +156,7 @@ function renderChrome() {
 function notifHref(n) {
   if (n.type === 'registration') return '#/admin/users';        // a sign-up to approve
   if (n.type === 'account_approved') return '#/';               // your account was approved
+  if (n.type === 'checkpoint_access') return '#/checkpoints';   // you can now operate a checkpoint
   if (n.data && n.data.contest_id) return `#/contest/${n.data.contest_id}`;
   return null;
 }
@@ -241,8 +247,8 @@ function stopLivePoll() {
 // Highlight the top-nav link for the current page (Home / Finished races /
 // League / Start lists / Admin), like the standings tabs.
 function setActiveNav(page) {
-  const key = { '': 'home', live: 'live', finished: 'finished', leagues: 'leagues', league: 'leagues', myleagues: 'leagues', contact: 'contact', startlists: 'startlists', admin: 'admin' }[page || ''];
-  const linkKey = { '#/': 'home', '#/live': 'live', '#/finished': 'finished', '#/leagues': 'leagues', '#/contact': 'contact', '#/startlists': 'startlists', '#/admin': 'admin' };
+  const key = { '': 'home', live: 'live', finished: 'finished', leagues: 'leagues', league: 'leagues', myleagues: 'leagues', contact: 'contact', startlists: 'startlists', checkpoints: 'checkpoints', admin: 'admin' }[page || ''];
+  const linkKey = { '#/': 'home', '#/live': 'live', '#/finished': 'finished', '#/leagues': 'leagues', '#/contact': 'contact', '#/startlists': 'startlists', '#/checkpoints': 'checkpoints', '#/admin': 'admin' };
   document.querySelectorAll('.topnav a').forEach((a) => {
     const on = key && linkKey[a.getAttribute('href')] === key;
     a.classList.toggle('active', !!on);
@@ -262,6 +268,7 @@ async function route() {
     if (page === 'live') return viewLiveRaces();
     if (page === 'finished') return viewFinishedRaces();
     if (page === 'startlists') return viewStartLists();
+    if (page === 'checkpoints') return viewMyCheckpoints();
     if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
     if (page === 'leagues') return viewLeagues();
     if (page === 'myleagues') return viewMyLeagues();
@@ -1455,6 +1462,71 @@ function fmtJoinCode(code) {
   return s.length === 6 ? `${s.slice(0, 3)}-${s.slice(3)}` : s;
 }
 
+// Build the checkpoint-join QR (a velogrip:// deep link carrying the code + this
+// server's URL) as an inline SVG string. '' if the code is empty or the QR lib
+// failed to load.
+function joinQrSvg(code) {
+  if (typeof qrcode !== 'function' || !code) return '';
+  try {
+    const base = location.origin + BASE;
+    const payload = `velogrip://join?code=${code}&base=${encodeURIComponent(base)}`;
+    const qr = qrcode(0, 'M');
+    qr.addData(payload);
+    qr.make();
+    return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+  } catch { return ''; }
+}
+// Inject the join QR into a container that carries data-code; removes it if the
+// QR couldn't be built (so no broken box is shown).
+function fillJoinQr(el) {
+  if (!el) return;
+  const svg = joinQrSvg(el.dataset.code);
+  if (!svg) { el.remove(); return; }
+  el.innerHTML = svg;
+  const s = el.querySelector('svg');
+  if (s) { s.style.width = '100%'; s.style.height = '100%'; s.style.display = 'block'; }
+}
+
+// The "Checkpoints" page for users a race has shared checkpoint access with:
+// each race shows its join code + QR so they can pair a checkpoint phone, plus a
+// link to watch the live results.
+async function viewMyCheckpoints() {
+  if (!state.user) { location.hash = '#/login'; return; }
+  const { races } = await api('/my/checkpoints');
+  main.innerHTML = `
+    <div class="pubresults">
+      <h1 style="text-align:center;margin-bottom:2px">📍 ${t('nav_checkpoints')}</h1>
+      <p style="text-align:center;color:var(--muted);margin:0 0 16px">${t('checkpoints_page_help')}</p>
+      ${races.length ? races.map((c) => `
+        <div class="card mt">
+          <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+            <h3 style="margin:0">${esc(c.title)}</h3>
+            <span class="muted" style="font-size:.85rem">${esc(fmtDate(c.start_at))}${c.location ? ' · ' + esc(c.location) : ''}</span>
+            <span class="muted" style="font-size:.85rem;margin-inline-start:auto">${t('organizer')}: ${esc(c.organizer_name || '')}</span>
+          </div>
+          <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px">
+            <div class="cpq" data-code="${esc(c.checkpoint_code || '')}" style="width:132px;height:132px;flex:0 0 auto;background:#fff;border-radius:8px;padding:6px"></div>
+            <div style="flex:1;min-width:200px">
+              <div class="muted" style="font-size:.8rem">${t('checkpoint_join_code')}</div>
+              <div style="display:flex;gap:8px;align-items:center;margin:4px 0">
+                <code style="font-size:1.5rem;letter-spacing:2px;font-weight:700">${esc(fmtJoinCode(c.checkpoint_code))}</code>
+                <button class="btn small secondary cpq-copy" data-code="${esc(c.checkpoint_code || '')}">${t('copy')}</button>
+              </div>
+              <p class="muted" style="margin:4px 0 0;font-size:.82rem">${t('checkpoint_join_help')}</p>
+              <a class="btn small secondary" style="margin-top:8px" href="#/results/${c.id}/winners">${t('results_word')}</a>
+            </div>
+          </div>
+        </div>`).join('') : `<div class="card">${t('no_checkpoints_shared')}</div>`}
+    </div>`;
+  main.querySelectorAll('.cpq').forEach(fillJoinQr);
+  main.querySelectorAll('.cpq-copy').forEach((btn) => {
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(btn.dataset.code); toast(t('copied')); }
+      catch { prompt(t('copy'), btn.dataset.code); }
+    };
+  });
+}
+
 // The detailed table behind a Race-winners link: one distance + optional
 // gender + optional category, with each racer's team shown under their name.
 function filteredResultsTable(results, id, dist, cat, gender) {
@@ -1674,14 +1746,16 @@ function racerEditForm(a, waves) {
 
 async function renderManage(box, c) {
   const generation = renderGeneration;
-  const [{ tags }, wavesData, readersData] = await Promise.all([
+  const [{ tags }, wavesData, readersData, collabData] = await Promise.all([
     api(`/contests/${c.id}/tags`),
     api(`/contests/${c.id}/waves`),
     api(`/contests/${c.id}/readers`).catch(() => ({ readers: [] })),
+    api(`/contests/${c.id}/collaborators`).catch(() => ({ collaborators: [] })),
   ]);
   if (generation !== renderGeneration) return;
   const waves = wavesData.waves;
   const checkpoints = (readersData.readers || []).filter((r) => r.role === 'checkpoint');
+  const collaborators = collabData.collaborators || [];
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
@@ -1745,6 +1819,23 @@ async function renderManage(box, c) {
         <label style="margin:0">${t('location')}
           <input id="cp-location" maxlength="80" style="display:block;margin-top:4px"></label>
         <button class="btn small">${t('add_checkpoint')}</button>
+      </form>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h4 style="margin:0">${t('checkpoint_operators')}</h4>
+      <p class="muted" style="margin:4px 0;font-size:.82rem">${t('checkpoint_operators_help')}</p>
+      <div id="collab-list">
+        ${collaborators.length ? collaborators.map((u) => `
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0">
+            <strong>${esc(u.name || u.email)}</strong>
+            <span class="muted" style="font-size:.8rem">${esc(u.email)}</span>
+            <button class="btn small danger collab-del" data-id="${u.id}" data-name="${esc(u.name || u.email)}" style="margin-inline-start:auto">${t('remove')}</button>
+          </div>`).join('') : `<p class="muted" style="margin:0">${t('no_operators')}</p>`}
+      </div>
+      <form id="add-collab" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px">
+        <label style="margin:0">${t('operator_email')}
+          <input id="collab-email" type="email" required maxlength="120" placeholder="${t('operator_email_ph')}" style="display:block;margin-top:4px;min-width:220px"></label>
+        <button class="btn small secondary">${t('add_operator')}</button>
       </form>
     </div>
 
@@ -1903,6 +1994,24 @@ async function renderManage(box, c) {
         toast(t('reads_merged', { n: r.imported, s: r.skipped }) + (r.errors?.length ? ' — ' + r.errors[0] : ''));
         viewContest(c.id, 'manage');
       } catch (err) { toast(err.message, true); }
+    };
+  });
+  // ---- checkpoint operators (share code access with a registered user) ----
+  $('#add-collab').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = $('#collab-email').value.trim();
+    if (!email) return;
+    try {
+      await api(`/contests/${c.id}/collaborators`, { method: 'POST', body: { email } });
+      toast(t('operator_added'));
+      viewContest(c.id, 'manage');
+    } catch (err) { toast(err.message, true); }
+  };
+  box.querySelectorAll('.collab-del').forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm(t('remove_operator_confirm', { name: btn.dataset.name }))) return;
+      try { await api(`/contests/${c.id}/collaborators/${btn.dataset.id}`, { method: 'DELETE' }); viewContest(c.id, 'manage'); }
+      catch (err) { toast(err.message, true); }
     };
   });
 

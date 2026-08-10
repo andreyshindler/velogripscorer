@@ -20,11 +20,21 @@ function isOrganizer(contest, user) {
   return user && (user.id === contest.organizer_id || user.role === 'admin');
 }
 
+// A checkpoint operator the organizer authorized: can view the race and its
+// checkpoint join code from their own account, but not edit it.
+function isCollaborator(contest, user) {
+  if (!user) return false;
+  return !!db
+    .prepare('SELECT 1 FROM contest_collaborators WHERE contest_id = ? AND user_id = ?')
+    .get(contest.id, user.id);
+}
+
 // Private contests are visible to the organizer, admins, approved participants,
 // and anyone presenting the invite code (req 3.2).
 function canView(contest, user, inviteCode) {
   if (contest.visibility === 'public') return true;
   if (isOrganizer(contest, user)) return true;
+  if (isCollaborator(contest, user)) return true;
   if (inviteCode && inviteCode === contest.invite_code) return true;
   if (user) {
     const row = db
@@ -114,12 +124,20 @@ function serializeContest(contest, user) {
       ? !!db.prepare('SELECT 1 FROM follows WHERE user_id = ? AND contest_id = ?').get(user.id, contest.id)
       : false,
   };
-  if (!isOrganizer(contest, user)) {
-    delete out.invite_code;
-  } else {
+  const organizer_ = isOrganizer(contest, user);
+  const collaborator_ = !organizer_ && isCollaborator(contest, user);
+  out.is_collaborator = collaborator_;
+  if (organizer_) {
     const reader = db.prepare("SELECT token FROM readers WHERE contest_id = ? AND role = 'primary' ORDER BY id LIMIT 1").get(contest.id);
     out.app_token = reader ? reader.token : null;
     out.checkpoint_code = ensureCheckpointCode(contest);
+  } else {
+    delete out.invite_code;
+    // Checkpoint operators see only the join code (to pair a checkpoint phone) —
+    // never the primary app token or the private invite code. Everyone else must
+    // not see the raw code that rode in on the {...contest} spread.
+    if (collaborator_) out.checkpoint_code = ensureCheckpointCode(contest);
+    else delete out.checkpoint_code;
   }
   return out;
 }
@@ -275,6 +293,72 @@ router.get('/my/races', requireAuth, (req, res) => {
       password: process.env.READER_WIFI_PASSWORD || '',
     },
   });
+});
+
+// ---- Checkpoint operators (collaborators) --------------------------------
+// The organizer authorizes registered users to help time the race; each then
+// sees the race + its checkpoint join code under "Checkpoints" in their own
+// account. They cannot edit the race or see the primary app token.
+
+// Races the current user may operate checkpoints for (as a collaborator).
+router.get('/my/checkpoints', requireAuth, (req, res) => {
+  const races = db
+    .prepare(
+      `SELECT c.id, c.title, c.sport, c.location, c.start_at, c.end_at, c.status,
+        c.checkpoint_code, c.kind, u.name AS organizer_name
+       FROM contest_collaborators cc
+       JOIN contests c ON c.id = cc.contest_id
+       JOIN users u ON u.id = c.organizer_id
+       WHERE cc.user_id = ? AND c.kind = 'race'
+       ORDER BY c.start_at DESC LIMIT 100`
+    )
+    .all(req.user.id);
+  for (const r of races) {
+    if (!r.checkpoint_code) r.checkpoint_code = ensureCheckpointCode(r);
+    delete r.kind;
+  }
+  res.json({ races });
+});
+
+router.get('/contests/:id/collaborators', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const collaborators = db
+    .prepare(
+      `SELECT cc.id, cc.user_id, u.name, u.email
+       FROM contest_collaborators cc JOIN users u ON u.id = cc.user_id
+       WHERE cc.contest_id = ? ORDER BY cc.id`
+    )
+    .all(contest.id);
+  res.json({ collaborators });
+});
+
+router.post('/contests/:id/collaborators', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const user = db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(email);
+  if (!user) return res.status(404).json({ error: 'no registered user with that email' });
+  if (user.id === contest.organizer_id) return res.status(400).json({ error: 'the organizer already has access' });
+  const exists = db.prepare('SELECT id FROM contest_collaborators WHERE contest_id = ? AND user_id = ?').get(contest.id, user.id);
+  if (exists) return res.status(409).json({ error: 'already added' });
+  const info = db.prepare('INSERT INTO contest_collaborators (contest_id, user_id) VALUES (?,?)').run(contest.id, user.id);
+  auditLog(req.user.id, 'collaborator.add', 'contest', contest.id, email);
+  notify(user.id, 'checkpoint_access', `You can now operate checkpoints for "${contest.title}"`, { contest_id: contest.id, nav: 'checkpoints' });
+  res.status(201).json({ id: info.lastInsertRowid, user_id: user.id, name: user.name, email: user.email });
+});
+
+router.delete('/contests/:id/collaborators/:cid', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const info = db.prepare('DELETE FROM contest_collaborators WHERE id = ? AND contest_id = ?').run(req.params.cid, contest.id);
+  if (!info.changes) return res.status(404).json({ error: 'collaborator not found' });
+  auditLog(req.user.id, 'collaborator.remove', 'contest', contest.id, `collab ${req.params.cid}`);
+  res.json({ ok: true });
 });
 
 // ---- Creation & management (req 3.2) ----

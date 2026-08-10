@@ -113,6 +113,52 @@ test('a phone joins as a checkpoint with the short code (auto-provisions a token
   assert.equal(r.splits[joined.id].elapsed, '0:45.0', 'joined checkpoint split at +45s');
 });
 
+test('an authorized operator sees the join code in their own account; others do not', async () => {
+  const op = (await request(app).post('/api/auth/register')
+    .send({ email: 'cp-op@test.co', password: 'password123', name: 'Marshal' })).body;
+  const other = (await request(app).post('/api/auth/register')
+    .send({ email: 'cp-other@test.co', password: 'password123', name: 'Nobody' })).body;
+
+  // Before being added, the operator sees no code and no shared races.
+  const before = (await request(app).get(`/api/contests/${contest.id}`).set(auth(op))).body;
+  assert.equal(before.checkpoint_code, undefined, 'no code before access is granted');
+  const noneYet = (await request(app).get('/api/my/checkpoints').set(auth(op))).body;
+  assert.equal(noneYet.races.length, 0);
+
+  // A non-registered email is rejected.
+  const bad = await request(app).post(`/api/contests/${contest.id}/collaborators`).set(auth(org))
+    .send({ email: 'ghost@nowhere.co' });
+  assert.equal(bad.status, 404);
+
+  // The organizer authorizes the operator by email.
+  const add = await request(app).post(`/api/contests/${contest.id}/collaborators`).set(auth(org))
+    .send({ email: 'cp-op@test.co' });
+  assert.equal(add.status, 201);
+  assert.equal(add.body.email, 'cp-op@test.co');
+
+  // Now the operator sees the code on the race and under /my/checkpoints...
+  const c = (await request(app).get(`/api/contests/${contest.id}`).set(auth(op))).body;
+  assert.ok(c.checkpoint_code, 'operator sees the checkpoint code');
+  assert.equal(c.is_collaborator, true);
+  assert.equal(c.app_token, undefined, 'operator never sees the primary app token');
+  const mine = (await request(app).get('/api/my/checkpoints').set(auth(op))).body;
+  assert.equal(mine.races.length, 1);
+  assert.equal(mine.races[0].id, contest.id);
+  assert.ok(mine.races[0].checkpoint_code);
+
+  // ...but an unrelated user still sees neither.
+  const stranger = (await request(app).get(`/api/contests/${contest.id}`).set(auth(other))).body;
+  assert.equal(stranger.checkpoint_code, undefined);
+  const strangerList = (await request(app).get('/api/my/checkpoints').set(auth(other))).body;
+  assert.equal(strangerList.races.length, 0);
+
+  // Removing the operator revokes it.
+  const del = await request(app).delete(`/api/contests/${contest.id}/collaborators/${add.body.id}`).set(auth(org));
+  assert.equal(del.status, 200);
+  const after = (await request(app).get('/api/my/checkpoints').set(auth(op))).body;
+  assert.equal(after.races.length, 0);
+});
+
 test('import-reads merges an offline checkpoint file (elapsed seconds)', async () => {
   const cp2 = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
     .send({ name: 'Checkpoint 2', role: 'checkpoint' })).body;
