@@ -108,11 +108,26 @@ router.post('/join/checkpoint', (req, res) => {
 
 // ---- Ingestion: called by the Android bridge app, authenticated by reader token ----
 
+// Server-anchored clock sync: the device sends its own "now" (client_time) with
+// each ingest call; we store server_time − device_time as this reader's offset.
+// Reads and the gun are then reconciled to the server clock when results are
+// computed, so a reading device with a skewed clock still yields correct splits.
+// Returns the offset in force for this reader (updated when client_time is given).
+function recordClockOffset(reader, clientTime) {
+  if (!clientTime) return reader.clock_offset_ms || 0;
+  const t = Date.parse(clientTime);
+  if (Number.isNaN(t)) return reader.clock_offset_ms || 0;
+  const offset = Date.now() - t;
+  db.prepare('UPDATE readers SET clock_offset_ms = ? WHERE id = ?').run(offset, reader.id);
+  return offset;
+}
+
 router.post('/ingest/reads', (req, res) => {
   const token = req.headers['x-reader-token'] || req.body?.token;
   if (!token) return res.status(401).json({ error: 'X-Reader-Token header required' });
   const reader = db.prepare('SELECT * FROM readers WHERE token = ?').get(String(token));
   if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  recordClockOffset(reader, req.body?.client_time);
 
   const reads = Array.isArray(req.body?.reads) ? req.body.reads.slice(0, MAX_BATCH) : null;
   if (!reads) return res.status(400).json({ error: 'reads array required' });
@@ -184,12 +199,15 @@ router.post('/ingest/wave-start', (req, res) => {
     return res.status(400).json({ error: 'valid started_at required' });
   }
   const at = new Date(startedAt).toISOString();
+  // The gun was stamped by this device's clock; record its offset so the gun is
+  // reconciled to server time alongside the reads.
+  const gunOffset = recordClockOffset(reader, req.body?.client_time);
   let wave = db.prepare('SELECT * FROM waves WHERE contest_id = ? AND name = ?').get(reader.contest_id, name);
   if (!wave) {
-    const info = db.prepare('INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)').run(reader.contest_id, name, at);
+    const info = db.prepare('INSERT INTO waves (contest_id, name, started_at, gun_offset_ms) VALUES (?,?,?,?)').run(reader.contest_id, name, at, gunOffset);
     wave = { id: info.lastInsertRowid, started_at: at };
   } else if (!wave.started_at || req.body?.force) {
-    db.prepare('UPDATE waves SET started_at = ? WHERE id = ?').run(at, wave.id);
+    db.prepare('UPDATE waves SET started_at = ?, gun_offset_ms = ? WHERE id = ?').run(at, gunOffset, wave.id);
   } else {
     // already started on the server; keep the earlier gun time
     return res.json({ ok: true, started_at: wave.started_at, kept_existing: true });

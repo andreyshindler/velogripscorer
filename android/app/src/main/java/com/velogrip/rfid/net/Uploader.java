@@ -50,7 +50,9 @@ public final class Uploader {
             if (row.manual) json.append(",\"manual\":true");
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
-        json.append("]}");
+        // client_time = this device's clock now, so the server can reconcile our
+        // reads to server time (fixes split times if this phone's clock is off).
+        json.append("],\"client_time\":\"").append(iso.format(new Date())).append("\"}");
         int code = post("/api/ingest/reads", json.toString());
         if (code == 401) throw new IOException("server rejected reader token (401)");
         return code >= 200 && code < 300;
@@ -62,6 +64,7 @@ public final class Uploader {
     public boolean uploadWaveStart(String name, long startedAtMs) throws IOException {
         String json = "{\"name\":" + jsonString(name)
                 + ",\"started_at\":\"" + iso.format(new Date(startedAtMs)) + "\""
+                + ",\"client_time\":\"" + iso.format(new Date()) + "\""
                 + ",\"force\":true}";
         int code = post("/api/ingest/wave-start", json);
         if (code == 401) throw new IOException("server rejected reader token (401)");

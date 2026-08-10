@@ -28,9 +28,11 @@ function computeRaceResults(contest, { category } = {}) {
   // crossings. Default role is 'primary', so a race with no checkpoints behaves
   // exactly as before.
   const readerRole = new Map(
-    db.prepare('SELECT id, name, location, role FROM readers WHERE contest_id = ?').all(contest.id)
+    db.prepare('SELECT id, name, location, role, clock_offset_ms FROM readers WHERE contest_id = ?').all(contest.id)
       .map((r) => [r.id, r])
   );
+  // Reconcile a wave's gun to server time (0 offset when it was set from the web).
+  const gunMs = (w) => Date.parse(w.started_at) + (w.gun_offset_ms || 0);
   const checkpointReaders = [...readerRole.values()]
     .filter((r) => r.role === 'checkpoint')
     .sort((a, b) => a.id - b.id);
@@ -41,8 +43,11 @@ function computeRaceResults(contest, { category } = {}) {
   const readsByEpc = new Map();     // primary crossings (finish/lap)
   const cpReadsByEpc = new Map();   // checkpoint passes: epc -> [{at, reader_id}]
   for (const r of allReads) {
-    const at = Date.parse(r.read_at);
     const manual = !!r.manual;
+    // Reconcile each device read to server time by its reader's clock offset.
+    // Manual (web/operator) reads are already server time — never shift them.
+    const offset = manual ? 0 : (readerRole.get(r.reader_id)?.clock_offset_ms || 0);
+    const at = Date.parse(r.read_at) + offset;
     if (!manual && readerRole.get(r.reader_id)?.role === 'checkpoint') {
       if (!cpReadsByEpc.has(r.epc)) cpReadsByEpc.set(r.epc, []);
       cpReadsByEpc.get(r.epc).push({ at, reader_id: r.reader_id });
@@ -82,7 +87,7 @@ function computeRaceResults(contest, { category } = {}) {
     // checkpoint reader id. Only the first pass at each checkpoint after the gun.
     base.splits = {};
     if (wave && wave.started_at && checkpointReaders.length) {
-      const cpStartMs = Date.parse(wave.started_at);
+      const cpStartMs = gunMs(wave);
       const cpReads = a.epcs.flatMap((epc) => cpReadsByEpc.get(epc) || []);
       for (const cp of checkpointReaders) {
         const first = cpReads
@@ -97,7 +102,7 @@ function computeRaceResults(contest, { category } = {}) {
     // organizer-declared statuses override everything (Webscorer-style)
     if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
     if (!wave || !wave.started_at) return { ...base, status: raceFinished ? 'DNS' : 'not_started', laps: 0 };
-    const startMs = Date.parse(wave.started_at);
+    const startMs = gunMs(wave);
     // Operator taps are deliberate: exempt from the start-suppression window
     // and the lap-gap dedupe (each tap is one crossing) — mirrors the app.
     const valid = a.epcs

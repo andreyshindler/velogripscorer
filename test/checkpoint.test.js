@@ -184,6 +184,32 @@ test('an authorized account mints a checkpoint token without a code (app pick-li
   assert.equal(r.splits[km12.id].elapsed, '0:30.0');
 });
 
+test('server-anchored clock correction fixes a checkpoint with a skewed clock', async () => {
+  const skewMs = 30_000; // this phone's clock runs 30s FAST
+  // Two checkpoints: one reports client_time (corrected), one does not (raw).
+  const corrected = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
+    .send({ name: 'Skewed corrected', role: 'checkpoint' })).body;
+  const raw = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
+    .send({ name: 'Skewed raw', role: 'checkpoint' })).body;
+
+  // Racer passes both at TRUE +60s, but the phone stamps +30s fast (so +90s).
+  const stampedFast = new Date(gun.getTime() + 90_000).toISOString();
+  const deviceNow = new Date(Date.now() + skewMs).toISOString();
+
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', corrected.token)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: stampedFast }], client_time: deviceNow });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', raw.token)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: stampedFast }] }); // no client_time
+
+  const res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r = res.body.results.find((x) => x.bib === '100');
+  assert.equal(r.splits[corrected.id].elapsed, '1:00.0', 'corrected back to the true +60s');
+  assert.equal(r.splits[raw.id].elapsed, '1:30.0', 'uncorrected still shows the +90s skew');
+  // The finish (primary, no skew) is untouched by any of this.
+  assert.equal(r.elapsed, '2:00.0');
+  assert.equal(r.laps, 1);
+});
+
 test('import-reads merges an offline checkpoint file (elapsed seconds)', async () => {
   const cp2 = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
     .send({ name: 'Checkpoint 2', role: 'checkpoint' })).body;

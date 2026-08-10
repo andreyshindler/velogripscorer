@@ -330,6 +330,14 @@ for (const stmt of [
   // link) to auto-provision itself as a checkpoint reader for this race, without
   // the organizer copying a long token by hand. Generated lazily per race.
   `ALTER TABLE contests ADD COLUMN checkpoint_code TEXT`,
+  // Server-anchored clock correction: server_time − device_time for this reader,
+  // measured from a client_time the device sends on ingest. Reads (and the gun)
+  // are reconciled to the server clock at compute time so a checkpoint phone
+  // with a skewed clock still yields correct split times. 0 = no correction.
+  `ALTER TABLE readers ADD COLUMN clock_offset_ms INTEGER NOT NULL DEFAULT 0`,
+  // The clock offset applied to this wave's gun time (the offset of the device
+  // that fired it; 0 when set from the web, which is already server time).
+  `ALTER TABLE waves ADD COLUMN gun_offset_ms INTEGER NOT NULL DEFAULT 0`,
 ]) {
   try {
     db.exec(stmt);
