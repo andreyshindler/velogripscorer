@@ -310,6 +310,10 @@ for (const stmt of [
   // Default 1 so every existing account (and the seeded admin) stays approved;
   // the register route inserts 0 for new sign-ups.
   `ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1`,
+  // Reader role: 'primary' is the start/finish/lap device (default, so every
+  // existing reader keeps counting as crossings); 'checkpoint' is a secondary
+  // reading point whose reads are split/pass times, never finish crossings.
+  `ALTER TABLE readers ADD COLUMN role TEXT NOT NULL DEFAULT 'primary'`,
 ]) {
   try {
     db.exec(stmt);

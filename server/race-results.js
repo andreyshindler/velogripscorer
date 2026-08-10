@@ -23,13 +23,33 @@ function computeRaceResults(contest, { category } = {}) {
     .prepare('SELECT * FROM tag_assignments WHERE contest_id = ? ORDER BY bib, epc')
     .all(contest.id)
     .filter((a) => !category || a.category === category);
+  // Reader roles: 'primary' reads (and any manual tap) are start/finish/lap
+  // crossings; 'checkpoint' reads are split/pass times and must NOT count as
+  // crossings. Default role is 'primary', so a race with no checkpoints behaves
+  // exactly as before.
+  const readerRole = new Map(
+    db.prepare('SELECT id, name, location, role FROM readers WHERE contest_id = ?').all(contest.id)
+      .map((r) => [r.id, r])
+  );
+  const checkpointReaders = [...readerRole.values()]
+    .filter((r) => r.role === 'checkpoint')
+    .sort((a, b) => a.id - b.id);
+
   const allReads = db
-    .prepare('SELECT epc, read_at, manual FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
+    .prepare('SELECT epc, read_at, manual, reader_id FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
     .all(contest.id);
-  const readsByEpc = new Map();
+  const readsByEpc = new Map();     // primary crossings (finish/lap)
+  const cpReadsByEpc = new Map();   // checkpoint passes: epc -> [{at, reader_id}]
   for (const r of allReads) {
-    if (!readsByEpc.has(r.epc)) readsByEpc.set(r.epc, []);
-    readsByEpc.get(r.epc).push({ at: Date.parse(r.read_at), manual: !!r.manual });
+    const at = Date.parse(r.read_at);
+    const manual = !!r.manual;
+    if (!manual && readerRole.get(r.reader_id)?.role === 'checkpoint') {
+      if (!cpReadsByEpc.has(r.epc)) cpReadsByEpc.set(r.epc, []);
+      cpReadsByEpc.get(r.epc).push({ at, reader_id: r.reader_id });
+    } else {
+      if (!readsByEpc.has(r.epc)) readsByEpc.set(r.epc, []);
+      readsByEpc.get(r.epc).push({ at, manual });
+    }
   }
 
   const suppressMs = contest.suppress_secs * 1000;
@@ -58,6 +78,19 @@ function computeRaceResults(contest, { category } = {}) {
       // stored value, not the computed DNS/DNF; ignored by the public views.
       racer_status: a.racer_status || '',
     };
+    // Checkpoint split/pass times (elapsed from the wave gun), keyed by
+    // checkpoint reader id. Only the first pass at each checkpoint after the gun.
+    base.splits = {};
+    if (wave && wave.started_at && checkpointReaders.length) {
+      const cpStartMs = Date.parse(wave.started_at);
+      const cpReads = a.epcs.flatMap((epc) => cpReadsByEpc.get(epc) || []);
+      for (const cp of checkpointReaders) {
+        const first = cpReads
+          .filter((x) => x.reader_id === cp.id && x.at >= cpStartMs)
+          .reduce((min, x) => (min === null || x.at < min ? x.at : min), null);
+        if (first !== null) base.splits[cp.id] = { elapsed_ms: first - cpStartMs, elapsed: formatElapsed(first - cpStartMs) };
+      }
+    }
     // Once the race is finished, a racer who never crossed is a non-finisher,
     // not still "on course": no started wave -> DNS, no finish read -> DNF.
     const raceFinished = contest.status === 'finished';

@@ -43,12 +43,13 @@ router.post('/contests/:id/readers', requireAuth, (req, res) => {
   if (!contest) return;
   const name = String(req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'reader name required' });
+  const role = req.body?.role === 'checkpoint' ? 'checkpoint' : 'primary';
   const token = `vgr_${crypto.randomBytes(24).toString('hex')}`;
   const info = db
-    .prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
-    .run(contest.id, name, token, String(req.body?.location || '').trim());
-  auditLog(req.user.id, 'reader.create', 'contest', contest.id, name);
-  res.status(201).json({ id: info.lastInsertRowid, name, token, location: req.body?.location || '' });
+    .prepare('INSERT INTO readers (contest_id, name, token, location, role) VALUES (?,?,?,?,?)')
+    .run(contest.id, name, token, String(req.body?.location || '').trim(), role);
+  auditLog(req.user.id, 'reader.create', 'contest', contest.id, `${role} ${name}`);
+  res.status(201).json({ id: info.lastInsertRowid, name, token, role, location: req.body?.location || '' });
 });
 
 router.get('/contests/:id/readers', requireAuth, (req, res) => {
@@ -56,7 +57,7 @@ router.get('/contests/:id/readers', requireAuth, (req, res) => {
   if (!contest) return;
   const readers = db
     .prepare(
-      `SELECT r.id, r.name, r.token, r.location, r.last_seen, r.created_at,
+      `SELECT r.id, r.name, r.token, r.location, r.role, r.last_seen, r.created_at,
         (SELECT COUNT(*) FROM tag_reads WHERE reader_id = r.id) AS read_count
        FROM readers r WHERE r.contest_id = ? ORDER BY r.id`
     )
@@ -520,6 +521,91 @@ router.post('/contests/:id/startlist-file', requireAuth, uploadMemory.single('fi
   res.json(importRacers(contest, racers, req.user.id));
 });
 
+// Merge an offline checkpoint's reads (CSV/XLSX of bib-or-epc + time) into a
+// checkpoint reader — the "connect after the race and merge" path for a
+// standalone reader. A networked checkpoint uses /ingest/reads instead.
+const FILE_READ_HEADERS = {
+  bib: FILE_HEADERS.bib,
+  epc: FILE_HEADERS.epc,
+  time: ['time', 'read_at', 'timestamp', 'pass', 'pass time', 'passtime', 'elapsed', 'seconds', 'sec', 'זמן', 'שעה'],
+};
+function rowsToReads(rows) {
+  if (!rows.length) return [];
+  const header = rows[0].map((h) => String(h ?? '').trim().toLowerCase());
+  const cols = {}; let hasHeader = false;
+  for (const [field, names] of Object.entries(FILE_READ_HEADERS)) {
+    const idx = header.findIndex((h) => names.includes(h));
+    if (idx >= 0) { cols[field] = idx; hasHeader = true; }
+  }
+  if (!hasHeader) Object.assign(cols, { bib: 0, time: 1 }); // positional: bib, time
+  return rows.slice(hasHeader ? 1 : 0).map((cells) => {
+    const get = (f) => (cols[f] !== undefined ? String(cells[cols[f]] ?? '').trim() : '');
+    return { bib: get('bib'), epc: get('epc'), time: get('time') };
+  }).filter((r) => (r.bib || r.epc) && r.time);
+}
+
+router.post('/contests/:id/readers/:rid/import-reads', requireAuth, uploadMemory.single('file'), (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const reader = db.prepare('SELECT * FROM readers WHERE id = ? AND contest_id = ?').get(req.params.rid, contest.id);
+  if (!reader) return res.status(404).json({ error: 'reader not found' });
+  if (reader.role !== 'checkpoint') return res.status(400).json({ error: 'reads can only be imported into a checkpoint reader' });
+  if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'file required' });
+  let rows;
+  try {
+    const isXlsx = /\.xlsx$/i.test(req.file.originalname || '') || req.file.buffer.subarray(0, 2).toString('latin1') === 'PK';
+    rows = isXlsx ? parseXlsx(req.file.buffer) : parseCsvBuffer(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: `could not read file: ${err.message}` });
+  }
+  const reads = rowsToReads(rows).slice(0, 5000);
+  if (!reads.length) return res.status(400).json({ error: 'no reads found in the file' });
+
+  const waves = new Map(db.prepare('SELECT id, started_at FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));
+  const byBib = new Map(); const byEpc = new Map();
+  for (const a of db.prepare('SELECT epc, bib, wave_id FROM tag_assignments WHERE contest_id = ?').all(contest.id)) {
+    if (a.bib && !byBib.has(a.bib)) byBib.set(a.bib, a);
+    byEpc.set(a.epc.toUpperCase(), a);
+  }
+  const raceDay = (contest.start_at || new Date().toISOString()).slice(0, 10);
+  // A time cell may be an ISO datetime, a HH:MM:SS time-of-day on race day, or a
+  // plain number = elapsed seconds from the racer's wave gun.
+  const resolveReadAt = (raw, assignment) => {
+    const s = String(raw).trim();
+    if (!s) return null;
+    if (/[-/T]/.test(s) && !Number.isNaN(Date.parse(s))) return new Date(s).toISOString();
+    if (/^\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) {
+      const t = Date.parse(`${raceDay}T${s.length <= 5 ? s + ':00' : s}`);
+      if (!Number.isNaN(t)) return new Date(t).toISOString();
+    }
+    const secs = Number(s);
+    if (Number.isFinite(secs) && assignment?.wave_id) {
+      const w = waves.get(assignment.wave_id);
+      if (w?.started_at) return new Date(Date.parse(w.started_at) + secs * 1000).toISOString();
+    }
+    return null;
+  };
+
+  const insert = db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, read_at, manual) VALUES (?,?,?,?,0)');
+  let imported = 0; const errors = [];
+  db.transaction(() => {
+    for (const r of reads) {
+      let epc = String(r.epc || '').toUpperCase();
+      let assignment = epc ? byEpc.get(epc) : null;
+      if (!epc && r.bib) { assignment = byBib.get(r.bib); epc = assignment ? assignment.epc.toUpperCase() : ''; }
+      if (!epc || !EPC_RE.test(epc)) { if (errors.length < 5) errors.push(`${r.bib || r.epc}: unknown racer`); continue; }
+      const readAt = resolveReadAt(r.time, assignment);
+      if (!readAt) { if (errors.length < 5) errors.push(`${r.bib || epc}: bad time "${r.time}"`); continue; }
+      insert.run(reader.id, contest.id, epc, readAt);
+      imported++;
+    }
+    db.prepare("UPDATE readers SET last_seen = datetime('now') WHERE id = ?").run(reader.id);
+  })();
+  if (imported) sseBroadcast(contest.id, 'tag_reads', { reader: { id: reader.id, name: reader.name, location: reader.location }, reads: [] });
+  auditLog(req.user.id, 'reader.import_reads', 'contest', contest.id, `${reader.name}: ${imported}`);
+  res.json({ imported, skipped: reads.length - imported, errors });
+});
+
 // ---- Waves & race start (Webscorer-style: gun time per wave) ----
 
 router.get('/contests/:id/waves', requireAuth, (req, res) => {
@@ -668,7 +754,11 @@ router.get('/contests/:id/race-results', async (req, res) => {
       return res.status(500).json({ error: 'pdf build failed' });
     }
   }
-  res.json({ results, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
+  // Checkpoint readers (split columns); each result row carries r.splits keyed by id.
+  const checkpoints = db
+    .prepare("SELECT id, name, location FROM readers WHERE contest_id = ? AND role = 'checkpoint' ORDER BY id")
+    .all(contest.id);
+  res.json({ results, checkpoints, suppress_secs: contest.suppress_secs, min_lap_gap_secs: contest.min_lap_gap_secs });
 });
 
 /**

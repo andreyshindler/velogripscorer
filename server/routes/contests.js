@@ -92,7 +92,7 @@ function serializeContest(contest, user) {
   if (!isOrganizer(contest, user)) {
     delete out.invite_code;
   } else {
-    const reader = db.prepare('SELECT token FROM readers WHERE contest_id = ? ORDER BY id LIMIT 1').get(contest.id);
+    const reader = db.prepare("SELECT token FROM readers WHERE contest_id = ? AND role = 'primary' ORDER BY id LIMIT 1").get(contest.id);
     out.app_token = reader ? reader.token : null;
   }
   return out;
@@ -225,7 +225,7 @@ router.get('/my/races', requireAuth, (req, res) => {
       `SELECT c.id, c.title, c.sport, c.location, c.start_at, c.end_at, c.status,
         (SELECT COUNT(DISTINCT CASE WHEN a.bib != '' THEN 'b' || a.bib ELSE 'e' || a.epc END)
            FROM tag_assignments a WHERE a.contest_id = c.id) AS racer_count,
-        (SELECT token FROM readers r WHERE r.contest_id = c.id ORDER BY r.id LIMIT 1) AS app_token,
+        (SELECT token FROM readers r WHERE r.contest_id = c.id AND r.role = 'primary' ORDER BY r.id LIMIT 1) AS app_token,
         (SELECT GROUP_CONCAT(l.name, ', ') FROM league_races lr
            JOIN leagues l ON l.id = lr.league_id WHERE lr.contest_id = c.id) AS league_names,
         (SELECT lr.league_id FROM league_races lr WHERE lr.contest_id = c.id LIMIT 1) AS league_id

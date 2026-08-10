@@ -1222,6 +1222,7 @@ async function viewPublicResults(id, tab) {
   if (tapsBtn) tapsBtn.onclick = () => downloadAuthed(`/contests/${id}/taps`, `taps-${id}.csv`);
 
   let currentResults = data.results;
+  let checkpoints = data.checkpoints || [];
   const render = (results) => {
     currentResults = results;
     const body = document.getElementById('pubbody');
@@ -1229,10 +1230,10 @@ async function viewPublicResults(id, tab) {
     const qi = location.hash.indexOf('?');
     const qs = qi >= 0 ? new URLSearchParams(location.hash.slice(qi + 1)) : null;
     if (tab === 'live' && qs && qs.has('dist')) {
-      body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '', c.status === 'finished');
+      body.innerHTML = liveRaceView(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '', c.status === 'finished', checkpoints);
     } else if (qs && qs.has('dist')) {
       body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
-    } else if (tab === 'full') body.innerHTML = fullResultsTable(results, isAdmin());
+    } else if (tab === 'full') body.innerHTML = fullResultsTable(results, isAdmin(), checkpoints);
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
     else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
     else body.innerHTML = raceWinnersTables(id, results, c.status === 'finished');
@@ -1242,6 +1243,7 @@ async function viewPublicResults(id, tab) {
   state.sse = new EventSource(`${BASE}/api/contests/${id}/stream`);
   const refetch = async () => {
     const fresh = await api(`/contests/${id}/race-results`);
+    if (fresh.checkpoints) checkpoints = fresh.checkpoints;
     render(fresh.results);
     return fresh.results;
   };
@@ -1389,7 +1391,13 @@ function fmtElapsedMs(ms) {
 
 // Live race / progress view: scope summary (finished / on course / not
 // started) plus the live finish order. Refreshes with the results via SSE.
-function liveRaceView(results, id, dist, cat, gender, raceDone) {
+function liveRaceView(results, id, dist, cat, gender, raceDone, checkpoints) {
+  const cps = checkpoints || [];
+  const cpHeads = cps.map((cp) => `<th title="${esc(cp.location || '')}">${esc(cp.name)}</th>`).join('');
+  const cpCells = (r) => cps.map((cp) => {
+    const s = r.splits && r.splits[cp.id];
+    return `<td class="muted" style="font-variant-numeric:tabular-nums">${s ? esc(s.elapsed) : ''}</td>`;
+  }).join('');
   let scope = results.filter((r) => (r.distance || '') === dist);
   if (gender === 'Male') scope = scope.filter((r) => isMaleW(r.gender));
   else if (gender === 'Female') scope = scope.filter((r) => isFemaleW(r.gender));
@@ -1412,8 +1420,8 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       ? (i === 0 ? '–' : '') : '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
     return `<tr><td><strong>${r.rank}</strong></td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
-      <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td></tr>`;
-  }).join('') || `<tr><td colspan="5" class="muted">${t('no_results_yet')}</td></tr>`;
+      <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td>${cpCells(r)}</tr>`;
+  }).join('') || `<tr><td colspan="${5 + cps.length}" class="muted">${t('no_results_yet')}</td></tr>`;
   const pillList = (label, rows) => rows.length
     ? `<h3 style="margin:16px 0 6px">${label} <span class="muted">(${rows.length})</span></h3>
        <div style="display:flex;flex-wrap:wrap;gap:6px">${rows
@@ -1433,7 +1441,7 @@ function liveRaceView(results, id, dist, cat, gender, raceDone) {
       ${dsq.length ? stat(dsq.length, 'DSQ', 'dns') : ''}
     </div>
     <div style="overflow-x:auto"><table class="board"><thead><tr>
-      <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>
+      <th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('finish_time')}</th><th>${t('difference')}</th>${cpHeads}
     </tr></thead><tbody>${finishedHtml}</tbody></table></div>
     ${onCourseHtml}`;
 }
@@ -1551,10 +1559,18 @@ function topFinishersTables(results, n) {
 
 // Full results split into a section per distance, each ranked on its own
 // (a 5k time can't be compared to a 10k, so they're separate competitions).
-function fullResultsTable(results, editable) {
+function fullResultsTable(results, editable, checkpoints) {
+  const cps = checkpoints || [];
   const eKey = (r) => r.bib || ('epc:' + r.epc);
   const eCell = (r) => (editable
     ? `<td><button class="btn small secondary rr-edit" data-key="${esc(eKey(r))}">✎ ${t('edit_result')}</button></td>` : '');
+  // A split cell per checkpoint (elapsed-from-gun), blank until the racer passes.
+  const cpHeads = cps.map((cp) => `<th title="${esc(cp.location || '')}">${esc(cp.name)}</th>`).join('');
+  const cpCells = (r) => cps.map((cp) => {
+    const s = r.splits && r.splits[cp.id];
+    return `<td class="muted" style="font-variant-numeric:tabular-nums">${s ? esc(s.elapsed) : ''}</td>`;
+  }).join('');
+  const cols = (editable ? 9 : 8) + cps.length;
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
   const sections = dists.map((d) => {
@@ -1573,16 +1589,16 @@ function fullResultsTable(results, editable) {
       <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
-      <td class="muted" style="font-variant-numeric:tabular-nums">${behindOf(r, i)}</td>${eCell(r)}</tr>`).join('');
+      <td class="muted" style="font-variant-numeric:tabular-nums">${behindOf(r, i)}</td>${cpCells(r)}${eCell(r)}</tr>`).join('');
     const otherRows = others.map((r) => `<tr>
       <td class="muted">–</td><td><strong>${esc(r.bib || '')}</strong></td>
       <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td></td><td>${r.laps || ''}</td>
-      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td>${eCell(r)}</tr>`).join('');
+      <td class="muted">${RACE_STATUS_LABEL()[r.status] || r.status}</td><td></td>${cpCells(r)}${eCell(r)}</tr>`).join('');
     return `<div style="overflow-x:auto"><table class="board mt"><thead>
-      <tr><th colspan="${editable ? 9 : 8}">${esc(d || t('overall'))}</th></tr>
+      <tr><th colspan="${cols}">${esc(d || t('overall'))}</th></tr>
       <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('category')}</th>
-      <th>${t('category_place')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>${editable ? '<th></th>' : ''}</tr></thead>
+      <th>${t('category_place')}</th><th>${t('laps')}</th><th>${t('elapsed_col')}</th><th>${t('behind')}</th>${cpHeads}${editable ? '<th></th>' : ''}</tr></thead>
       <tbody>${finRows}${otherRows}</tbody></table></div>`;
   }).join('');
   return sections || `<p class="muted">${t('no_results_yet')}</p>`;
@@ -1651,12 +1667,14 @@ function racerEditForm(a, waves) {
 
 async function renderManage(box, c) {
   const generation = renderGeneration;
-  const [{ tags }, wavesData] = await Promise.all([
+  const [{ tags }, wavesData, readersData] = await Promise.all([
     api(`/contests/${c.id}/tags`),
     api(`/contests/${c.id}/waves`),
+    api(`/contests/${c.id}/readers`).catch(() => ({ readers: [] })),
   ]);
   if (generation !== renderGeneration) return;
   const waves = wavesData.waves;
+  const checkpoints = (readersData.readers || []).filter((r) => r.role === 'checkpoint');
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
@@ -1677,6 +1695,38 @@ async function renderManage(box, c) {
         <code style="font-size:0.8rem;overflow-wrap:anywhere">${esc(c.app_token || '')}</code>
         <button class="btn small secondary" id="copy-token">${t('copy')}</button>
       </div>
+    </div>
+
+    <div class="card mt" id="checkpoints-card">
+      <h3 style="margin-top:0">📍 ${t('checkpoints')}</h3>
+      <p class="muted" style="margin:4px 0">${t('checkpoint_help')}</p>
+      <div id="checkpoints-list">
+        ${checkpoints.length ? checkpoints.map((cp) => `
+          <div class="card" style="margin:8px 0;padding:10px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <strong>${esc(cp.name)}</strong>
+              ${cp.location ? `<span class="pill tag">📍 ${esc(cp.location)}</span>` : ''}
+              <span class="muted" style="font-size:.8rem">${cp.read_count} ${t('reads')}</span>
+              <button class="btn small danger cp-del" data-id="${cp.id}" data-name="${esc(cp.name)}" style="margin-inline-start:auto">${t('delete')}</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+              <code style="font-size:.75rem;overflow-wrap:anywhere">${esc(cp.token)}</code>
+              <button class="btn small secondary cp-copy" data-token="${esc(cp.token)}">${t('copy')}</button>
+            </div>
+            <div style="margin-top:8px">
+              <label class="btn small secondary" style="cursor:pointer">${t('import_checkpoint_reads')}
+                <input type="file" class="cp-import" data-id="${cp.id}" accept=".csv,.xlsx,text/csv" hidden></label>
+              <span class="muted" style="font-size:.75rem">${t('checkpoint_import_help')}</span>
+            </div>
+          </div>`).join('') : `<p class="muted" style="margin:0">${t('no_checkpoints')}</p>`}
+      </div>
+      <form id="add-checkpoint" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px">
+        <label style="margin:0">${t('checkpoint_name')}
+          <input id="cp-name" required maxlength="60" placeholder="${t('checkpoint_name_ph')}" style="display:block;margin-top:4px"></label>
+        <label style="margin:0">${t('location')}
+          <input id="cp-location" maxlength="80" style="display:block;margin-top:4px"></label>
+        <button class="btn small">${t('add_checkpoint')}</button>
+      </form>
     </div>
 
     <div class="card mt">
@@ -1773,6 +1823,46 @@ async function renderManage(box, c) {
     try { await navigator.clipboard.writeText(c.app_token || ''); toast(t('copied')); }
     catch { prompt(t('copy'), c.app_token || ''); }
   };
+
+  // ---- checkpoints ----
+  $('#add-checkpoint').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/contests/${c.id}/readers`, { method: 'POST', body: {
+        role: 'checkpoint',
+        name: $('#cp-name').value.trim(),
+        location: $('#cp-location').value.trim(),
+      }});
+      toast(t('saved'));
+      viewContest(c.id, 'manage');
+    } catch (err) { toast(err.message, true); }
+  };
+  box.querySelectorAll('.cp-copy').forEach((btn) => {
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(btn.dataset.token); toast(t('copied')); }
+      catch { prompt(t('copy'), btn.dataset.token); }
+    };
+  });
+  box.querySelectorAll('.cp-del').forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm(t('delete_checkpoint_confirm', { name: btn.dataset.name }))) return;
+      try { await api(`/contests/${c.id}/readers/${btn.dataset.id}`, { method: 'DELETE' }); viewContest(c.id, 'manage'); }
+      catch (err) { toast(err.message, true); }
+    };
+  });
+  box.querySelectorAll('.cp-import').forEach((input) => {
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.set('file', file);
+      try {
+        const r = await api(`/contests/${c.id}/readers/${input.dataset.id}/import-reads`, { method: 'POST', form });
+        toast(t('reads_merged', { n: r.imported, s: r.skipped }) + (r.errors?.length ? ' — ' + r.errors[0] : ''));
+        viewContest(c.id, 'manage');
+      } catch (err) { toast(err.message, true); }
+    };
+  });
 
   const reopenBtn = $('#reopen-race');
   if (reopenBtn) reopenBtn.onclick = async () => {
