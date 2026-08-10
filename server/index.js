@@ -79,6 +79,10 @@ if (BASE_PATH) {
   rootApp = express();
   rootApp.disable('x-powered-by');
   rootApp.set('trust proxy', true);
+  // Answer the container HEALTHCHECK at the root too — it probes
+  // http://localhost:3000/api/health with no prefix, which would otherwise 404
+  // under BASE_PATH and mark the container unhealthy even though the app is up.
+  rootApp.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
   rootApp.use((req, res, next) => {
     // exact bare prefix only — Express route matching would also swallow
     // the trailing-slash form and loop
