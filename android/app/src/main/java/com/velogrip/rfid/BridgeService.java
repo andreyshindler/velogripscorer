@@ -53,6 +53,7 @@ public class BridgeService extends Service {
     public static final String EXTRA_WIFI_STATE = "wifiState";
     public static final String EXTRA_PENDING = "pending";
     public static final String EXTRA_UPLOADED = "uploaded";
+    public static final String EXTRA_ONLINE = "online";
     public static final String EXTRA_LAST_EPC = "lastEpc";
     public static final String EXTRA_LOG = "log";
 
@@ -65,6 +66,9 @@ public class BridgeService extends Service {
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean readerConnected = new AtomicBoolean(false);
+    // Whether the last server sync attempt succeeded — drives the on-screen
+    // "offline / N buffered" indicator. Starts true (optimistic).
+    private final AtomicBoolean online = new AtomicBoolean(true);
     private final AtomicLong uploadedTotal = new AtomicLong(0);
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
@@ -340,12 +344,16 @@ public class BridgeService extends Service {
                 if (uploader.upload(batch)) {
                     store.markUploaded(batch.get(batch.size() - 1).id);
                     uploadedTotal.addAndGet(batch.size());
+                    online.set(true);
                     broadcastStatus(null);
                     updateNotification();
                 }
             } catch (InterruptedException e) {
                 return;
             } catch (Exception e) {
+                // Upload failed (no internet / server unreachable): the passes
+                // stay buffered and the screen shows "offline / N waiting".
+                online.set(false);
                 broadcastStatus(getString(R.string.log_upload_error, shortMessage(e)));
             }
         }
@@ -368,6 +376,7 @@ public class BridgeService extends Service {
         intent.putExtra(EXTRA_WIFI_STATE, networkState());
         intent.putExtra(EXTRA_PENDING, store.pendingCount());
         intent.putExtra(EXTRA_UPLOADED, uploadedTotal.get());
+        intent.putExtra(EXTRA_ONLINE, online.get());
         if (log != null) intent.putExtra(EXTRA_LOG, log);
         return intent;
     }

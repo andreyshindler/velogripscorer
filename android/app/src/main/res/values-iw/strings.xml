@@ -30,6 +30,8 @@
     <string name="join_pick_race">הקש על המרוץ שאתה מפעיל</string>
     <string name="join_no_shared_races">עדיין לא שותפה גישה לנקודת ביקורת עם החשבון הזה. בקש מהמארגן להוסיף אותך, או השתמש בקוד הצטרפות למטה.</string>
     <string name="join_or_code">או הזן קוד הצטרפות</string>
+    <string name="sync_offline">● לא מקוון — %1$d חציות נשמרו, יועלו כשהחיבור יחזור</string>
+    <string name="sync_uploading">↑ מעלה — נותרו %1$d חציות</string>
     <string name="join_checkpoint_note">טיפ: סרוק את קוד ה-QR בלשונית הניהול באתר כדי למלא את הקוד אוטומטית. לאחר מכן הגדר את חיבור הקורא והתחל לתזמן — החציות נשלחות בזמן אמת, או נצברות וממוזגות כשמתחברים מחדש.</string>
 
     <string name="no_startlist_yet">אין עדיין רשימת זינוק בטלפון — הורד קודם את המרוץ שלך.</string>

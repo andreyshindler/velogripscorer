@@ -45,6 +45,19 @@
             android:textSize="18sp" />
     </LinearLayout>
 
+    <!-- Upload/offline status strip: hidden when everything is synced, shown when
+         passes are buffered or the server is unreachable. -->
+    <TextView
+        android:id="@+id/syncStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="6dp"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:visibility="gone" />
+
     <!-- Clock row: ‹ prev · clock · next › -->
     <LinearLayout
         android:layout_width="match_parent"

@@ -30,6 +30,8 @@
     <string name="join_pick_race">Tap the race you\'re operating</string>
     <string name="join_no_shared_races">No races have shared checkpoint access with this account yet. Ask the organizer to add you, or use a join code below.</string>
     <string name="join_or_code">Or enter a join code</string>
+    <string name="sync_offline">● Offline — %1$d passes saved, will upload when back online</string>
+    <string name="sync_uploading">↑ Uploading — %1$d passes left</string>
     <string name="join_checkpoint_note">Tip: scan the QR on the web Manage tab to fill the code in automatically. Next, set up the reader connection and start timing — your passes upload live, or buffer and merge when you reconnect.</string>
 
     <string name="no_startlist_yet">No start list on this phone yet — download your race first.</string>

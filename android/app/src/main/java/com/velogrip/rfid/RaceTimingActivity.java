@@ -37,6 +37,8 @@ public class RaceTimingActivity extends BaseActivity {
     private RaceStore store;
     private Prefs prefs;
     private TextView clockText, clockSub, hint;
+    private TextView syncStatus;
+    private boolean online = true; // last sync state reported by BridgeService
     private SnapScrollView pager;
     private LinearLayout pagerInner;
     private LinearLayout resultsBox;
@@ -84,6 +86,7 @@ public class RaceTimingActivity extends BaseActivity {
     /** Reader reads arrive as passings written by BridgeService; refresh on each. */
     private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent i) {
+            online = i.getBooleanExtra(BridgeService.EXTRA_ONLINE, online);
             scheduleRender(); // a new crossing (or status change) landed in the store
         }
     };
@@ -102,6 +105,7 @@ public class RaceTimingActivity extends BaseActivity {
         pager.setOnPage(p -> { page = p; updateHint(); });
         resultsBox = findViewById(R.id.resultsBox);
         hint = findViewById(R.id.timingHint);
+        syncStatus = findViewById(R.id.syncStatus);
 
         findViewById(R.id.homeButton).setOnClickListener(v -> {
             Intent i = new Intent(this, MainActivity.class);
@@ -275,7 +279,27 @@ public class RaceTimingActivity extends BaseActivity {
 
     // ---- rendering ----
 
+    // Show the upload/offline strip only when it matters: passes waiting to sync,
+    // or the server unreachable. Hidden (and out of the way) when all is synced.
+    private void updateSyncStatus() {
+        if (syncStatus == null) return;
+        long pending = store.pendingCount();
+        if (pending == 0 && online) {
+            syncStatus.setVisibility(android.view.View.GONE);
+            return;
+        }
+        syncStatus.setVisibility(android.view.View.VISIBLE);
+        if (!online) {
+            syncStatus.setBackgroundColor(0xFFC0392B); // red: offline
+            syncStatus.setText(getString(R.string.sync_offline, pending));
+        } else {
+            syncStatus.setBackgroundColor(0xFFB9770E); // amber: catching up
+            syncStatus.setText(getString(R.string.sync_uploading, pending));
+        }
+    }
+
     private void render() {
+        updateSyncStatus();
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
