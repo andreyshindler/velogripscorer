@@ -1448,6 +1448,13 @@ function liveRaceView(results, id, dist, cat, gender, raceDone, checkpoints) {
 
 function bibNumW(bib) { const n = parseInt(String(bib || '').replace(/[^0-9]/g, ''), 10); return Number.isNaN(n) ? 1e9 : n; }
 
+// Display a 6-char checkpoint join code as XXX-XXX for readability; the server
+// strips the dash when matching, so it stays typo-friendly.
+function fmtJoinCode(code) {
+  const s = String(code || '');
+  return s.length === 6 ? `${s.slice(0, 3)}-${s.slice(3)}` : s;
+}
+
 // The detailed table behind a Race-winners link: one distance + optional
 // gender + optional category, with each racer's team shown under their name.
 function filteredResultsTable(results, id, dist, cat, gender) {
@@ -1700,6 +1707,18 @@ async function renderManage(box, c) {
     <div class="card mt" id="checkpoints-card">
       <h3 style="margin-top:0">📍 ${t('checkpoints')}</h3>
       <p class="muted" style="margin:4px 0">${t('checkpoint_help')}</p>
+      ${c.checkpoint_code ? `
+      <div class="card" style="margin:8px 0;padding:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <div id="cp-qr" style="width:132px;height:132px;flex:0 0 auto;background:#fff;border-radius:8px;padding:6px"></div>
+        <div style="flex:1;min-width:200px">
+          <div class="muted" style="font-size:.8rem">${t('checkpoint_join_code')}</div>
+          <div style="display:flex;gap:8px;align-items:center;margin:4px 0">
+            <code style="font-size:1.5rem;letter-spacing:2px;font-weight:700">${esc(fmtJoinCode(c.checkpoint_code))}</code>
+            <button class="btn small secondary" id="cp-code-copy" data-code="${esc(c.checkpoint_code)}">${t('copy')}</button>
+          </div>
+          <p class="muted" style="margin:4px 0 0;font-size:.82rem">${t('checkpoint_join_help')}</p>
+        </div>
+      </div>` : ''}
       <div id="checkpoints-list">
         ${checkpoints.length ? checkpoints.map((cp) => `
           <div class="card" style="margin:8px 0;padding:10px">
@@ -1825,6 +1844,29 @@ async function renderManage(box, c) {
   };
 
   // ---- checkpoints ----
+  // Render the join QR (a velogrip:// deep link that opens the app's Join-as-
+  // checkpoint screen pre-filled with the code + this server's URL) and wire the
+  // code copy button. Falls back silently if the QR lib failed to load.
+  if (c.checkpoint_code) {
+    const qrBox = $('#cp-qr');
+    if (qrBox && typeof qrcode === 'function') {
+      try {
+        const base = location.origin + BASE;
+        const payload = `velogrip://join?code=${c.checkpoint_code}&base=${encodeURIComponent(base)}`;
+        const qr = qrcode(0, 'M');
+        qr.addData(payload);
+        qr.make();
+        qrBox.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+        const svg = qrBox.querySelector('svg');
+        if (svg) { svg.style.width = '100%'; svg.style.height = '100%'; svg.style.display = 'block'; }
+      } catch { qrBox.remove(); }
+    } else if (qrBox) { qrBox.remove(); }
+    const codeCopy = $('#cp-code-copy');
+    if (codeCopy) codeCopy.onclick = async () => {
+      try { await navigator.clipboard.writeText(codeCopy.dataset.code); toast(t('copied')); }
+      catch { prompt(t('copy'), codeCopy.dataset.code); }
+    };
+  }
   $('#add-checkpoint').onsubmit = async (e) => {
     e.preventDefault();
     try {

@@ -35,6 +35,31 @@ function canView(contest, user, inviteCode) {
   return false;
 }
 
+// A short, human-friendly join code (6 chars, no ambiguous 0/O/1/I) that a
+// secondary phone types — or scans off a QR deep link — to auto-provision
+// itself as a checkpoint reader. Generated lazily the first time a race's
+// organizer needs it, and unique across contests.
+const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+function genCheckpointCode() {
+  const bytes = crypto.randomBytes(6);
+  let out = '';
+  for (let i = 0; i < 6; i++) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  return out;
+}
+function ensureCheckpointCode(contest) {
+  if (contest.kind !== 'race') return null;
+  if (contest.checkpoint_code) return contest.checkpoint_code;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const code = genCheckpointCode();
+    const clash = db.prepare('SELECT 1 FROM contests WHERE checkpoint_code = ?').get(code);
+    if (clash) continue;
+    db.prepare('UPDATE contests SET checkpoint_code = ? WHERE id = ?').run(code, contest.id);
+    contest.checkpoint_code = code;
+    return code;
+  }
+  return null;
+}
+
 function votingOpen(contest) {
   if (contest.status !== 'active') return false;
   const now = new Date();
@@ -94,6 +119,7 @@ function serializeContest(contest, user) {
   } else {
     const reader = db.prepare("SELECT token FROM readers WHERE contest_id = ? AND role = 'primary' ORDER BY id LIMIT 1").get(contest.id);
     out.app_token = reader ? reader.token : null;
+    out.checkpoint_code = ensureCheckpointCode(contest);
   }
   return out;
 }

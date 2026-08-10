@@ -34,6 +34,8 @@ public class MainActivity extends BaseActivity {
                 startActivity(new Intent(this, RaceArchiveActivity.class)));
         findViewById(R.id.rowDownload).setOnClickListener(v ->
                 startActivity(new Intent(this, DownloadRacesActivity.class)));
+        findViewById(R.id.rowJoinCheckpoint).setOnClickListener(v ->
+                startActivity(new Intent(this, JoinCheckpointActivity.class)));
         findViewById(R.id.navSettings).setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.navAccount).setOnClickListener(v ->

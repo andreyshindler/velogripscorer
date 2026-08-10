@@ -81,6 +81,38 @@ test('checkpoint reads are split times, not finish crossings', async () => {
   assert.equal(r.splits[cp1.id].elapsed, '1:00.0', 'split = checkpoint pass at +60s');
 });
 
+test('a phone joins as a checkpoint with the short code (auto-provisions a token)', async () => {
+  // The organizer's contest fetch mints the join code lazily.
+  const c = (await request(app).get(`/api/contests/${contest.id}`).set(auth(org))).body;
+  assert.ok(c.checkpoint_code, 'organizer sees a checkpoint join code');
+  assert.match(c.checkpoint_code, /^[0-9A-Z]{6}$/);
+
+  // A bad code is rejected.
+  const bad = await request(app).post('/api/join/checkpoint').send({ code: 'ZZZ999', name: 'Nope' });
+  assert.equal(bad.status, 404);
+
+  // The real code (typed with a dash, as shown) provisions a checkpoint token.
+  const dashed = `${c.checkpoint_code.slice(0, 3)}-${c.checkpoint_code.slice(3)}`;
+  const join = await request(app).post('/api/join/checkpoint').send({ code: dashed, name: 'KM 8' });
+  assert.equal(join.status, 201);
+  assert.ok(join.body.token && join.body.token.startsWith('vgr_'));
+  assert.equal(join.body.contest_id, contest.id);
+  assert.equal(join.body.name, 'KM 8');
+  assert.notEqual(join.body.token, cpTok, 'a fresh token, not an existing one');
+
+  // That token ingests as a checkpoint: it records a split, never a finish/lap.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', join.body.token)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: at(45) }] });
+  const readers = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers;
+  const joined = readers.find((r) => r.name === 'KM 8');
+  assert.equal(joined.role, 'checkpoint');
+
+  const res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r = res.body.results.find((x) => x.bib === '100');
+  assert.equal(r.laps, 1, 'joined checkpoint did not add a lap');
+  assert.equal(r.splits[joined.id].elapsed, '0:45.0', 'joined checkpoint split at +45s');
+});
+
 test('import-reads merges an offline checkpoint file (elapsed seconds)', async () => {
   const cp2 = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
     .send({ name: 'Checkpoint 2', role: 'checkpoint' })).body;

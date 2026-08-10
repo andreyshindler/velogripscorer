@@ -26,6 +26,33 @@
             </intent-filter>
         </activity>
 
+        <!-- Join as checkpoint: exported so the QR deep link opens it directly.
+             velogrip://join?code=...&base=... is the primary (no chooser); the
+             https .../join?code=... filter lets a shared web link open here too. -->
+        <activity
+            android:name=".JoinCheckpointActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="velogrip" android:host="join" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                    android:host="srv1515969.hstgr.cloud"
+                    android:pathPrefix="/veloscorer/join" />
+                <data android:scheme="https"
+                    android:host="srv1515969.hstgr.cloud"
+                    android:pathPrefix="/veloscorer-staging/join" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".RaceActivity"
             android:label="@string/race_title"

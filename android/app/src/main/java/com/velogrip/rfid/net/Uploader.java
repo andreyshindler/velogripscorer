@@ -187,6 +187,28 @@ public final class Uploader {
         return response;
     }
 
+    /** Joins this race as a checkpoint using the short code shown on the web
+     *  Manage tab (no login needed). Returns the response JSON, which carries a
+     *  freshly-minted checkpoint reader token to pair this phone with. */
+    public static String joinCheckpoint(String serverUrl, String code, String name) throws IOException {
+        HttpURLConnection conn = openStatic(serverUrl, "/api/join/checkpoint", "POST", null);
+        byte[] body = ("{\"code\":" + jsonString(code) + ",\"name\":" + jsonString(name) + "}")
+                .getBytes(StandardCharsets.UTF_8);
+        conn.setDoOutput(true);
+        conn.setFixedLengthStreamingMode(body.length);
+        OutputStream os = conn.getOutputStream();
+        try {
+            os.write(body);
+        } finally {
+            os.close();
+        }
+        int code2 = conn.getResponseCode();
+        String response = readBody(conn, code2);
+        conn.disconnect();
+        if (code2 < 200 || code2 >= 300) throw new IOException("HTTP " + code2 + ": " + response);
+        return response;
+    }
+
     /** Lists the account's races (each carries its app pairing token). */
     public static String myRaces(String serverUrl, String jwt) throws IOException {
         HttpURLConnection conn = openStatic(serverUrl, "/api/my/races", "GET", jwt);

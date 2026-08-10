@@ -186,6 +186,12 @@ public final class Prefs {
                 .putString("accountPass", password).apply();
     }
 
+    /** Point the app at a server URL (used when a checkpoint QR deep link carries
+     *  the base URL, so a fresh phone self-configures without typing it). */
+    public void setServerUrl(String url) {
+        sp.edit().putString("serverUrl", url.replaceAll("/+$", "")).apply();
+    }
+
     /** Called when the user picks a race after logging in: wires the pairing. */
     public void savePairing(String readerToken, String contestTitle, String email, int contestId) {
         sp.edit()

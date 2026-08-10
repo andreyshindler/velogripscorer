@@ -314,6 +314,10 @@ for (const stmt of [
   // existing reader keeps counting as crossings); 'checkpoint' is a secondary
   // reading point whose reads are split/pass times, never finish crossings.
   `ALTER TABLE readers ADD COLUMN role TEXT NOT NULL DEFAULT 'primary'`,
+  // Short, human-friendly code a secondary phone enters (or scans as a QR deep
+  // link) to auto-provision itself as a checkpoint reader for this race, without
+  // the organizer copying a long token by hand. Generated lazily per race.
+  `ALTER TABLE contests ADD COLUMN checkpoint_code TEXT`,
 ]) {
   try {
     db.exec(stmt);

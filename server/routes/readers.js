@@ -74,6 +74,38 @@ router.delete('/contests/:id/readers/:rid', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Auto-pairing: a secondary phone joins as a checkpoint with a short code ----
+// The organizer reads the race's checkpoint_code off the Manage tab (or the
+// phone scans it as a QR deep link). No auth: possessing the short code is the
+// capability. It only mints a *checkpoint* reader (splits — never finish
+// crossings) and never exposes anything about the race, so the blast radius of
+// a leaked code is limited to extra split readers, which the organizer can
+// delete. Returns the freshly-minted checkpoint token for the phone to store.
+router.post('/join/checkpoint', (req, res) => {
+  const raw = String(req.body?.code || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+  if (!raw) return res.status(400).json({ error: 'join code required' });
+  const contest = db.prepare("SELECT * FROM contests WHERE checkpoint_code = ? AND kind = 'race'").get(raw);
+  if (!contest) return res.status(404).json({ error: 'invalid join code' });
+
+  // Cap checkpoints per race so a leaked code can't create readers without bound.
+  const cpCount = db
+    .prepare("SELECT COUNT(*) AS n FROM readers WHERE contest_id = ? AND role = 'checkpoint'")
+    .get(contest.id).n;
+  if (cpCount >= 50) return res.status(429).json({ error: 'too many checkpoints for this race' });
+
+  let name = String(req.body?.name || '').trim().slice(0, 60);
+  if (!name) name = `Checkpoint ${cpCount + 1}`;
+  const location = String(req.body?.location || '').trim().slice(0, 80);
+  const token = `vgr_${crypto.randomBytes(24).toString('hex')}`;
+  db.prepare('INSERT INTO readers (contest_id, name, token, location, role) VALUES (?,?,?,?,?)')
+    .run(contest.id, name, token, location, 'checkpoint');
+  auditLog(null, 'reader.join', 'contest', contest.id, `checkpoint ${name}`);
+  res.status(201).json({
+    ok: true, token, name,
+    contest_id: contest.id, contest_title: contest.title,
+  });
+});
+
 // ---- Ingestion: called by the Android bridge app, authenticated by reader token ----
 
 router.post('/ingest/reads', (req, res) => {

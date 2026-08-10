@@ -12,7 +12,21 @@
     <string name="home_race_data">Race data</string>
     <string name="home_archive">Race archive</string>
     <string name="home_download">Download races</string>
+    <string name="home_join_checkpoint">Join as checkpoint</string>
     <string name="nav_account">My account</string>
+
+    <string name="join_checkpoint">Join as checkpoint</string>
+    <string name="join_checkpoint_help">Turn this phone into a checkpoint reader for a race. Its reads become split (pass) times — the finish line stays authoritative.</string>
+    <string name="join_code_label">Join code</string>
+    <string name="join_code_hint">e.g. 7K2-Q9X</string>
+    <string name="checkpoint_name_optional">Checkpoint name (optional)</string>
+    <string name="checkpoint_name_hint">e.g. KM 10</string>
+    <string name="join_needs_code">Enter the join code shown on the race\'s Manage tab.</string>
+    <string name="joining">Joining…</string>
+    <string name="joined_as">Joined as %1$s</string>
+    <string name="join_failed">Couldn\'t join: %1$s</string>
+    <string name="join_checkpoint_note">Tip: scan the QR on the web Manage tab to fill this in automatically. Next, set up the reader connection and start timing — your passes upload live, or buffer and merge when you reconnect.</string>
+
     <string name="no_startlist_yet">No start list on this phone yet — download your race first.</string>
 
     <string name="download_title">Download races</string>
