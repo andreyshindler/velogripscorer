@@ -209,6 +209,37 @@ public final class Uploader {
         return response;
     }
 
+    /** Lists races this account may operate a checkpoint for (shared access). */
+    public static String myCheckpoints(String serverUrl, String jwt) throws IOException {
+        HttpURLConnection conn = openStatic(serverUrl, "/api/my/checkpoints", "GET", jwt);
+        int code = conn.getResponseCode();
+        String response = readBody(conn, code);
+        conn.disconnect();
+        if (code != 200) throw new IOException("HTTP " + code + ": " + response);
+        return response;
+    }
+
+    /** Mints a checkpoint reader token for a race the account is authorized for
+     *  (organizer or shared operator). Returns the response JSON with the token. */
+    public static String checkpointToken(String serverUrl, String jwt, int contestId, String name)
+            throws IOException {
+        HttpURLConnection conn = openStatic(serverUrl, "/api/contests/" + contestId + "/checkpoint-token", "POST", jwt);
+        byte[] body = ("{\"name\":" + jsonString(name) + "}").getBytes(StandardCharsets.UTF_8);
+        conn.setDoOutput(true);
+        conn.setFixedLengthStreamingMode(body.length);
+        OutputStream os = conn.getOutputStream();
+        try {
+            os.write(body);
+        } finally {
+            os.close();
+        }
+        int code = conn.getResponseCode();
+        String response = readBody(conn, code);
+        conn.disconnect();
+        if (code < 200 || code >= 300) throw new IOException("HTTP " + code + ": " + response);
+        return response;
+    }
+
     /** Lists the account's races (each carries its app pairing token). */
     public static String myRaces(String serverUrl, String jwt) throws IOException {
         HttpURLConnection conn = openStatic(serverUrl, "/api/my/races", "GET", jwt);

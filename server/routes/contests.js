@@ -361,6 +361,31 @@ router.delete('/contests/:id/collaborators/:cid', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// A registered operator (or the organizer) mints a checkpoint token for a race
+// they're authorized for — the app's "sign in & pick your race" flow, so the
+// marshal never types the join code. Same result as POST /join/checkpoint, but
+// authenticated by the account instead of the short code.
+router.post('/contests/:id/checkpoint-token', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (contest.kind !== 'race') return res.status(400).json({ error: 'not a race' });
+  if (!isOrganizer(contest, req.user) && !isCollaborator(contest, req.user)) {
+    return res.status(403).json({ error: 'not authorized for this race' });
+  }
+  const cpCount = db
+    .prepare("SELECT COUNT(*) AS n FROM readers WHERE contest_id = ? AND role = 'checkpoint'")
+    .get(contest.id).n;
+  if (cpCount >= 50) return res.status(429).json({ error: 'too many checkpoints for this race' });
+  let name = String(req.body?.name || '').trim().slice(0, 60);
+  if (!name) name = `Checkpoint ${cpCount + 1}`;
+  const location = String(req.body?.location || '').trim().slice(0, 80);
+  const token = `vgr_${crypto.randomBytes(24).toString('hex')}`;
+  db.prepare('INSERT INTO readers (contest_id, name, token, location, role) VALUES (?,?,?,?,?)')
+    .run(contest.id, name, token, location, 'checkpoint');
+  auditLog(req.user.id, 'reader.checkpoint-token', 'contest', contest.id, name);
+  res.status(201).json({ ok: true, token, name, contest_id: contest.id, contest_title: contest.title });
+});
+
 // ---- Creation & management (req 3.2) ----
 
 router.post('/contests', requireAuth, (req, res) => {

@@ -159,6 +159,31 @@ test('an authorized operator sees the join code in their own account; others do 
   assert.equal(after.races.length, 0);
 });
 
+test('an authorized account mints a checkpoint token without a code (app pick-list)', async () => {
+  const stranger = (await request(app).post('/api/auth/register')
+    .send({ email: 'cp-stranger@test.co', password: 'password123', name: 'Stranger' })).body;
+  // Not authorized for the race.
+  const no = await request(app).post(`/api/contests/${contest.id}/checkpoint-token`).set(auth(stranger)).send({ name: 'X' });
+  assert.equal(no.status, 403);
+
+  // The organizer (authorized) mints a checkpoint token directly.
+  const ok = await request(app).post(`/api/contests/${contest.id}/checkpoint-token`).set(auth(org)).send({ name: 'KM 12' });
+  assert.equal(ok.status, 201);
+  assert.ok(ok.body.token && ok.body.token.startsWith('vgr_'));
+  assert.equal(ok.body.contest_id, contest.id);
+
+  // The minted token records splits, not finish crossings.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', ok.body.token)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: at(30) }] });
+  const readers = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers;
+  const km12 = readers.find((r) => r.name === 'KM 12');
+  assert.equal(km12.role, 'checkpoint');
+  const res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r = res.body.results.find((x) => x.bib === '100');
+  assert.equal(r.laps, 1);
+  assert.equal(r.splits[km12.id].elapsed, '0:30.0');
+});
+
 test('import-reads merges an offline checkpoint file (elapsed seconds)', async () => {
   const cp2 = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
     .send({ name: 'Checkpoint 2', role: 'checkpoint' })).body;
