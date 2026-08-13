@@ -27,6 +27,7 @@ test('setup: admin logs in, a regular user + a race exist', async () => {
 
   u1 = (await request(app).post('/api/auth/register')
     .send({ email: 'u1@test.co', password: 'password123', username: 'racer1' })).body;
+  assert.equal(u1.user.role, 'marshal', 'a regular user is a marshal, not a voter');
   await request(app).post('/api/contests').set(auth(u1)).send({
     title: 'A race', kind: 'race', category: 'other',
     start_at: new Date().toISOString(), end_at: new Date(Date.now() + 3600_000).toISOString(),
@@ -41,12 +42,12 @@ test('admin can promote and demote a user; guards hold', async () => {
   assert.equal(check.role, 'admin');
 
   // Can't change your own role.
-  const self = await request(app).post(`/api/admin/users/${admin.user.id}/role`).set(auth(admin)).send({ role: 'voter' });
+  const self = await request(app).post(`/api/admin/users/${admin.user.id}/role`).set(auth(admin)).send({ role: 'marshal' });
   assert.equal(self.status, 400);
 
-  const down = await request(app).post(`/api/admin/users/${u1.user.id}/role`).set(auth(admin)).send({ role: 'voter' });
+  const down = await request(app).post(`/api/admin/users/${u1.user.id}/role`).set(auth(admin)).send({ role: 'marshal' });
   assert.equal(down.status, 200);
-  assert.equal(down.body.role, 'voter');
+  assert.equal(down.body.role, 'marshal');
 });
 
 test('reset test data wipes races + non-admin users but keeps admins', async () => {

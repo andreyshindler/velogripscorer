@@ -2641,7 +2641,7 @@ async function viewAdmin(section) {
       <tbody>${users.filter((u) => u.approved).map((u) => `
         <tr><td>${u.id}</td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${u.reputation}</td>
         <td style="white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">
-          ${u.id === state.user.id ? '' : `<button class="btn small secondary" data-role="${u.id}" data-to="${u.role === 'admin' ? 'voter' : 'admin'}" data-name="${esc(u.name)}">${u.role === 'admin' ? t('remove_admin') : t('make_admin')}</button>`}
+          ${u.id === state.user.id ? '' : `<button class="btn small secondary" data-role="${u.id}" data-to="${u.role === 'admin' ? 'marshal' : 'admin'}" data-name="${esc(u.name)}">${u.role === 'admin' ? t('remove_admin') : t('make_admin')}</button>`}
           <button class="btn small ${u.is_banned ? 'secondary' : 'danger'}" data-ban="${u.id}" data-to="${u.is_banned ? 0 : 1}">${u.is_banned ? 'Unban' : t('ban_user')}</button>
           ${u.role === 'admin' ? '' : `<button class="btn small danger" data-del="${u.id}" data-name="${esc(u.name)}">${t('delete_user')}</button>`}
         </td></tr>`).join('')}</tbody></table></div>`

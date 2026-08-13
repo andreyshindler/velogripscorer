@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   name          TEXT NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'voter' CHECK (role IN ('voter','admin')),
+  role          TEXT NOT NULL DEFAULT 'marshal' CHECK (role IN ('voter','marshal','admin')),
   bio           TEXT NOT NULL DEFAULT '',
   avatar_url    TEXT NOT NULL DEFAULT '',
   links         TEXT NOT NULL DEFAULT '[]',
@@ -347,6 +347,43 @@ for (const stmt of [
   } catch (err) {
     if (!/duplicate column/.test(String(err.message))) throw err;
   }
+}
+
+// One-time widen of the users.role CHECK to allow the 'marshal' role (the
+// regular non-admin role, renamed from the legacy 'voter'). SQLite can't ALTER a
+// CHECK in place, so rebuild the table when the old constraint is still present,
+// migrating every non-admin to 'marshal'. Runs with foreign keys off (the
+// standard SQLite table-rebuild pattern); ids are preserved so references hold.
+const usersDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
+if (usersDef && !/marshal/.test(usersDef.sql)) {
+  db.pragma('foreign_keys = OFF');
+  db.transaction(() => {
+    db.exec(`CREATE TABLE users_new (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      email         TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      name          TEXT NOT NULL,
+      role          TEXT NOT NULL DEFAULT 'marshal' CHECK (role IN ('voter','marshal','admin')),
+      bio           TEXT NOT NULL DEFAULT '',
+      avatar_url    TEXT NOT NULL DEFAULT '',
+      links         TEXT NOT NULL DEFAULT '[]',
+      is_public     INTEGER NOT NULL DEFAULT 1,
+      reputation    INTEGER NOT NULL DEFAULT 0,
+      is_banned     INTEGER NOT NULL DEFAULT 0,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      approved      INTEGER NOT NULL DEFAULT 1,
+      username      TEXT
+    )`);
+    db.exec(`INSERT INTO users_new
+        (id,email,password_hash,name,role,bio,avatar_url,links,is_public,reputation,is_banned,created_at,approved,username)
+      SELECT id,email,password_hash,name,
+        CASE WHEN role='admin' THEN 'admin' ELSE 'marshal' END,
+        bio,avatar_url,links,is_public,reputation,is_banned,created_at,approved,username
+      FROM users`);
+    db.exec('DROP TABLE users');
+    db.exec('ALTER TABLE users_new RENAME TO users');
+  })();
+  db.pragma('foreign_keys = ON');
 }
 
 // Enforce unique usernames case-insensitively, but only for users who set one

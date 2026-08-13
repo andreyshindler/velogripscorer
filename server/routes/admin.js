@@ -106,16 +106,16 @@ router.get('/admin/users', (req, res) => {
 // Promote a user to admin or demote back to a regular user.
 router.post('/admin/users/:id/role', (req, res) => {
   const id = Number(req.params.id);
-  const role = req.body?.role === 'admin' ? 'admin' : 'voter';
+  const role = req.body?.role === 'admin' ? 'admin' : 'marshal';
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'user not found' });
   if (id === req.user.id) return res.status(400).json({ error: 'you cannot change your own role' });
-  if (role === 'voter' && user.role === 'admin') {
+  if (role !== 'admin' && user.role === 'admin') {
     const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
     if (admins <= 1) return res.status(400).json({ error: 'cannot remove the last admin' });
   }
   if (role === 'admin') db.prepare("UPDATE users SET role = 'admin', approved = 1 WHERE id = ?").run(id);
-  else db.prepare("UPDATE users SET role = 'voter' WHERE id = ?").run(id);
+  else db.prepare("UPDATE users SET role = 'marshal' WHERE id = ?").run(id);
   auditLog(req.user.id, role === 'admin' ? 'admin.promote_user' : 'admin.demote_user', 'user', id);
   if (role === 'admin') notify(id, 'account_approved', 'You are now an administrator.');
   res.json({ ok: true, role });
