@@ -70,7 +70,7 @@
     <string name="conn_offline">✈️ Offline — record &amp; merge later</string>
     <string name="checkpoint_offline_title">%1$s · ✈️ Offline</string>
     <string name="stop_checkpoint_confirm">Stop this checkpoint? Its %1$d recorded readings will be cleared — here and on the server — so the next session starts fresh. This can\'t be undone.</string>
-    <string name="stop_checkpoint_offline_confirm">Stop this checkpoint? Your %1$d saved passes stay on this phone and upload when you\'re back online.</string>
+    <string name="stop_checkpoint_offline_confirm">Stop this checkpoint? Recorded passes are saved on this phone and upload automatically whenever it has network.</string>
     <string name="lap_label">Lap %1$d</string>
     <string name="all_laps_recorded">All %1$d laps already recorded for this rider</string>
     <string name="sign_in_to_join">Sign in first so this checkpoint is saved to your account</string>

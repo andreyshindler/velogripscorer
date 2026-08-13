@@ -229,7 +229,9 @@ public class CheckpointActivity extends BaseActivity {
     private void startBridge(boolean manualOnly) {
         Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_START);
         i.putExtra(BridgeService.EXTRA_MANUAL_ONLY, manualOnly);
-        i.putExtra(BridgeService.EXTRA_NO_UPLOAD, offlineMode); // offline: read/buffer, don't post
+        // No upload suppression: the loop buffers while there's no signal and
+        // flushes automatically the moment the phone regains network. Offline mode
+        // only bypasses the race-start gate.
         startForegroundService(i);
         serviceStarted = true;
     }
@@ -414,7 +416,7 @@ public class CheckpointActivity extends BaseActivity {
         if (offlineMode) {
             new android.app.AlertDialog.Builder(this)
                     .setTitle(R.string.stop_checkpoint)
-                    .setMessage(getString(R.string.stop_checkpoint_offline_confirm, store.pendingCount()))
+                    .setMessage(R.string.stop_checkpoint_offline_confirm)
                     .setPositiveButton(R.string.stop_checkpoint, (d, w) -> doStop(false))
                     .setNegativeButton(android.R.string.cancel, null)
                     .show();
