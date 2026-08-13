@@ -44,11 +44,17 @@ function computeRaceResults(contest, { category } = {}) {
   const cpReadsByEpc = new Map();   // checkpoint passes: epc -> [{at, reader_id}]
   for (const r of allReads) {
     const manual = !!r.manual;
-    // Reconcile each device read to server time by its reader's clock offset.
-    // Manual (web/operator) reads are already server time — never shift them.
-    const offset = manual ? 0 : (readerRole.get(r.reader_id)?.clock_offset_ms || 0);
+    const role = readerRole.get(r.reader_id)?.role;
+    const off = readerRole.get(r.reader_id)?.clock_offset_ms || 0;
+    // Reconcile device reads to server time by the reader's clock offset.
+    // Checkpoint reads — auto OR a marshal's manual tap — come from the
+    // checkpoint device, so always correct them. On a primary reader, device
+    // reads are corrected but web/operator manual reads are already server time.
+    const offset = role === 'checkpoint' ? off : (manual ? 0 : off);
     const at = Date.parse(r.read_at) + offset;
-    if (!manual && readerRole.get(r.reader_id)?.role === 'checkpoint') {
+    // A read on a checkpoint reader is a split/pass — whether the tag was read by
+    // RFID or the marshal tapped the bib in manually.
+    if (role === 'checkpoint') {
       if (!cpReadsByEpc.has(r.epc)) cpReadsByEpc.set(r.epc, []);
       cpReadsByEpc.get(r.epc).push({ at, reader_id: r.reader_id });
     } else {

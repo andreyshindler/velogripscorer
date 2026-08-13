@@ -54,6 +54,9 @@ public class BridgeService extends Service {
     public static final String EXTRA_PENDING = "pending";
     public static final String EXTRA_UPLOADED = "uploaded";
     public static final String EXTRA_ONLINE = "online";
+    // Manual checkpoint: upload the marshal's tapped passes without opening the
+    // RFID reader socket (no reader hardware at this checkpoint).
+    public static final String EXTRA_MANUAL_ONLY = "manualOnly";
     public static final String EXTRA_LAST_EPC = "lastEpc";
     public static final String EXTRA_LOG = "log";
 
@@ -69,6 +72,7 @@ public class BridgeService extends Service {
     // Whether the last server sync attempt succeeded — drives the on-screen
     // "offline / N buffered" indicator. Starts true (optimistic).
     private final AtomicBoolean online = new AtomicBoolean(true);
+    private boolean manualOnly = false;
     private final AtomicLong uploadedTotal = new AtomicLong(0);
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
@@ -100,6 +104,7 @@ public class BridgeService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        manualOnly = intent != null && intent.getBooleanExtra(EXTRA_MANUAL_ONLY, false);
         startBridge();
         return START_STICKY;
     }
@@ -116,10 +121,13 @@ public class BridgeService extends Service {
         // background service — and the reader socket binds to it here. Ethernet
         // needs no such per-race setup: hold it automatically the whole time
         // the bridge runs, so a wired adapter (if any) just works.
-        ReaderEthernet.start(this);
-
-        readerThread = new Thread(this::readerLoop, "reader");
-        readerThread.start();
+        // A manual checkpoint has no RFID reader — skip the reader socket/loop and
+        // just run the uploader for the marshal's tapped passes.
+        if (!manualOnly) {
+            ReaderEthernet.start(this);
+            readerThread = new Thread(this::readerLoop, "reader");
+            readerThread.start();
+        }
         uploadThread = new Thread(this::uploadLoop, "uploader");
         uploadThread.start();
         broadcastStatus(getString(R.string.log_started));

@@ -229,6 +229,21 @@ test('server-anchored clock correction fixes a checkpoint with a skewed clock', 
   assert.equal(r.laps, 1);
 });
 
+test('a manual tap on a checkpoint records a split, not a finish crossing', async () => {
+  const manualCp = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
+    .send({ name: 'Manual CP', role: 'checkpoint' })).body;
+  // The marshal tapped bib 100 in manually (the app resolves bib->epc and sends
+  // the epc with manual:true) at +75s.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', manualCp.token)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: at(75), manual: true }] });
+
+  const res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r = res.body.results.find((x) => x.bib === '100');
+  assert.equal(r.laps, 1, 'the manual checkpoint tap did NOT add a lap');
+  assert.equal(r.elapsed, '2:00.0', 'finish unchanged');
+  assert.equal(r.splits[manualCp.id].elapsed, '1:15.0', 'manual tap is a split at +75s');
+});
+
 test('import-reads merges an offline checkpoint file (elapsed seconds)', async () => {
   const cp2 = (await request(app).post(`/api/contests/${contest.id}/readers`).set(auth(org))
     .send({ name: 'Checkpoint 2', role: 'checkpoint' })).body;
