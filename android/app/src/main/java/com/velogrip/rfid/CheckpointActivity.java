@@ -15,6 +15,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.velogrip.rfid.db.RaceStore;
 import com.velogrip.rfid.net.StartListSync;
@@ -49,6 +50,7 @@ public class CheckpointActivity extends BaseActivity {
     private LinearLayout bibGrid;
     private List<RaceStore.Racer> racers = new ArrayList<>();
     private final Map<String, Integer> taps = new HashMap<>();
+    private Map<String, Integer> lapCaps = new HashMap<>(); // distance -> laps (tap cap)
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
@@ -165,6 +167,7 @@ public class CheckpointActivity extends BaseActivity {
             runOnUiThread(() -> {
                 manualStatus.setText(text);
                 racers = store.racers();
+                lapCaps = store.lapTargets();
                 filter.setVisibility(racers.isEmpty() ? View.GONE : View.VISIBLE);
                 buildGrid("");
             });
@@ -221,27 +224,43 @@ public class CheckpointActivity extends BaseActivity {
         tile.addView(bibTv);
         tile.addView(nameTv);
 
-        styleTile(tile, bibTv, nameTv, r.bib, taps.getOrDefault(r.bib, 0));
+        styleTile(tile, bibTv, nameTv, r.bib, taps.getOrDefault(r.bib, 0), maxTaps(r));
         tile.setOnClickListener(v -> tapBib(r, tile, bibTv, nameTv));
         return tile;
     }
 
+    // A rider passes a checkpoint once per lap, so cap taps at the race's lap
+    // count for that distance. Unknown lap count -> no cap (or 1 if single-crossing).
+    private int maxTaps(RaceStore.Racer r) {
+        Integer laps = lapCaps.get(r.distance == null ? "" : r.distance);
+        if (laps != null && laps > 0) return laps;
+        return prefs.recordLaps() ? Integer.MAX_VALUE : 1;
+    }
+
     private void tapBib(RaceStore.Racer r, View tile, TextView bibTv, TextView nameTv) {
+        final int max = maxTaps(r);
+        final int cur = taps.getOrDefault(r.bib, 0);
+        if (cur >= max) {
+            Toast.makeText(this, getString(R.string.all_laps_recorded, max), Toast.LENGTH_SHORT).show();
+            return;
+        }
         store.recordPassing(r.epc, System.currentTimeMillis());
-        int n = taps.getOrDefault(r.bib, 0) + 1;
+        int n = cur + 1;
         taps.put(r.bib, n);
-        styleTile(tile, bibTv, nameTv, r.bib, n);
+        styleTile(tile, bibTv, nameTv, r.bib, n, max);
         recent.setText(getString(R.string.recorded_bib, r.bib, r.name == null ? "" : r.name));
         render(false, store.pendingCount(), true);
     }
 
-    private void styleTile(View tile, TextView bibTv, TextView nameTv, String bib, int count) {
+    private void styleTile(View tile, TextView bibTv, TextView nameTv, String bib, int count, int max) {
         boolean on = count > 0;
-        tile.setBackgroundColor(getColor(on ? R.color.velogrip_green : R.color.tile_idle_bg));
+        boolean full = on && count >= max;
+        tile.setBackgroundColor(getColor(!on ? R.color.tile_idle_bg : (full ? R.color.velogrip_dark : R.color.velogrip_green)));
         int tc = getColor(on ? R.color.on_accent : R.color.tile_idle_text);
         bibTv.setTextColor(tc);
         nameTv.setTextColor(tc);
-        bibTv.setText(count > 1 ? bib + "  ×" + count : bib);
+        boolean finite = max != Integer.MAX_VALUE;
+        bibTv.setText(count == 0 ? bib : (finite ? bib + "  " + count + "/" + max : bib + "  ×" + count));
     }
 
     private View spacer() {

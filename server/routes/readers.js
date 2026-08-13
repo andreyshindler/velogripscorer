@@ -189,13 +189,38 @@ router.get('/ingest/startlist', (req, res) => {
     )
     .all(contest.id);
   const waves = db.prepare('SELECT name, started_at FROM waves WHERE contest_id = ? ORDER BY id').all(contest.id);
+  let lapTargets = {};
+  try { lapTargets = JSON.parse(contest.lap_targets || '{}'); } catch { lapTargets = {}; }
   res.json({
     contest: { id: contest.id, title: contest.title },
     suppress_secs: contest.suppress_secs,
     min_lap_gap_secs: contest.min_lap_gap_secs,
+    record_laps: contest.record_laps,
+    lap_targets: lapTargets,
     waves,
     racers: tags,
   });
+});
+
+// The timing device publishes its per-distance lap counts (and lap mode) so a
+// checkpoint can cap manual taps at how many times a rider passes.
+router.post('/ingest/lap-targets', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const src = req.body?.lap_targets;
+  const clean = {};
+  if (src && typeof src === 'object') {
+    for (const [dist, n] of Object.entries(src)) {
+      const laps = Number(n);
+      if (Number.isInteger(laps) && laps >= 1 && laps <= 999) clean[String(dist).slice(0, 80)] = laps;
+    }
+  }
+  const patch = { lap_targets: JSON.stringify(clean) };
+  db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(patch.lap_targets, reader.contest_id);
+  if (typeof req.body?.record_laps === 'boolean') {
+    db.prepare('UPDATE contests SET record_laps = ? WHERE id = ?').run(req.body.record_laps ? 1 : 0, reader.contest_id);
+  }
+  res.json({ ok: true });
 });
 
 // Gun-time upload from the offline timing app (reader-token auth). Waves are

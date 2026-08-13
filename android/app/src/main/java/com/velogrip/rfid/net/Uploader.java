@@ -108,6 +108,22 @@ public final class Uploader {
         return ok;
     }
 
+    /** Publishes this device's per-distance lap counts + lap mode, so a checkpoint
+     *  can cap manual taps at how many times a rider passes. */
+    public boolean uploadLapTargets(java.util.Map<String, Integer> laps, boolean recordLaps) throws IOException {
+        StringBuilder json = new StringBuilder("{\"record_laps\":").append(recordLaps).append(",\"lap_targets\":{");
+        boolean first = true;
+        for (java.util.Map.Entry<String, Integer> e : laps.entrySet()) {
+            if (e.getKey() == null || e.getKey().isEmpty()) continue;
+            if (!first) json.append(',');
+            json.append(jsonString(e.getKey())).append(':').append(e.getValue() == null ? 1 : e.getValue());
+            first = false;
+        }
+        json.append("}}");
+        int code = post("/api/ingest/lap-targets", json.toString());
+        return code >= 200 && code < 300;
+    }
+
     /** Downloads the start list JSON (racers, waves, timing settings). */
     public String downloadStartList() throws IOException {
         HttpURLConnection conn = open("/api/ingest/startlist", "GET");

@@ -345,6 +345,10 @@ for (const stmt of [
   // added or anonymous code joins). Lets a signed-in marshal re-scan the same
   // race and get their existing checkpoint back instead of a duplicate.
   `ALTER TABLE readers ADD COLUMN created_by INTEGER`,
+  // Per-distance lap counts (JSON {distance: laps}) published by the timing
+  // device, so a checkpoint can cap manual taps at the number of laps a rider
+  // makes. NULL = unknown (checkpoint then doesn't cap).
+  `ALTER TABLE contests ADD COLUMN lap_targets TEXT`,
 ]) {
   try {
     db.exec(stmt);

@@ -26,6 +26,16 @@ public final class StartListSync {
                 json.optInt("suppress_secs", 10),
                 json.optInt("min_lap_gap_secs", 30),
                 json.getJSONObject("contest").optString("title", ""));
+        // Lap mode + per-distance lap counts, so a checkpoint can cap manual taps.
+        if (json.has("record_laps")) prefs.setRecordLaps(json.optInt("record_laps", 1) != 0);
+        JSONObject lapTargets = json.optJSONObject("lap_targets");
+        if (lapTargets != null) {
+            java.util.Iterator<String> keys = lapTargets.keys();
+            while (keys.hasNext()) {
+                String d = keys.next();
+                store.setLaps(d, lapTargets.optInt(d, 1));
+            }
+        }
         JSONArray waves = json.getJSONArray("waves");
         for (int i = 0; i < waves.length(); i++) {
             JSONObject w = waves.getJSONObject(i);

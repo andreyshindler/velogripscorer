@@ -336,9 +336,15 @@ public class BridgeService extends Service {
 
     private void uploadLoop() {
         Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
+        boolean lapTargetsSynced = false;
         while (running.get()) {
             try {
                 Thread.sleep(UPLOAD_INTERVAL_MS);
+                // The finish device publishes its lap counts once, so checkpoints
+                // can cap taps. A manual checkpoint has none of its own to send.
+                if (!manualOnly && !lapTargetsSynced) {
+                    if (uploader.uploadLapTargets(store.lapTargets(), prefs.recordLaps())) lapTargetsSynced = true;
+                }
                 // gun times first: results on the web are wrong without them
                 for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
                     if (wave.name.isEmpty()) continue; // local mass-start marker
