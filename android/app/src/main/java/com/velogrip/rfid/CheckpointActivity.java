@@ -54,8 +54,9 @@ public class CheckpointActivity extends BaseActivity {
     private View chooser, readerPanel, manualPanel, lapCountersScroll, waiting;
     private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, waitingMsg;
     private boolean checkingGate = false;
+    private boolean raceStarted = false; // recording is unlocked once the race starts
     private final android.os.Handler gateHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable gatePoll = () -> { if (mode == MODE_NONE) checkGate(); };
+    private final Runnable gatePoll = () -> { if (!raceStarted) checkGate(); };
     private Button connect;
     private EditText filter;
     private LinearLayout bibGrid, lapCounters;
@@ -105,7 +106,6 @@ public class CheckpointActivity extends BaseActivity {
         findViewById(R.id.cpWaitingRefresh).setOnClickListener(v -> checkGate());
         findViewById(R.id.cpModeReader).setOnClickListener(v -> pickReader());
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
-        setChooserEnabled(false); // stays disabled until the race-start gate clears
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
         findViewById(R.id.cpReaderSettings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.cpStop).setOnClickListener(v -> stopAndExit());
@@ -123,9 +123,10 @@ public class CheckpointActivity extends BaseActivity {
         // Re-arm the reader if a scan just set the address.
         if (mode == MODE_READER && !serviceStarted && !prefs.readerHost().isEmpty()) startBridge(false);
         render(false, store.pendingCount(), true);
-        // Gate: a marshal can only start the checkpoint once the organizer has
-        // started the race (a wave has a gun time).
-        if (mode == MODE_NONE) checkGate();
+        // Refresh whether the race has started (a wave has a gun time). The marshal
+        // can connect a reader and view the bib list any time, but can't record a
+        // pass until the organizer starts the race.
+        checkGate();
     }
 
     @Override
@@ -137,44 +138,34 @@ public class CheckpointActivity extends BaseActivity {
 
     // ---- Race-start gate -------------------------------------------------------
 
-    // Refresh wave status from the server and reveal the mode chooser only if the
-    // race has started; otherwise show the waiting screen and poll again shortly.
+    // Sync wave status; recording is unlocked only once the race is under way.
+    // Keeps polling until it starts, so the checkpoint unlocks on its own.
     private void checkGate() {
-        if (mode != MODE_NONE || checkingGate) return;
+        if (checkingGate) return;
         checkingGate = true;
         gateHandler.removeCallbacks(gatePoll);
-        // The mode options stay visible the whole time — just not tappable until
-        // the race has started.
-        setChooserEnabled(false);
-        waiting.setVisibility(View.VISIBLE);
-        waitingMsg.setText(R.string.checkpoint_checking);
+        if (!raceStarted) { waiting.setVisibility(View.VISIBLE); waitingMsg.setText(R.string.checkpoint_checking); }
         new Thread(() -> {
             try { StartListSync.download(prefs, store); } catch (Exception ignored) { /* fall back to cached waves */ }
-            final boolean started = raceStarted();
+            final boolean started = anyWaveStarted();
             runOnUiThread(() -> {
                 checkingGate = false;
-                if (mode != MODE_NONE) return; // marshal already past the gate
-                if (started) {
-                    waiting.setVisibility(View.GONE);
-                    setChooserEnabled(true);
-                } else {
-                    waiting.setVisibility(View.VISIBLE);
-                    waitingMsg.setText(R.string.checkpoint_wait_for_start);
-                    setChooserEnabled(false);
-                    gateHandler.postDelayed(gatePoll, 15000); // auto-detect the start
-                }
+                raceStarted = started;
+                applyGate();
+                if (!started) gateHandler.postDelayed(gatePoll, 15000); // auto-detect the start
             });
         }).start();
     }
 
-    // Grey out (or re-enable) the mode buttons without hiding them, so the marshal
-    // always sees the options.
-    private void setChooserEnabled(boolean on) {
-        findViewById(R.id.cpModeReader).setEnabled(on);
-        findViewById(R.id.cpModeManual).setEnabled(on);
+    // Reflect the race-started state: a banner + dimmed, un-tappable bib grid until
+    // the race starts; recording enabled once it does.
+    private void applyGate() {
+        waiting.setVisibility(raceStarted ? View.GONE : View.VISIBLE);
+        if (!raceStarted) waitingMsg.setText(R.string.checkpoint_wait_for_start);
+        bibGrid.setAlpha(raceStarted ? 1f : 0.4f);
     }
 
-    private boolean raceStarted() {
+    private boolean anyWaveStarted() {
         for (RaceStore.Wave w : store.waves()) if (w.startedAtMs != null) return true;
         return false;
     }
@@ -332,6 +323,10 @@ public class CheckpointActivity extends BaseActivity {
     }
 
     private void tapBib(RaceStore.Racer r, View tile, TextView bibTv, TextView nameTv) {
+        if (!raceStarted) { // can view the bibs, but not record until the race starts
+            Toast.makeText(this, R.string.checkpoint_not_started_tap, Toast.LENGTH_SHORT).show();
+            return;
+        }
         final int max = maxTaps(r);
         final int cur = taps.getOrDefault(r.bib, 0);
         if (cur >= max) {
