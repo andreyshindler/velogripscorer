@@ -26,6 +26,8 @@
     <string name="joined_as">הצטרפת בתור %1$s</string>
     <string name="join_failed">לא ניתן להצטרף: %1$s</string>
     <string name="join_signin_pick">התחבר ובחר את המרוץ שלך</string>
+    <string name="resume_checkpoint_header">שמור בטלפון הזה — עובד גם לא מקוון</string>
+    <string name="resume_checkpoint">▶ המשך נקודת ביקורת</string>
     <string name="join_signin_button">התחבר</string>
     <string name="join_pick_race">הקש על המרוץ שאתה מפעיל</string>
     <string name="join_no_shared_races">עדיין לא שותפה גישה לנקודת ביקורת עם החשבון הזה. בקש מהמארגן להוסיף אותך, או השתמש בקוד הצטרפות למטה.</string>

@@ -70,7 +70,22 @@ public class JoinCheckpointActivity extends BaseActivity {
 
         prefillFromDeepLink(getIntent());
 
-        // Saved account -> list shared races without asking again.
+        // A checkpoint is already saved on this phone: offer a one-tap resume that
+        // works offline (no sign-in), so ending it by mistake isn't a dead end.
+        boolean paired = !prefs.readerToken().isEmpty();
+        if (paired) {
+            findViewById(R.id.jcResumeCard).setVisibility(View.VISIBLE);
+            ((TextView) findViewById(R.id.jcResumeRace)).setText(
+                    prefs.contestTitle().isEmpty() ? getString(R.string.checkpoint_mode) : prefs.contestTitle());
+            findViewById(R.id.jcResume).setOnClickListener(v -> {
+                startActivity(new Intent(this, CheckpointActivity.class));
+                finish();
+            });
+        }
+
+        // Saved account -> list shared races without asking again (for switching
+        // races when online). If it can't reach the server, stay quiet — the resume
+        // card above already covers the offline case.
         if (!prefs.serverUrl().isEmpty() && !prefs.accountEmail().isEmpty()
                 && !prefs.accountPass().isEmpty()) {
             connect(prefs.accountEmail(), prefs.accountPass(), false);
@@ -160,7 +175,10 @@ public class JoinCheckpointActivity extends BaseActivity {
                 final String msg = e.getMessage();
                 runOnUiThread(() -> {
                     signIn.setEnabled(true);
-                    if (fromForm || !prefs.accountPass().isEmpty()) {
+                    // An auto sign-in that failed while a checkpoint is already saved
+                    // (e.g. offline) shouldn't nag — the Resume card handles it.
+                    boolean paired = !prefs.readerToken().isEmpty();
+                    if (fromForm || (!prefs.accountPass().isEmpty() && !paired)) {
                         status.setVisibility(View.VISIBLE);
                         status.setText(getString(R.string.join_failed, msg));
                         signInForm.setVisibility(View.VISIBLE);
