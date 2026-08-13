@@ -48,6 +48,7 @@
     <string name="last_tag">Last: %1$s</string>
     <string name="checkpoint_pick_mode">How does this checkpoint read riders?</string>
     <string name="mode_reader">📡 RFID reader</string>
+    <string name="start_recording">▶ Start recording</string>
     <string name="mode_manual">✋ Manual entry (tap bibs)</string>
     <string name="scan_for_reader">Scan for reader</string>
     <string name="reader_settings">Reader settings</string>

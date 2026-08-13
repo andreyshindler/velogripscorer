@@ -48,6 +48,7 @@
     <string name="last_tag">אחרון: %1$s</string>
     <string name="checkpoint_pick_mode">כיצד נקודת הביקורת קוראת רוכבים?</string>
     <string name="mode_reader">📡 קורא RFID</string>
+    <string name="start_recording">▶ התחל רישום</string>
     <string name="mode_manual">✋ הזנה ידנית (הקשת מספרי חזה)</string>
     <string name="scan_for_reader">סרוק לאיתור קורא</string>
     <string name="reader_settings">הגדרות קורא</string>

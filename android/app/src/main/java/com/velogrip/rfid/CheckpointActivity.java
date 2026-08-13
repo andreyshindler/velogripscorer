@@ -127,6 +127,7 @@ public class CheckpointActivity extends BaseActivity {
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
         findViewById(R.id.cpTestReader).setOnClickListener(v -> testReader());
+        findViewById(R.id.cpReaderStart).setOnClickListener(v -> startReaderRecording());
         findViewById(R.id.cpReaderSettings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.cpStop).setOnClickListener(v -> stopAndExit());
         filter.addTextChangedListener(new TextWatcher() {
@@ -210,16 +211,27 @@ public class CheckpointActivity extends BaseActivity {
 
     // ---- Mode selection --------------------------------------------------------
 
+    // Reader mode is two steps: first a setup screen to connect + TEST the reader,
+    // then "Start recording" moves to the live checkpoint screen.
     private void pickReader() {
         mode = MODE_READER;
-        if (sessionBase < 0) { sessionBase = store.passingCount(); sessionStartMs = System.currentTimeMillis(); }
         chooser.setVisibility(View.GONE);
-        showCounts();
         readerPanel.setVisibility(View.VISIBLE);
-        listPanel.setVisibility(View.VISIBLE);   // show the bib list as a live read view
+        findViewById(R.id.cpReaderStart).setVisibility(View.VISIBLE);
+        findViewById(R.id.cpTestReader).setVisibility(View.VISIBLE);
         gridTappable = false;                     // reader records; the grid is view-only
+        loadStartList();                          // ready the grid for the recording step
+        if (!prefs.readerHost().isEmpty()) startBridge(false); // connect so the test can read
+    }
+
+    private void startReaderRecording() {
+        if (sessionBase < 0) { sessionBase = store.passingCount(); sessionStartMs = System.currentTimeMillis(); }
+        findViewById(R.id.cpReaderStart).setVisibility(View.GONE);
+        findViewById(R.id.cpTestReader).setVisibility(View.GONE);
+        testResult.setVisibility(View.GONE);
+        showCounts();
+        listPanel.setVisibility(View.VISIBLE);   // live read view
         findViewById(R.id.cpStop).setVisibility(View.VISIBLE);
-        loadStartList();
         if (!prefs.readerHost().isEmpty()) startBridge(false);
     }
 

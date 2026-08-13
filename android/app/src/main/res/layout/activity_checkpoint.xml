@@ -257,6 +257,13 @@
                     android:layout_marginTop="6dp"
                     android:text="@string/reader_settings"
                     style="?android:attr/buttonBarButtonStyle" />
+
+                <Button
+                    android:id="@+id/cpReaderStart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="@string/start_recording" />
             </LinearLayout>
 
             <!-- Manual entry panel -->
