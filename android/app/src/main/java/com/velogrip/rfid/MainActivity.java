@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,6 +43,23 @@ public class MainActivity extends BaseActivity {
                 startActivity(new Intent(this, DownloadRacesActivity.class)));
 
         requestNeededPermissions();
+        applyRoleUi();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        applyRoleUi(); // reflect the account that just signed in (e.g. via Join)
+    }
+
+    // Marshals only operate checkpoints, so hide the organizer menu (time a race,
+    // race data, download) and leave "Join as checkpoint" + Settings.
+    private void applyRoleUi() {
+        boolean marshal = "marshal".equals(new Prefs(this).accountRole());
+        View organizer = findViewById(R.id.organizerSection);
+        if (organizer != null) organizer.setVisibility(marshal ? View.GONE : View.VISIBLE);
+        View account = findViewById(R.id.navAccount);
+        if (account != null) account.setVisibility(marshal ? View.GONE : View.VISIBLE);
     }
 
     private void requestNeededPermissions() {

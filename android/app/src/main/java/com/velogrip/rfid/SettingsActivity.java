@@ -136,6 +136,8 @@ public class SettingsActivity extends BaseActivity {
                 try {
                     JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), email, password));
                     String jwt = session.getString("token");
+                    prefs.setAccountRole(session.optJSONObject("user") != null
+                            ? session.optJSONObject("user").optString("role") : "");
                     JSONObject my = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt));
                     JSONArray races = my.getJSONArray("races");
                     // Reader WiFi credentials come from the server env; store and prefill.

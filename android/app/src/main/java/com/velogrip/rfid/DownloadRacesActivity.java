@@ -73,6 +73,8 @@ public class DownloadRacesActivity extends BaseActivity {
             try {
                 JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), mail, pass));
                 String jwt = session.getString("token");
+                prefs.setAccountRole(session.optJSONObject("user") != null
+                        ? session.optJSONObject("user").optString("role") : "");
                 JSONArray races = new JSONObject(Uploader.myRaces(prefs.serverUrl(), jwt))
                         .getJSONArray("races");
                 runOnUiThread(() -> {

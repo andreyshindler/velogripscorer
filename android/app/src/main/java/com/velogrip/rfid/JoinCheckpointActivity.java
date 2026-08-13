@@ -131,6 +131,8 @@ public class JoinCheckpointActivity extends BaseActivity {
             try {
                 JSONObject session = new JSONObject(Uploader.login(prefs.serverUrl(), mail, pass));
                 jwt = session.getString("token");
+                prefs.setAccountRole(session.optJSONObject("user") != null
+                        ? session.optJSONObject("user").optString("role") : "");
                 JSONArray races = new JSONObject(Uploader.myCheckpoints(prefs.serverUrl(), jwt))
                         .getJSONArray("races");
                 runOnUiThread(() -> {

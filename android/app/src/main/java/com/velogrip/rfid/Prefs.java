@@ -186,12 +186,20 @@ public final class Prefs {
                 .putString("accountPass", password).apply();
     }
 
+    // The signed-in account's role ('marshal' | 'admin' | ''), stored at login so
+    // the home screen can hide organizer-only options for marshals.
+    public String accountRole() { return sp.getString("accountRole", ""); }
+    public void setAccountRole(String role) {
+        sp.edit().putString("accountRole", role == null ? "" : role.trim()).apply();
+    }
+
     /** Sign out: forget the saved account and unpair this device from its race
      *  (so it stops auto-connecting and a different account can sign in). Keeps
      *  device/hardware settings like the server URL and reader connection. */
     public void logout() {
         sp.edit()
                 .remove("accountPass")
+                .remove("accountRole")
                 .remove("readerToken")
                 .remove("contestId")
                 .remove("contestTitle")
