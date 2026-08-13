@@ -420,57 +420,65 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     await send.message(chatId, `<b>${racers.length} racers</b>\n${lines.join('\n')}${more}`);
   }
 
-  // Number of laps per race, capped by distance. Checkpoints use these to cap
-  // manual bib taps, and multi-lap results/lap-time tables key off them too.
-  //   /laps            → show the current laps for each distance
-  //   /laps 3          → set every distance to 3 laps
-  //   /laps MTB 4      → set one distance
+  // Number of laps for the selected race — bound to that race. A bare number is
+  // the race-wide count (works whether or not the race has distances yet);
+  // distance overrides are optional. Checkpoints cap manual bib taps by this.
+  //   /laps            → show the race's laps (race-wide + any distance overrides)
+  //   /laps 3          → set the whole race to 3 laps
+  //   /laps MTB 4      → override one distance
   //   /laps 0 (or MTB 0) → clear (no limit)
   async function cmdLaps(chatId, rest) {
     const c = await needRace(chatId);
     if (!c) return;
     const got = await A('GET', `/contests/${c.id}/lap-targets`);
-    const data = (got && got.json) || { lap_targets: {}, distances: [] };
+    const data = (got && got.json) || { lap_targets: {}, distances: [], race_laps: null };
     const distances = data.distances || [];
-    const current = { ...(data.lap_targets || {}) };
     const arg = String(rest || '').trim();
 
-    if (!distances.length) {
-      await send.message(chatId, 'This race has no distances yet. Add a start list with distances first, then set the laps.');
-      return;
-    }
-    const show = (laps) => distances
-      .map((d) => `• <b>${esc(d)}</b>: ${laps[d] ? `${laps[d]} lap${laps[d] > 1 ? 's' : ''}` : '— (no limit)'}`)
-      .join('\n');
+    const show = (laps, raceLaps) => {
+      const head = `• <b>whole race</b>: ${raceLaps ? `${raceLaps} lap${raceLaps > 1 ? 's' : ''}` : '— (no limit)'}`;
+      const perDist = distances
+        .filter((d) => laps[d])
+        .map((d) => `• <b>${esc(d)}</b>: ${laps[d]} lap${laps[d] > 1 ? 's' : ''} <i>(override)</i>`);
+      return [head, ...perDist].join('\n');
+    };
 
     if (!arg) {
+      const distHint = distances.length
+        ? `\n<code>/laps ${esc(distances[0])} 4</code> — override one distance`
+        : '';
       await send.message(chatId,
-        `<b>Laps per distance — ${esc(c.title)}</b>\n${show(current)}\n\n` +
-        `Set them:\n<code>/laps 3</code> — all distances to 3\n` +
-        `<code>/laps ${esc(distances[0])} 4</code> — one distance\n` +
+        `<b>Laps — ${esc(c.title)}</b>\n${show(data.lap_targets || {}, data.race_laps)}\n\n` +
+        `Set them:\n<code>/laps 3</code> — the whole race to 3${distHint}\n` +
         `<code>/laps 0</code> — clear (no limit)`);
       return;
     }
 
-    let newTargets;
-    if (/^\d+$/.test(arg)) { // a bare number sets every distance at once
-      const n = parseInt(arg, 10);
-      newTargets = {};
-      for (const d of distances) newTargets[d] = n; // 0 → dropped server-side → no limit
+    let body;
+    let confirm;
+    if (/^\d+$/.test(arg)) { // a bare number is the race-wide count — always bound to this race
+      body = { race_laps: parseInt(arg, 10) }; // 0 → cleared server-side
+      confirm = 'race-wide laps updated';
     } else {
+      if (!distances.length) {
+        await send.message(chatId, 'This race has no distances to override yet. Use <code>/laps &lt;number&gt;</code> to set the whole race.');
+        return;
+      }
       const m = arg.match(/^(.*?)[\s=]+(\d+)$/); // "<distance> <n>" or "<distance>=<n>"
-      if (!m) { await send.message(chatId, 'Usage: <code>/laps 3</code> (all) or <code>/laps MTB 4</code> (one).'); return; }
+      if (!m) { await send.message(chatId, 'Usage: <code>/laps 3</code> (whole race) or <code>/laps MTB 4</code> (one distance).'); return; }
       const real = distances.find((d) => d.toLowerCase() === m[1].trim().toLowerCase());
       if (!real) { await send.message(chatId, `Unknown distance “${esc(m[1].trim())}”. Known: ${distances.map(esc).join(', ')}`); return; }
-      newTargets = { ...current, [real]: parseInt(m[2], 10) };
+      body = { lap_targets: { ...(data.lap_targets || {}), [real]: parseInt(m[2], 10) } };
+      confirm = `${real} override updated`;
     }
 
-    const patch = await A('PATCH', `/contests/${c.id}/lap-targets`, { lap_targets: newTargets });
+    const patch = await A('PATCH', `/contests/${c.id}/lap-targets`, body);
     if (!patch || patch.status >= 400) {
       await send.message(chatId, `⚠️ ${esc((patch && patch.json && patch.json.error) || 'could not save laps')}`);
       return;
     }
-    await send.message(chatId, `✅ Saved.\n${show((patch.json && patch.json.lap_targets) || {})}`);
+    const j = patch.json || {};
+    await send.message(chatId, `✅ ${confirm}.\n${show(j.lap_targets || {}, j.race_laps)}`);
   }
 
   // Resolve a wave name to its id for this race, creating it if new (mirrors the

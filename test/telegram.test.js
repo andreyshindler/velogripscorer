@@ -405,37 +405,37 @@ test('empty allowlist serves nobody (fail-safe)', async () => {
   process.env.TELEGRAM_ALLOWED_USER_IDS = saved;
 });
 
-test('/laps shows and sets the per-distance lap counts', async () => {
-  // Make sure a race is selected and it has at least one distance.
+test('/laps binds the lap count to the selected race', async () => {
   await tap(ALLOWED, `use:${contestId}`);
-  const distances = (await api('GET', `/contests/${contestId}/lap-targets`, { token: organizer.token })).json.distances;
+  const getLaps = async () => (await api('GET', `/contests/${contestId}/lap-targets`, { token: organizer.token })).json;
+  const distances = (await getLaps()).distances;
   assert.ok(distances.length >= 1, 'race has distances from earlier /add tests');
 
-  // No-arg listing mentions a distance and "no limit" (nothing set yet).
+  // No-arg listing shows the race-wide line and "no limit" (nothing set yet).
   send.reset();
   await text(ALLOWED, '/laps');
-  assert.match(send.last('message').text, /Laps per distance/);
+  assert.match(send.last('message').text, /whole race/);
   assert.match(send.last('message').text, /no limit/);
 
-  // Bulk set every distance to 3.
+  // A bare number sets the whole race — bound to this contest.
   send.reset();
   await text(ALLOWED, '/laps 3');
-  assert.match(send.last('message').text, /Saved/);
-  let lt = (await api('GET', `/contests/${contestId}/lap-targets`, { token: organizer.token })).json.lap_targets;
-  for (const d of distances) assert.equal(lt[d], 3, `${d} set to 3`);
+  assert.match(send.last('message').text, /✅/);
+  assert.equal((await getLaps()).race_laps, 3, 'race-wide laps saved on the race');
 
-  // Set one distance individually.
+  // A distance argument sets a per-distance override, leaving race-wide intact.
   send.reset();
   await text(ALLOWED, `/laps ${distances[0]} 5`);
-  lt = (await api('GET', `/contests/${contestId}/lap-targets`, { token: organizer.token })).json.lap_targets;
-  assert.equal(lt[distances[0]], 5, 'single distance overridden');
-  if (distances[1]) assert.equal(lt[distances[1]], 3, 'the others are untouched');
+  let laps = await getLaps();
+  assert.equal(laps.lap_targets[distances[0]], 5, 'distance override saved');
+  assert.equal(laps.race_laps, 3, 'race-wide untouched by an override');
 
-  // Clear all.
+  // Clear the race-wide cap.
   send.reset();
   await text(ALLOWED, '/laps 0');
-  lt = (await api('GET', `/contests/${contestId}/lap-targets`, { token: organizer.token })).json.lap_targets;
-  assert.deepEqual(lt, {}, 'all caps cleared');
+  laps = await getLaps();
+  assert.equal(laps.race_laps, null, 'race-wide cleared');
+  assert.equal(laps.lap_targets[distances[0]], 5, 'override preserved');
 
   // An unknown distance is rejected, not saved.
   send.reset();

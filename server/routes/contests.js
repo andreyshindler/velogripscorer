@@ -409,24 +409,46 @@ router.get('/contests/:id/lap-targets', requireAuth, (req, res) => {
     )
     .all(contest.id)
     .map((r) => r.distance);
-  res.json({ lap_targets: lapTargets, distances, record_laps: contest.record_laps });
+  res.json({
+    lap_targets: lapTargets, distances,
+    race_laps: contest.race_laps, record_laps: contest.record_laps,
+  });
 });
 
 router.patch('/contests/:id/lap-targets', requireAuth, (req, res) => {
   const contest = getContest(req.params.id);
   if (!contest) return res.status(404).json({ error: 'contest not found' });
   if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
-  const src = req.body?.lap_targets;
-  if (!src || typeof src !== 'object') return res.status(400).json({ error: 'lap_targets object required' });
-  const clean = {};
-  for (const [dist, n] of Object.entries(src)) {
-    const laps = Number(n);
-    // A blank/0 entry means "no cap for this distance" — just omit it.
-    if (Number.isInteger(laps) && laps >= 1 && laps <= 999) clean[String(dist).slice(0, 80)] = laps;
+  const hasTargets = req.body?.lap_targets !== undefined;
+  const hasRace = req.body?.race_laps !== undefined;
+  if (!hasTargets && !hasRace) return res.status(400).json({ error: 'lap_targets or race_laps required' });
+
+  let clean;
+  if (hasTargets) {
+    const src = req.body.lap_targets;
+    if (!src || typeof src !== 'object') return res.status(400).json({ error: 'lap_targets object required' });
+    clean = {};
+    for (const [dist, n] of Object.entries(src)) {
+      const laps = Number(n);
+      // A blank/0 entry means "no cap for this distance" — just omit it.
+      if (Number.isInteger(laps) && laps >= 1 && laps <= 999) clean[String(dist).slice(0, 80)] = laps;
+    }
+    db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(JSON.stringify(clean), contest.id);
   }
-  db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(JSON.stringify(clean), contest.id);
-  auditLog(req.user.id, 'contest.lap-targets', 'contest', contest.id, JSON.stringify(clean));
-  res.json({ ok: true, lap_targets: clean });
+  let raceLaps = contest.race_laps;
+  if (hasRace) {
+    const n = Number(req.body.race_laps);
+    // 0 / null / out of range clears the race-wide cap.
+    raceLaps = Number.isInteger(n) && n >= 1 && n <= 999 ? n : null;
+    db.prepare('UPDATE contests SET race_laps = ? WHERE id = ?').run(raceLaps, contest.id);
+  }
+  auditLog(req.user.id, 'contest.lap-targets', 'contest', contest.id,
+    JSON.stringify({ lap_targets: clean, race_laps: raceLaps }));
+  res.json({
+    ok: true,
+    lap_targets: clean !== undefined ? clean : (() => { try { return JSON.parse(contest.lap_targets || '{}'); } catch { return {}; } })(),
+    race_laps: raceLaps,
+  });
 });
 
 // A registered operator (or the organizer) mints a checkpoint token for a race

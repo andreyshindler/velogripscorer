@@ -263,7 +263,8 @@ public class CheckpointActivity extends BaseActivity {
     // count for that distance. Unknown lap count -> no cap (or 1 if single-crossing).
     private int maxTaps(RaceStore.Racer r) {
         Integer laps = lapCaps.get(r.distance == null ? "" : r.distance);
-        if (laps != null && laps > 0) return laps;
+        if (laps != null && laps > 0) return laps;          // per-distance override
+        if (prefs.raceLaps() > 0) return prefs.raceLaps();  // race-wide cap
         return prefs.recordLaps() ? Integer.MAX_VALUE : 1;
     }
 
@@ -370,6 +371,7 @@ public class CheckpointActivity extends BaseActivity {
         // Show every expected lap (from the configured caps) even before anyone
         // has reached it, so the marshal sees all the lap counters up front.
         for (int cap : lapCaps.values()) if (cap > maxLap) maxLap = cap;
+        if (prefs.raceLaps() > maxLap) maxLap = prefs.raceLaps();
 
         if (maxLap < 2) { // single-lap: keep just the big total counter
             lapCountersScroll.setVisibility(View.GONE);

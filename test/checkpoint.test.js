@@ -331,3 +331,20 @@ test('a non-organizer cannot read or set lap targets', async () => {
     .send({ lap_targets: { '50K': 1 } });
   assert.equal(patch.status, 403);
 });
+
+test('race-wide lap count reaches the checkpoint via the start list', async () => {
+  // Organizer sets a race-wide cap (no distance needed).
+  const patch = await request(app).patch(`/api/contests/${contest.id}/lap-targets`).set(auth(org))
+    .send({ race_laps: 4 });
+  assert.equal(patch.status, 200);
+  assert.equal(patch.body.race_laps, 4);
+
+  // The checkpoint learns it on its next start-list sync.
+  const sl = (await request(app).get('/api/ingest/startlist').set('X-Reader-Token', cpTok)).body;
+  assert.equal(sl.race_laps, 4, 'checkpoint sees the race-wide cap');
+
+  // Clearing it sets race_laps back to null.
+  const clear = await request(app).patch(`/api/contests/${contest.id}/lap-targets`).set(auth(org))
+    .send({ race_laps: 0 });
+  assert.equal(clear.body.race_laps, null);
+});

@@ -349,6 +349,10 @@ for (const stmt of [
   // device, so a checkpoint can cap manual taps at the number of laps a rider
   // makes. NULL = unknown (checkpoint then doesn't cap).
   `ALTER TABLE contests ADD COLUMN lap_targets TEXT`,
+  // A race-wide lap count that binds to the race regardless of distance (set
+  // from the bot or web). Used as the cap when a rider's distance has no
+  // per-distance override. NULL = no race-wide cap.
+  `ALTER TABLE contests ADD COLUMN race_laps INTEGER`,
 ]) {
   try {
     db.exec(stmt);

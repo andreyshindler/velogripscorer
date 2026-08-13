@@ -65,6 +65,11 @@ public final class Prefs {
     public boolean recordLaps() { return sp.getBoolean("recordLaps", true); }
     public void setRecordLaps(boolean on) { sp.edit().putBoolean("recordLaps", on).apply(); }
 
+    // Race-wide lap count (0 = none) — the default checkpoint tap cap when a
+    // rider's distance has no specific override.
+    public int raceLaps() { return sp.getInt("raceLaps", 0); }
+    public void setRaceLaps(int laps) { sp.edit().putInt("raceLaps", Math.max(0, laps)).apply(); }
+
     // Hardware setup: whether an RFID reader is used for this race. Off means
     // manual-only timing (no reader connection shown in the race console).
     public boolean chipTiming() { return sp.getBoolean("chipTiming", true); }

@@ -197,6 +197,7 @@ router.get('/ingest/startlist', (req, res) => {
     min_lap_gap_secs: contest.min_lap_gap_secs,
     record_laps: contest.record_laps,
     lap_targets: lapTargets,
+    race_laps: contest.race_laps,
     waves,
     racers: tags,
   });
