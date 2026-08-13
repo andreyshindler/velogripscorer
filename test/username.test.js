@@ -34,6 +34,18 @@ test('register with a username, then log in with either email or username', asyn
   assert.equal(wrong.status, 401);
 });
 
+test('a username with no display name becomes the display name; one is required', async () => {
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: 'noname@test.co', password: 'password123', username: 'soloName' });
+  assert.equal(reg.status, 201);
+  assert.equal(reg.body.user.name, 'soloName', 'display name defaults to the username');
+  assert.equal(reg.body.user.username, 'soloName');
+
+  const nada = await request(app).post('/api/auth/register')
+    .send({ email: 'nada@test.co', password: 'password123' });
+  assert.equal(nada.status, 400, 'a username (or name) is required');
+});
+
 test('usernames are unique and format-checked', async () => {
   const dup = await request(app).post('/api/auth/register')
     .send({ email: 'other@test.co', password: 'password123', name: 'Other', username: 'andrey' });

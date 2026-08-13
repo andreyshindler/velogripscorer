@@ -33,18 +33,23 @@ function validateUsername(raw) {
 }
 
 router.post('/auth/register', rateLimit({ max: 20 }), (req, res) => {
-  const { email, password, name } = req.body || {};
+  const { email, password } = req.body || {};
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return res.status(400).json({ error: 'valid email required' });
   }
   if (!password || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
 
   let username;
   try { username = validateUsername(req.body?.username); }
   catch (e) { return res.status(e.status || 400).json({ error: e.error }); }
+  // The username is the display name. A `name` may still be supplied (older
+  // clients / API callers); otherwise the username stands in for it. One of the
+  // two is required.
+  let name = String(req.body?.name || '').trim();
+  if (!name && !username) return res.status(400).json({ error: 'username required' });
+  if (!name) name = username;
   if (username && db.prepare('SELECT 1 FROM users WHERE lower(username) = ?').get(username.toLowerCase())) {
     return res.status(409).json({ error: 'username already taken' });
   }
@@ -56,7 +61,7 @@ router.post('/auth/register', rateLimit({ max: 20 }), (req, res) => {
   try {
     const info = db
       .prepare('INSERT INTO users (email, password_hash, name, approved, username) VALUES (?, ?, ?, ?, ?)')
-      .run(email.toLowerCase(), hash, name.trim(), approved, username || null);
+      .run(email.toLowerCase(), hash, name, approved, username || null);
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     auditLog(user.id, 'user.register', 'user', user.id);
     if (!approved) {

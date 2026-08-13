@@ -128,6 +128,14 @@ function avatar(url, name) {
 
 const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
+// A small badge marking an admin account, shown next to their name.
+function adminBadge(role) {
+  if (role !== 'admin') return '';
+  return `<span title="${t('admin_label')}" style="display:inline-block;background:#6c5ce7;color:#fff;`
+    + `font-size:.66rem;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:999px;`
+    + `vertical-align:middle;margin-inline-start:6px">🛡 ${t('admin_label')}</span>`;
+}
+
 // ---------- chrome (topbar, auth, bell) ----------
 
 function renderChrome() {
@@ -143,7 +151,7 @@ function renderChrome() {
   document.getElementById('bell').hidden = !state.user;
   if (state.user) {
     authArea.innerHTML = `
-      <a href="#/profile/${state.user.id}" style="font-weight:600">${avatar(state.user.avatar_url, state.user.name)} ${esc(state.user.name)}</a>
+      <a href="#/profile/${state.user.id}" style="font-weight:600">${avatar(state.user.avatar_url, state.user.name)} ${esc(state.user.name)}</a>${adminBadge(state.user.role)}
       <button class="ghost" id="logout-btn">${t('logout')}</button>`;
     document.getElementById('logout-btn').onclick = () => { setSession(null, null); location.hash = '#/'; };
     pollNotifications();
@@ -492,12 +500,8 @@ function viewLogin() {
         <button role="tab" aria-selected="false" id="tab-register">${t('register')}</button>
       </div>
       <form id="auth-form">
-        <div id="name-field" hidden>
-          <label for="f-name">${t('display_name')}</label>
-          <input id="f-name" autocomplete="name">
-        </div>
         <div id="username-field" hidden>
-          <label for="f-username">${t('username_optional')}</label>
+          <label for="f-username">${t('username')}</label>
           <input id="f-username" autocomplete="username" maxlength="30" placeholder="${t('username_ph')}">
         </div>
         <label for="f-email" id="email-label">${t('email')}</label>
@@ -520,7 +524,6 @@ function viewLogin() {
   let mode = 'login';
   const setMode = (m) => {
     mode = m;
-    document.getElementById('name-field').hidden = m === 'login';
     document.getElementById('username-field').hidden = m === 'login';
     // In login you may type an email OR a username; registration takes an email.
     document.getElementById('email-label').textContent = m === 'login' ? t('email_or_username') : t('email');
@@ -542,9 +545,9 @@ function viewLogin() {
         password: document.getElementById('f-password').value,
       };
       if (mode === 'register') {
-        body.name = document.getElementById('f-name').value;
         const u = document.getElementById('f-username').value.trim();
-        if (u) body.username = u;
+        if (!u) { showAuthMsg(t('username_required'), 'error'); return; }
+        body.username = u; // the username is the display name
       }
       const data = await api(`/auth/${mode}`, { method: 'POST', body });
       if (data.pending) {
@@ -2193,7 +2196,7 @@ async function viewProfile(id) {
     <div class="card" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
       ${avatar(u.avatar_url, u.name)}
       <div>
-        <h1 style="margin:0">${esc(u.name)}</h1>
+        <h1 style="margin:0">${esc(u.name)}${adminBadge(u.role)}</h1>
         <p class="muted" style="margin:2px 0">${esc(u.bio || '')}</p>
         ${u.reputation !== undefined ? `<span class="pill">⭐ ${u.reputation} rep</span>` : ''}
       </div>
