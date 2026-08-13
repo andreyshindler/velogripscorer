@@ -180,26 +180,30 @@ public class CheckpointActivity extends BaseActivity {
         }).start();
     }
 
-    /** A tappable tile per bib in the start list; tap = record that racer's pass. */
+    /** A tappable tile per bib in the start list, laid out like the race console's
+     *  timing grid: rounded, colour-coded tiles in a 4-column grid, bib order. */
     private void buildGrid(String q) {
         bibGrid.removeAllViews();
-        final int cols = 3;
-        LinearLayout row = null;
-        int shown = 0;
+        final int cols = 4;
+        List<RaceStore.Racer> shown = new ArrayList<>();
         for (RaceStore.Racer r : racers) {
             if (r.epc == null || r.epc.isEmpty()) continue;
             if (!q.isEmpty() && (r.bib == null || !r.bib.contains(q))) continue;
-            if (shown % cols == 0) {
+            shown.add(r);
+        }
+        java.util.Collections.sort(shown, (a, b) -> Long.compare(bibNum(a.bib), bibNum(b.bib)));
+        LinearLayout row = null;
+        for (int i = 0; i < shown.size(); i++) {
+            if (i % cols == 0) {
                 row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 bibGrid.addView(row, new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             }
-            row.addView(makeTile(r));
-            shown++;
+            row.addView(makeTile(shown.get(i)));
         }
-        if (row != null) for (int i = shown % cols; i != 0 && i < cols; i++) row.addView(spacer());
-        if (shown == 0) {
+        if (row != null) for (int i = shown.size() % cols; i != 0 && i < cols; i++) row.addView(spacer());
+        if (shown.isEmpty()) {
             TextView empty = new TextView(this);
             empty.setText(R.string.no_matching_bib);
             empty.setTextColor(getColor(R.color.text_muted));
@@ -211,10 +215,10 @@ public class CheckpointActivity extends BaseActivity {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(72), 1f);
         lp.setMargins(dp(4), dp(4), dp(4), dp(4));
         tile.setLayoutParams(lp);
-        tile.setPadding(dp(6), dp(12), dp(6), dp(12));
+        tile.setPadding(dp(6), dp(6), dp(6), dp(6));
         tile.setClickable(true);
 
         TextView bibTv = new TextView(this);
@@ -233,6 +237,19 @@ public class CheckpointActivity extends BaseActivity {
         styleTile(tile, bibTv, nameTv, r.bib, taps.getOrDefault(r.bib, 0), maxTaps(r));
         tile.setOnClickListener(v -> tapBib(r, tile, bibTv, nameTv));
         return tile;
+    }
+
+    // Numeric bib order (matches the race console), non-numeric bibs sort last.
+    private static long bibNum(String bib) {
+        if (bib == null) return Long.MAX_VALUE;
+        try { return Long.parseLong(bib.trim()); } catch (NumberFormatException e) { return Long.MAX_VALUE; }
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedTile(int color) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(10));
+        return d;
     }
 
     // A rider passes a checkpoint once per lap, so cap taps at the race's lap
@@ -258,15 +275,20 @@ public class CheckpointActivity extends BaseActivity {
         render(false, store.pendingCount(), true);
     }
 
+    // Traffic-light tiles, matching the race console: green = available to record,
+    // amber = a pass logged (still under the lap cap), grey = all laps recorded.
     private void styleTile(View tile, TextView bibTv, TextView nameTv, String bib, int count, int max) {
-        boolean on = count > 0;
-        boolean full = on && count >= max;
-        tile.setBackgroundColor(getColor(!on ? R.color.tile_idle_bg : (full ? R.color.velogrip_dark : R.color.velogrip_green)));
-        int tc = getColor(on ? R.color.on_accent : R.color.tile_idle_text);
-        bibTv.setTextColor(tc);
-        nameTv.setTextColor(tc);
         boolean finite = max != Integer.MAX_VALUE;
-        bibTv.setText(count == 0 ? bib : (finite ? bib + "  " + count + "/" + max : bib + "  ×" + count));
+        boolean full = count > 0 && count >= max;
+        int bg = count == 0 ? 0xFF8DC63F : (full ? 0xFF8A8F98 : 0xFFEDE023);
+        tile.setBackground(roundedTile(bg));
+        int tc = full ? 0xFFFFFFFF : 0xFF1A1A1A;
+        bibTv.setText(bib);
+        bibTv.setTextColor(tc);
+        nameTv.setTextColor(full ? 0xFFE8E8E8 : 0xFF294715);
+        // Idle tiles keep the racer name (set in makeTile); once a pass is logged
+        // the sub-line becomes the count, like the console's "On lap X/Y".
+        if (count > 0) nameTv.setText(finite ? count + "/" + max : "×" + count);
     }
 
     private View spacer() {
