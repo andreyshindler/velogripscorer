@@ -63,6 +63,7 @@ public class JoinCheckpointActivity extends BaseActivity {
         signIn.setOnClickListener(v ->
                 connect(email.getText().toString().trim(), password.getText().toString(), true));
         join.setOnClickListener(v -> submitCode());
+        findViewById(R.id.jcScan).setOnClickListener(v -> scanQr());
 
         prefillFromDeepLink(getIntent());
 
@@ -80,8 +81,14 @@ public class JoinCheckpointActivity extends BaseActivity {
     }
 
     private void prefillFromDeepLink(Intent intent) {
-        Uri data = intent == null ? null : intent.getData();
-        if (data == null) return;
+        prefillFromUri(intent == null ? null : intent.getData());
+    }
+
+    // Fill the code (and point at the server the QR came from) from a velogrip://
+    // or https .../join?code=... link — whether it arrived as a deep link or was
+    // scanned in-app. Returns the code found, or "".
+    private String prefillFromUri(Uri data) {
+        if (data == null) return "";
         String c = data.getQueryParameter("code");
         if (c != null && !c.isEmpty()) code.setText(c.toUpperCase(Locale.US));
         String base = data.getQueryParameter("base");
@@ -92,6 +99,22 @@ public class JoinCheckpointActivity extends BaseActivity {
             String trimmed = path.replaceAll("/join/?$", "");
             prefs.setServerUrl(data.getScheme() + "://" + data.getAuthority() + trimmed);
         }
+        return c == null ? "" : c;
+    }
+
+    // ---- Scan the checkpoint QR in-app (Google Code Scanner: no camera perm) ----
+    private void scanQr() {
+        com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this).startScan()
+                .addOnSuccessListener(barcode -> {
+                    String raw = barcode.getRawValue();
+                    if (raw == null || raw.isEmpty()) return;
+                    String c = prefillFromUri(Uri.parse(raw));
+                    if (!c.isEmpty()) submitCode(); // scanned a real join link -> pair now
+                    else Toast.makeText(this, R.string.scan_not_a_checkpoint, Toast.LENGTH_LONG).show();
+                })
+                .addOnCanceledListener(() -> { })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, getString(R.string.scan_failed, e.getMessage()), Toast.LENGTH_LONG).show());
     }
 
     // ---- Path 1: sign in and pick a shared race --------------------------------

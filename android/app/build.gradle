@@ -10,8 +10,8 @@ android {
         applicationId 'com.velogrip.rfid'
         minSdk 26
         targetSdk 33
-        versionCode 34
-        versionName '0.6.10'
+        versionCode 35
+        versionName '0.6.11'
     }
 
     // A fixed debug keystore committed at android/debug.keystore so every build
@@ -46,4 +46,9 @@ android {
 // Deliberately zero dependencies: plain android.app + java.net keeps the APK
 // tiny and the build independent of androidx artifact resolution.
 dependencies {
+    // Google Code Scanner (ML Kit, via Play Services): an in-app QR scanner with
+    // no camera permission and no bundled UI — the module is fetched on demand.
+    // The app's first dependency; enables the "Scan QR" button on the checkpoint
+    // join screen. (useAndroidX is on in gradle.properties for this.)
+    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
 }
