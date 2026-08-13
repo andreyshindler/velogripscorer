@@ -65,6 +65,12 @@
             android:exported="false" />
 
         <activity
+            android:name=".CheckpointActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
+        <activity
             android:name=".SettingsActivity"
             android:label="@string/settings_title"
             android:parentActivityName=".MainActivity"

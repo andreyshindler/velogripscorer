@@ -45,7 +45,7 @@ public class JoinCheckpointActivity extends BaseActivity {
         ((TextView) findViewById(R.id.headerTitle)).setText(R.string.join_checkpoint);
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
         findViewById(R.id.nextButton).setOnClickListener(v ->
-                startActivity(new Intent(this, RaceSetupActivity.class)));
+                startActivity(new Intent(this, CheckpointActivity.class)));
 
         email = findViewById(R.id.jcEmail);
         password = findViewById(R.id.jcPassword);
@@ -258,7 +258,7 @@ public class JoinCheckpointActivity extends BaseActivity {
         prefs.setContestTitle(title);
         Toast.makeText(this, getString(R.string.joined_as, cpName.isEmpty() ? title : cpName),
                 Toast.LENGTH_LONG).show();
-        startActivity(new Intent(this, RaceSetupActivity.class));
+        startActivity(new Intent(this, CheckpointActivity.class));
         finish();
     }
 
