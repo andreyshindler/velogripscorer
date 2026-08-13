@@ -55,8 +55,14 @@ public class CheckpointActivity extends BaseActivity {
     private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, waitingMsg;
     private boolean checkingGate = false;
     private boolean raceStarted = false; // recording is unlocked once the race starts
+    private boolean connChosen = false;  // has the marshal picked online / offline yet
+    private boolean offlineMode = false; // no service: record locally, merge later
+    private View chooserConn;
     private final android.os.Handler gateHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable gatePoll = () -> { if (!raceStarted) checkGate(); };
+    private final Runnable gatePoll = () -> { if (!raceStarted && !offlineMode) checkGate(); };
+
+    // Offline mode bypasses the online-only race-start gate; online mode enforces it.
+    private boolean canRecord() { return offlineMode || raceStarted; }
     private Button connect;
     private EditText filter;
     private LinearLayout bibGrid, lapCounters;
@@ -100,10 +106,13 @@ public class CheckpointActivity extends BaseActivity {
         bibGrid = findViewById(R.id.cpBibGrid);
         waiting = findViewById(R.id.cpWaiting);
         waitingMsg = findViewById(R.id.cpWaitingMsg);
+        chooserConn = findViewById(R.id.cpConnChooser);
 
         title.setText(prefs.contestTitle());
         findViewById(R.id.cpHome).setOnClickListener(v -> goHome());
         findViewById(R.id.cpWaitingRefresh).setOnClickListener(v -> checkGate());
+        findViewById(R.id.cpConnOnline).setOnClickListener(v -> pickConnectivity(false));
+        findViewById(R.id.cpConnOffline).setOnClickListener(v -> pickConnectivity(true));
         findViewById(R.id.cpModeReader).setOnClickListener(v -> pickReader());
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
@@ -123,10 +132,10 @@ public class CheckpointActivity extends BaseActivity {
         // Re-arm the reader if a scan just set the address.
         if (mode == MODE_READER && !serviceStarted && !prefs.readerHost().isEmpty()) startBridge(false);
         render(false, store.pendingCount(), true);
-        // Refresh whether the race has started (a wave has a gun time). The marshal
-        // can connect a reader and view the bib list any time, but can't record a
-        // pass until the organizer starts the race.
-        checkGate();
+        // Online only: refresh whether the race has started. The marshal can connect
+        // a reader and view the bib list any time, but can't record a pass until the
+        // organizer starts the race. Offline mode skips this entirely.
+        if (connChosen && !offlineMode) checkGate();
     }
 
     @Override
@@ -136,12 +145,29 @@ public class CheckpointActivity extends BaseActivity {
         try { unregisterReceiver(receiver); } catch (IllegalArgumentException ignored) { }
     }
 
-    // ---- Race-start gate -------------------------------------------------------
+    // ---- Connectivity + race-start gate ----------------------------------------
+
+    // Online: post live, but recording is gated on the race starting (needs the
+    // server to confirm). Offline: no service — record locally and merge later, so
+    // the race-start gate is skipped (the marshal can tap / read straight away).
+    private void pickConnectivity(boolean offline) {
+        connChosen = true;
+        offlineMode = offline;
+        chooserConn.setVisibility(View.GONE);
+        chooser.setVisibility(View.VISIBLE);
+        if (offline) {
+            title.setText(getString(R.string.checkpoint_offline_title, prefs.contestTitle()));
+            raceStarted = true; // no gate offline
+            applyGate();
+        } else {
+            checkGate();
+        }
+    }
 
     // Sync wave status; recording is unlocked only once the race is under way.
     // Keeps polling until it starts, so the checkpoint unlocks on its own.
     private void checkGate() {
-        if (checkingGate) return;
+        if (checkingGate || offlineMode) return;
         checkingGate = true;
         gateHandler.removeCallbacks(gatePoll);
         if (!raceStarted) { waiting.setVisibility(View.VISIBLE); waitingMsg.setText(R.string.checkpoint_checking); }
@@ -160,9 +186,10 @@ public class CheckpointActivity extends BaseActivity {
     // Reflect the race-started state: a banner + dimmed, un-tappable bib grid until
     // the race starts; recording enabled once it does.
     private void applyGate() {
-        waiting.setVisibility(raceStarted ? View.GONE : View.VISIBLE);
-        if (!raceStarted) waitingMsg.setText(R.string.checkpoint_wait_for_start);
-        bibGrid.setAlpha(raceStarted ? 1f : 0.4f);
+        boolean rec = canRecord();
+        waiting.setVisibility(rec ? View.GONE : View.VISIBLE);
+        if (!rec) waitingMsg.setText(R.string.checkpoint_wait_for_start);
+        bibGrid.setAlpha(rec ? 1f : 0.4f);
     }
 
     private boolean anyWaveStarted() {
@@ -202,6 +229,7 @@ public class CheckpointActivity extends BaseActivity {
     private void startBridge(boolean manualOnly) {
         Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_START);
         i.putExtra(BridgeService.EXTRA_MANUAL_ONLY, manualOnly);
+        i.putExtra(BridgeService.EXTRA_NO_UPLOAD, offlineMode); // offline: read/buffer, don't post
         startForegroundService(i);
         serviceStarted = true;
     }
@@ -323,7 +351,7 @@ public class CheckpointActivity extends BaseActivity {
     }
 
     private void tapBib(RaceStore.Racer r, View tile, TextView bibTv, TextView nameTv) {
-        if (!raceStarted) { // can view the bibs, but not record until the race starts
+        if (!canRecord()) { // online + race not started: can view the bibs, not record
             Toast.makeText(this, R.string.checkpoint_not_started_tap, Toast.LENGTH_SHORT).show();
             return;
         }
@@ -379,19 +407,30 @@ public class CheckpointActivity extends BaseActivity {
         startActivity(i);
     }
 
-    // Confirm before stopping: it clears this checkpoint's readings (here and on
-    // the server) so the next session starts from a clean count.
+    // Confirm before stopping. Online: clear this checkpoint's readings (here and
+    // on the server) for a clean next session. Offline: keep the buffered passes —
+    // they were never posted, so wiping them would lose data; they merge later.
     private void stopAndExit() {
+        if (offlineMode) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.stop_checkpoint)
+                    .setMessage(getString(R.string.stop_checkpoint_offline_confirm, store.pendingCount()))
+                    .setPositiveButton(R.string.stop_checkpoint, (d, w) -> doStop(false))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            return;
+        }
         new android.app.AlertDialog.Builder(this)
                 .setTitle(R.string.stop_checkpoint)
                 .setMessage(getString(R.string.stop_checkpoint_confirm, store.passingCount()))
-                .setPositiveButton(R.string.stop_and_clear, (d, w) -> doStopAndReset())
+                .setPositiveButton(R.string.stop_and_clear, (d, w) -> doStop(true))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
-    private void doStopAndReset() {
+    private void doStop(boolean clear) {
         startService(new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_STOP));
+        if (!clear) { goHome(); finish(); return; }
         final String server = prefs.serverUrl(), token = prefs.readerToken();
         new Thread(() -> {
             // Clear the server's read count for this checkpoint, then the local buffer.

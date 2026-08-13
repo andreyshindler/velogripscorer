@@ -57,6 +57,7 @@ public class BridgeService extends Service {
     // Manual checkpoint: upload the marshal's tapped passes without opening the
     // RFID reader socket (no reader hardware at this checkpoint).
     public static final String EXTRA_MANUAL_ONLY = "manualOnly";
+    public static final String EXTRA_NO_UPLOAD = "noUpload"; // offline: buffer, never post
     public static final String EXTRA_LAST_EPC = "lastEpc";
     public static final String EXTRA_LOG = "log";
 
@@ -73,6 +74,7 @@ public class BridgeService extends Service {
     // "offline / N buffered" indicator. Starts true (optimistic).
     private final AtomicBoolean online = new AtomicBoolean(true);
     private boolean manualOnly = false;
+    private boolean noUpload = false; // offline mode: read/buffer but never post
     private final AtomicLong uploadedTotal = new AtomicLong(0);
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
@@ -105,6 +107,7 @@ public class BridgeService extends Service {
             return START_NOT_STICKY;
         }
         manualOnly = intent != null && intent.getBooleanExtra(EXTRA_MANUAL_ONLY, false);
+        noUpload = intent != null && intent.getBooleanExtra(EXTRA_NO_UPLOAD, false);
         startBridge();
         return START_STICKY;
     }
@@ -340,6 +343,9 @@ public class BridgeService extends Service {
         while (running.get()) {
             try {
                 Thread.sleep(UPLOAD_INTERVAL_MS);
+                // Offline mode: keep buffering (reads still land in the store), but
+                // never post — just report the offline / pending state to the screen.
+                if (noUpload) { online.set(false); broadcastStatus(null); continue; }
                 // The finish device publishes its lap counts once, so checkpoints
                 // can cap taps. A manual checkpoint has none of its own to send.
                 if (!manualOnly && !lapTargetsSynced) {

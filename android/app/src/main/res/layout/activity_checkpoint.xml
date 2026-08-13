@@ -60,8 +60,40 @@
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
+            <!-- Connectivity chooser: online (post live, gated on race start) or
+                 offline (no service — record locally, merge later) -->
+            <LinearLayout
+                android:id="@+id/cpConnChooser"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="28dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginBottom="10dp"
+                    android:text="@string/conn_pick"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/cpConnOnline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/conn_online" />
+
+                <Button
+                    android:id="@+id/cpConnOffline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/conn_offline" />
+            </LinearLayout>
+
             <!-- Gate: the race must be started by the organizer before a marshal
-                 can start the checkpoint -->
+                 can record (online mode only) -->
             <LinearLayout
                 android:id="@+id/cpWaiting"
                 android:layout_width="match_parent"
@@ -89,14 +121,15 @@
                     android:text="@string/checkpoint_refresh" />
             </LinearLayout>
 
-            <!-- Mode chooser: pick RFID reader or manual entry (disabled until the
-                 organizer starts the race) -->
+            <!-- Mode chooser: pick RFID reader or manual entry (shown after the
+                 marshal picks online/offline) -->
             <LinearLayout
                 android:id="@+id/cpModeChooser"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="28dp">
+                android:layout_marginTop="28dp"
+                android:visibility="gone">
 
                 <TextView
                     android:layout_width="wrap_content"
