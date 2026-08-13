@@ -105,6 +105,7 @@ public class CheckpointActivity extends BaseActivity {
         findViewById(R.id.cpWaitingRefresh).setOnClickListener(v -> checkGate());
         findViewById(R.id.cpModeReader).setOnClickListener(v -> pickReader());
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
+        setChooserEnabled(false); // stays disabled until the race-start gate clears
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
         findViewById(R.id.cpReaderSettings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.cpStop).setOnClickListener(v -> stopAndExit());
@@ -142,7 +143,9 @@ public class CheckpointActivity extends BaseActivity {
         if (mode != MODE_NONE || checkingGate) return;
         checkingGate = true;
         gateHandler.removeCallbacks(gatePoll);
-        chooser.setVisibility(View.GONE);
+        // The mode options stay visible the whole time — just not tappable until
+        // the race has started.
+        setChooserEnabled(false);
         waiting.setVisibility(View.VISIBLE);
         waitingMsg.setText(R.string.checkpoint_checking);
         new Thread(() -> {
@@ -153,15 +156,22 @@ public class CheckpointActivity extends BaseActivity {
                 if (mode != MODE_NONE) return; // marshal already past the gate
                 if (started) {
                     waiting.setVisibility(View.GONE);
-                    chooser.setVisibility(View.VISIBLE);
+                    setChooserEnabled(true);
                 } else {
-                    chooser.setVisibility(View.GONE);
                     waiting.setVisibility(View.VISIBLE);
                     waitingMsg.setText(R.string.checkpoint_wait_for_start);
+                    setChooserEnabled(false);
                     gateHandler.postDelayed(gatePoll, 15000); // auto-detect the start
                 }
             });
         }).start();
+    }
+
+    // Grey out (or re-enable) the mode buttons without hiding them, so the marshal
+    // always sees the options.
+    private void setChooserEnabled(boolean on) {
+        findViewById(R.id.cpModeReader).setEnabled(on);
+        findViewById(R.id.cpModeManual).setEnabled(on);
     }
 
     private boolean raceStarted() {

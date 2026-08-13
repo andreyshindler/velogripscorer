@@ -89,14 +89,14 @@
                     android:text="@string/checkpoint_refresh" />
             </LinearLayout>
 
-            <!-- Mode chooser: pick RFID reader or manual entry -->
+            <!-- Mode chooser: pick RFID reader or manual entry (disabled until the
+                 organizer starts the race) -->
             <LinearLayout
                 android:id="@+id/cpModeChooser"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="28dp"
-                android:visibility="gone">
+                android:layout_marginTop="28dp">
 
                 <TextView
                     android:layout_width="wrap_content"
