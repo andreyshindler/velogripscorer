@@ -189,6 +189,7 @@ public class CheckpointActivity extends BaseActivity {
         for (RaceStore.Racer r : racers) {
             if (r.epc == null || r.epc.isEmpty()) continue;
             if (!q.isEmpty() && (r.bib == null || !r.bib.contains(q))) continue;
+            if (isDone(r)) continue; // all laps recorded -> drop the tile off the grid
             shown.add(r);
         }
         java.util.Collections.sort(shown, (a, b) -> Long.compare(bibNum(a.bib), bibNum(b.bib)));
@@ -205,8 +206,9 @@ public class CheckpointActivity extends BaseActivity {
         if (row != null) for (int i = shown.size() % cols; i != 0 && i < cols; i++) row.addView(spacer());
         if (shown.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText(R.string.no_matching_bib);
+            empty.setText(q.isEmpty() && !racers.isEmpty() ? R.string.all_riders_recorded : R.string.no_matching_bib);
             empty.setTextColor(getColor(R.color.text_muted));
+            empty.setPadding(dp(8), dp(16), dp(8), dp(16));
             bibGrid.addView(empty);
         }
     }
@@ -260,6 +262,13 @@ public class CheckpointActivity extends BaseActivity {
         return prefs.recordLaps() ? Integer.MAX_VALUE : 1;
     }
 
+    // A rider is done once every lap is recorded (only when the lap count is known
+    // — an unknown/uncapped rider never drops off).
+    private boolean isDone(RaceStore.Racer r) {
+        int max = maxTaps(r);
+        return max != Integer.MAX_VALUE && taps.getOrDefault(r.bib, 0) >= max;
+    }
+
     private void tapBib(RaceStore.Racer r, View tile, TextView bibTv, TextView nameTv) {
         final int max = maxTaps(r);
         final int cur = taps.getOrDefault(r.bib, 0);
@@ -270,9 +279,11 @@ public class CheckpointActivity extends BaseActivity {
         store.recordPassing(r.epc, System.currentTimeMillis());
         int n = cur + 1;
         taps.put(r.bib, n);
-        styleTile(tile, bibTv, nameTv, r.bib, n, max);
         recent.setText(getString(R.string.recorded_bib, r.bib, r.name == null ? "" : r.name));
         render(false, store.pendingCount(), true);
+        // Last lap recorded -> the tile leaves the grid; otherwise just update it.
+        if (n >= max) buildGrid(filter.getText().toString().trim());
+        else styleTile(tile, bibTv, nameTv, r.bib, n, max);
     }
 
     // Traffic-light tiles, matching the race console: green = available to record,
