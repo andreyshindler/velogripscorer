@@ -42,6 +42,10 @@ public class CheckpointActivity extends BaseActivity {
     private int mode = MODE_NONE;
     private String lastEpc = "";
     private boolean serviceStarted = false;
+    // Passes already in the buffer when this checkpoint session started, so the
+    // on-screen counter shows this session's passes — not the race's running total
+    // (the buffer is kept for offline upload and survives a stop/re-join).
+    private long sessionBase = -1;
 
     private View chooser, readerPanel, manualPanel;
     private TextView title, count, countLabel, sync, reader, last, manualStatus, recent;
@@ -118,6 +122,7 @@ public class CheckpointActivity extends BaseActivity {
 
     private void pickReader() {
         mode = MODE_READER;
+        if (sessionBase < 0) sessionBase = store.passingCount();
         chooser.setVisibility(View.GONE);
         showCounts();
         readerPanel.setVisibility(View.VISIBLE);
@@ -127,6 +132,7 @@ public class CheckpointActivity extends BaseActivity {
 
     private void pickManual() {
         mode = MODE_MANUAL;
+        if (sessionBase < 0) sessionBase = store.passingCount();
         chooser.setVisibility(View.GONE);
         showCounts();
         manualPanel.setVisibility(View.VISIBLE);
@@ -291,7 +297,8 @@ public class CheckpointActivity extends BaseActivity {
     }
 
     private void render(boolean readerConnected, long pending, boolean online) {
-        count.setText(String.valueOf(store.passingCount()));
+        long total = store.passingCount();
+        count.setText(String.valueOf(sessionBase < 0 ? total : Math.max(0, total - sessionBase)));
         if (mode == MODE_READER) {
             if (readerConnected) {
                 reader.setText(R.string.reader_connected);
