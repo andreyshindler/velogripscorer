@@ -8,15 +8,28 @@ const { notify } = require('../events');
 
 const router = express.Router();
 
-const PUBLIC_USER_FIELDS = 'id, name, role, bio, avatar_url, links, is_public, reputation, created_at';
+const PUBLIC_USER_FIELDS = 'id, name, role, bio, avatar_url, links, is_public, reputation, created_at, username';
 
 function publicUser(user, viewer) {
   const self = viewer && (viewer.id === user.id || viewer.role === 'admin');
   if (!user.is_public && !self) {
-    return { id: user.id, name: user.name, is_public: 0 };
+    return { id: user.id, name: user.name, username: user.username || null, is_public: 0 };
   }
   const { id, name, role, bio, avatar_url, links, is_public, reputation, created_at } = user;
-  return { id, name, role, bio, avatar_url, links: JSON.parse(links || '[]'), is_public, reputation, created_at, ...(self ? { email: user.email } : {}) };
+  return { id, name, username: user.username || null, role, bio, avatar_url, links: JSON.parse(links || '[]'), is_public, reputation, created_at, ...(self ? { email: user.email } : {}) };
+}
+
+// A username is an optional login handle: 3–30 chars of letters/digits/._-, no
+// '@' so it can never be confused with an email. Returns a normalized value, or
+// throws { status, error } for a bad one.
+const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
+function validateUsername(raw) {
+  const username = String(raw || '').trim();
+  if (!username) return null; // optional
+  if (!USERNAME_RE.test(username)) {
+    throw { status: 400, error: 'username must be 3–30 letters, digits, or . _ -' };
+  }
+  return username;
 }
 
 router.post('/auth/register', rateLimit({ max: 20 }), (req, res) => {
@@ -29,14 +42,21 @@ router.post('/auth/register', rateLimit({ max: 20 }), (req, res) => {
   }
   if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
 
+  let username;
+  try { username = validateUsername(req.body?.username); }
+  catch (e) { return res.status(e.status || 400).json({ error: e.error }); }
+  if (username && db.prepare('SELECT 1 FROM users WHERE lower(username) = ?').get(username.toLowerCase())) {
+    return res.status(409).json({ error: 'username already taken' });
+  }
+
   // New sign-ups need admin approval before they can log in. Set
   // OPEN_REGISTRATION=1 to keep the old self-service behaviour (used by tests).
   const approved = process.env.OPEN_REGISTRATION === '1' ? 1 : 0;
   const hash = bcrypt.hashSync(password, 10);
   try {
     const info = db
-      .prepare('INSERT INTO users (email, password_hash, name, approved) VALUES (?, ?, ?, ?)')
-      .run(email.toLowerCase(), hash, name.trim(), approved);
+      .prepare('INSERT INTO users (email, password_hash, name, approved, username) VALUES (?, ?, ?, ?, ?)')
+      .run(email.toLowerCase(), hash, name.trim(), approved, username || null);
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     auditLog(user.id, 'user.register', 'user', user.id);
     if (!approved) {
@@ -57,7 +77,13 @@ router.post('/auth/register', rateLimit({ max: 20 }), (req, res) => {
 
 router.post('/auth/login', rateLimit({ max: 20 }), (req, res) => {
   const { email, password } = req.body || {};
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').toLowerCase());
+  // The identifier may be an email or a username (both arrive in the `email`
+  // field for backward compatibility). Emails are stored lowercased; usernames
+  // are matched case-insensitively.
+  const id = String(email || '').trim().toLowerCase();
+  const user = id
+    ? db.prepare('SELECT * FROM users WHERE lower(email) = ? OR lower(username) = ?').get(id, id)
+    : null;
   if (!user || !bcrypt.compareSync(String(password || ''), user.password_hash)) {
     return res.status(401).json({ error: 'invalid credentials' });
   }
@@ -76,14 +102,28 @@ router.get('/users/me', requireAuth, (req, res) => {
 router.patch('/users/me', requireAuth, (req, res) => {
   const { name, bio, avatar_url, links, is_public } = req.body || {};
   const user = req.user;
+
+  // Username is optional and settable here: '' clears it, undefined leaves it.
+  let username = user.username;
+  if (req.body?.username !== undefined) {
+    let next;
+    try { next = validateUsername(req.body.username); }
+    catch (e) { return res.status(e.status || 400).json({ error: e.error }); }
+    if (next && db.prepare('SELECT 1 FROM users WHERE lower(username) = ? AND id != ?').get(next.toLowerCase(), user.id)) {
+      return res.status(409).json({ error: 'username already taken' });
+    }
+    username = next; // may be null to clear
+  }
+
   db.prepare(
-    `UPDATE users SET name = ?, bio = ?, avatar_url = ?, links = ?, is_public = ? WHERE id = ?`
+    `UPDATE users SET name = ?, bio = ?, avatar_url = ?, links = ?, is_public = ?, username = ? WHERE id = ?`
   ).run(
     name !== undefined && String(name).trim() ? String(name).trim() : user.name,
     bio !== undefined ? String(bio) : user.bio,
     avatar_url !== undefined ? String(avatar_url) : user.avatar_url,
     links !== undefined ? JSON.stringify(links) : user.links,
     is_public !== undefined ? (is_public ? 1 : 0) : user.is_public,
+    username || null,
     user.id
   );
   auditLog(user.id, 'user.update_profile', 'user', user.id);

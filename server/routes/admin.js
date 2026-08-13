@@ -96,7 +96,7 @@ router.post('/admin/users/:id/ban', (req, res) => {
 
 router.get('/admin/users', (req, res) => {
   const rows = db
-    .prepare('SELECT id, email, name, role, reputation, is_banned, approved, created_at FROM users ORDER BY id DESC LIMIT 200')
+    .prepare('SELECT id, email, username, name, role, reputation, is_banned, approved, created_at FROM users ORDER BY id DESC LIMIT 200')
     .all();
   res.json({ users: rows });
 });

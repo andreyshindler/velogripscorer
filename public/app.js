@@ -496,8 +496,12 @@ function viewLogin() {
           <label for="f-name">${t('display_name')}</label>
           <input id="f-name" autocomplete="name">
         </div>
-        <label for="f-email">${t('email')}</label>
-        <input id="f-email" type="email" required autocomplete="email">
+        <div id="username-field" hidden>
+          <label for="f-username">${t('username_optional')}</label>
+          <input id="f-username" autocomplete="username" maxlength="30" placeholder="${t('username_ph')}">
+        </div>
+        <label for="f-email" id="email-label">${t('email')}</label>
+        <input id="f-email" type="text" required autocomplete="username">
         <label for="f-password">${t('password')}</label>
         <div class="pw-wrap">
           <input id="f-password" type="password" required minlength="8" autocomplete="current-password">
@@ -517,6 +521,9 @@ function viewLogin() {
   const setMode = (m) => {
     mode = m;
     document.getElementById('name-field').hidden = m === 'login';
+    document.getElementById('username-field').hidden = m === 'login';
+    // In login you may type an email OR a username; registration takes an email.
+    document.getElementById('email-label').textContent = m === 'login' ? t('email_or_username') : t('email');
     document.getElementById('auth-submit').textContent = t(m);
     document.getElementById('tab-login').setAttribute('aria-selected', String(m === 'login'));
     document.getElementById('tab-register').setAttribute('aria-selected', String(m === 'register'));
@@ -534,7 +541,11 @@ function viewLogin() {
         email: document.getElementById('f-email').value,
         password: document.getElementById('f-password').value,
       };
-      if (mode === 'register') body.name = document.getElementById('f-name').value;
+      if (mode === 'register') {
+        body.name = document.getElementById('f-name').value;
+        const u = document.getElementById('f-username').value.trim();
+        if (u) body.username = u;
+      }
       const data = await api(`/auth/${mode}`, { method: 'POST', body });
       if (data.pending) {
         // New registration awaiting admin approval — no session yet.
@@ -2245,6 +2256,7 @@ async function viewProfile(id) {
     document.getElementById('edit-box').innerHTML = `
       <form class="card mt form-narrow" id="profile-form">
         <label for="p-name">${t('display_name')}</label><input id="p-name" value="${esc(u.name)}">
+        <label for="p-username">${t('username_optional')}</label><input id="p-username" maxlength="30" value="${esc(u.username || '')}" placeholder="${t('username_ph')}">
         <label for="p-bio">${t('bio')}</label><textarea id="p-bio" rows="3">${esc(u.bio || '')}</textarea>
         <label for="p-avatar">${t('avatar_url')}</label><input id="p-avatar" value="${esc(u.avatar_url || '')}">
         <label><input type="checkbox" id="p-public" style="width:auto" ${u.is_public ? 'checked' : ''}> ${t('profile_public')}</label>
@@ -2255,6 +2267,7 @@ async function viewProfile(id) {
       try {
         const updated = await api('/users/me', { method: 'PATCH', body: {
           name: document.getElementById('p-name').value,
+          username: document.getElementById('p-username').value.trim(),
           bio: document.getElementById('p-bio').value,
           avatar_url: document.getElementById('p-avatar').value,
           is_public: document.getElementById('p-public').checked,

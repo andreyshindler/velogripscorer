@@ -338,6 +338,9 @@ for (const stmt of [
   // The clock offset applied to this wave's gun time (the offset of the device
   // that fired it; 0 when set from the web, which is already server time).
   `ALTER TABLE waves ADD COLUMN gun_offset_ms INTEGER NOT NULL DEFAULT 0`,
+  // Optional handle a user can log in with instead of their email. Unique
+  // (case-insensitive) among users who set one; NULL/'' for those who don't.
+  `ALTER TABLE users ADD COLUMN username TEXT`,
 ]) {
   try {
     db.exec(stmt);
@@ -345,6 +348,14 @@ for (const stmt of [
     if (!/duplicate column/.test(String(err.message))) throw err;
   }
 }
+
+// Enforce unique usernames case-insensitively, but only for users who set one
+// (partial index skips the NULL/'' rows). Created after the ALTER above so the
+// column exists on databases upgraded from before this feature.
+db.exec(
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username
+     ON users (lower(username)) WHERE username IS NOT NULL AND username != ''`
+);
 
 function auditLog(userId, action, targetType, targetId, details) {
   db.prepare(
