@@ -159,6 +159,25 @@ test('an authorized operator sees the join code in their own account; others do 
   assert.equal(after.races.length, 0);
 });
 
+test('organizer can list marshals and add one by picking (not just email)', async () => {
+  const m = (await request(app).post('/api/auth/register')
+    .send({ email: 'pick-me@test.co', password: 'password123', username: 'pickme' })).body;
+  assert.equal(m.user.role, 'marshal');
+
+  let cands = (await request(app).get(`/api/contests/${contest.id}/marshal-candidates`).set(auth(org))).body.marshals;
+  assert.ok(cands.find((x) => x.id === m.user.id), 'the marshal shows up as a candidate');
+
+  const add = await request(app).post(`/api/contests/${contest.id}/collaborators`).set(auth(org))
+    .send({ user_id: m.user.id });
+  assert.equal(add.status, 201);
+
+  cands = (await request(app).get(`/api/contests/${contest.id}/marshal-candidates`).set(auth(org))).body.marshals;
+  assert.ok(!cands.find((x) => x.id === m.user.id), 'an added marshal drops off the candidate list');
+
+  const mine = (await request(app).get('/api/my/checkpoints').set(auth(m))).body.races;
+  assert.ok(mine.find((r) => r.id === contest.id), 'the picked marshal now sees the race');
+});
+
 test('an authorized account mints a checkpoint token without a code (app pick-list)', async () => {
   const stranger = (await request(app).post('/api/auth/register')
     .send({ email: 'cp-stranger@test.co', password: 'password123', name: 'Stranger' })).body;

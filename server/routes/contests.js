@@ -334,19 +334,42 @@ router.get('/contests/:id/collaborators', requireAuth, (req, res) => {
   res.json({ collaborators });
 });
 
+// Marshals available to add as checkpoint operators for this race: every
+// marshal-role user not already an operator (and not the organizer).
+router.get('/contests/:id/marshal-candidates', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const marshals = db
+    .prepare(
+      `SELECT id, username, name, email FROM users
+       WHERE role = 'marshal' AND is_banned = 0 AND approved = 1 AND id != ?
+         AND id NOT IN (SELECT user_id FROM contest_collaborators WHERE contest_id = ?)
+       ORDER BY COALESCE(NULLIF(username, ''), name) LIMIT 500`
+    )
+    .all(contest.organizer_id, contest.id);
+  res.json({ marshals });
+});
+
 router.post('/contests/:id/collaborators', requireAuth, (req, res) => {
   const contest = getContest(req.params.id);
   if (!contest) return res.status(404).json({ error: 'contest not found' });
   if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  if (!email) return res.status(400).json({ error: 'email required' });
-  const user = db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(email);
+  // Add by picked user id (from the marshal list) or by typed email.
+  let user;
+  if (req.body?.user_id) {
+    user = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(Number(req.body.user_id));
+  } else {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'email required' });
+    user = db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(email);
+  }
   if (!user) return res.status(404).json({ error: 'no registered user with that email' });
   if (user.id === contest.organizer_id) return res.status(400).json({ error: 'the organizer already has access' });
   const exists = db.prepare('SELECT id FROM contest_collaborators WHERE contest_id = ? AND user_id = ?').get(contest.id, user.id);
   if (exists) return res.status(409).json({ error: 'already added' });
   const info = db.prepare('INSERT INTO contest_collaborators (contest_id, user_id) VALUES (?,?)').run(contest.id, user.id);
-  auditLog(req.user.id, 'collaborator.add', 'contest', contest.id, email);
+  auditLog(req.user.id, 'collaborator.add', 'contest', contest.id, user.email);
   notify(user.id, 'checkpoint_access', `You can now operate checkpoints for "${contest.title}"`, { contest_id: contest.id, nav: 'checkpoints' });
   res.status(201).json({ id: info.lastInsertRowid, user_id: user.id, name: user.name, email: user.email });
 });

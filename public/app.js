@@ -1760,16 +1760,18 @@ function racerEditForm(a, waves) {
 
 async function renderManage(box, c) {
   const generation = renderGeneration;
-  const [{ tags }, wavesData, readersData, collabData] = await Promise.all([
+  const [{ tags }, wavesData, readersData, collabData, marshalData] = await Promise.all([
     api(`/contests/${c.id}/tags`),
     api(`/contests/${c.id}/waves`),
     api(`/contests/${c.id}/readers`).catch(() => ({ readers: [] })),
     api(`/contests/${c.id}/collaborators`).catch(() => ({ collaborators: [] })),
+    api(`/contests/${c.id}/marshal-candidates`).catch(() => ({ marshals: [] })),
   ]);
   if (generation !== renderGeneration) return;
   const waves = wavesData.waves;
   const checkpoints = (readersData.readers || []).filter((r) => r.role === 'checkpoint');
   const collaborators = collabData.collaborators || [];
+  const marshals = marshalData.marshals || [];
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
@@ -1846,10 +1848,17 @@ async function renderManage(box, c) {
             <button class="btn small danger collab-del" data-id="${u.id}" data-name="${esc(u.name || u.email)}" style="margin-inline-start:auto">${t('remove')}</button>
           </div>`).join('') : `<p class="muted" style="margin:0">${t('no_operators')}</p>`}
       </div>
+      ${marshals.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px">
+        <label style="margin:0">${t('pick_marshal')}
+          <select id="collab-pick" style="display:block;margin-top:4px;min-width:240px">
+            ${marshals.map((m) => `<option value="${m.id}">${esc(m.username || m.name)}${m.email ? ` — ${esc(m.email)}` : ''}</option>`).join('')}
+          </select></label>
+        <button class="btn small" id="add-collab-pick">${t('add_operator')}</button>
+      </div>` : `<p class="muted" style="margin:8px 0 0;font-size:.82rem">${t('no_marshals')}</p>`}
       <form id="add-collab" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px">
         <label style="margin:0">${t('operator_email')}
-          <input id="collab-email" type="email" required maxlength="120" placeholder="${t('operator_email_ph')}" style="display:block;margin-top:4px;min-width:220px"></label>
-        <button class="btn small secondary">${t('add_operator')}</button>
+          <input id="collab-email" type="email" maxlength="120" placeholder="${t('operator_email_ph')}" style="display:block;margin-top:4px;min-width:220px"></label>
+        <button class="btn small secondary">${t('add_by_email')}</button>
       </form>
     </div>
 
@@ -2011,6 +2020,16 @@ async function renderManage(box, c) {
     };
   });
   // ---- checkpoint operators (share code access with a registered user) ----
+  const pickBtn = $('#add-collab-pick');
+  if (pickBtn) pickBtn.onclick = async () => {
+    const sel = $('#collab-pick');
+    if (!sel || !sel.value) return;
+    try {
+      await api(`/contests/${c.id}/collaborators`, { method: 'POST', body: { user_id: Number(sel.value) } });
+      toast(t('operator_added'));
+      viewContest(c.id, 'manage');
+    } catch (err) { toast(err.message, true); }
+  };
   $('#add-collab').onsubmit = async (e) => {
     e.preventDefault();
     const email = $('#collab-email').value.trim();
