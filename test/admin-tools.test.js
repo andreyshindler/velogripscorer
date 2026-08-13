@@ -50,6 +50,22 @@ test('admin can promote and demote a user; guards hold', async () => {
   assert.equal(down.body.role, 'marshal');
 });
 
+test('in curated mode, marshals cannot create races or leagues; admins can', async () => {
+  delete process.env.OPEN_REGISTRATION; // simulate staging/prod (curated)
+  try {
+    const race = {
+      title: 'Gated', kind: 'race', category: 'other',
+      start_at: new Date().toISOString(), end_at: new Date(Date.now() + 3600_000).toISOString(),
+    };
+    assert.equal((await request(app).post('/api/contests').set(auth(u1)).send(race)).status, 403);
+    assert.equal((await request(app).post('/api/contests').set(auth(admin)).send(race)).status, 201);
+    assert.equal((await request(app).post('/api/leagues').set(auth(u1)).send({ name: 'L' })).status, 403);
+    assert.equal((await request(app).post('/api/leagues').set(auth(admin)).send({ name: 'L' })).status, 201);
+  } finally {
+    process.env.OPEN_REGISTRATION = '1';
+  }
+});
+
 test('reset test data wipes races + non-admin users but keeps admins', async () => {
   // Needs the typed confirmation.
   const noConfirm = await request(app).post('/api/admin/reset-test-data').set(auth(admin)).send({});

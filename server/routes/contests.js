@@ -20,6 +20,13 @@ function isOrganizer(contest, user) {
   return user && (user.id === contest.organizer_id || user.role === 'admin');
 }
 
+// Who may create/manage races & leagues. Admins always; any registered user
+// only in open self-service mode (OPEN_REGISTRATION) — dev/test convenience.
+// In the default curated mode (staging/prod), marshals cannot organize.
+function canOrganize(user) {
+  return !!user && (user.role === 'admin' || process.env.OPEN_REGISTRATION === '1');
+}
+
 // A checkpoint operator the organizer authorized: can view the race and its
 // checkpoint join code from their own account, but not edit it.
 function isCollaborator(contest, user) {
@@ -412,6 +419,10 @@ router.post('/contests/:id/checkpoint-token', requireAuth, (req, res) => {
 // ---- Creation & management (req 3.2) ----
 
 router.post('/contests', requireAuth, (req, res) => {
+  // Organizing (creating/managing races) is curated the same way registration
+  // is: admin-only by default (marshals just operate checkpoints), but open to
+  // any registered user in open self-service mode — the classic dev/test setup.
+  if (!canOrganize(req.user)) return res.status(403).json({ error: 'only admins can create races' });
   const b = req.body || {};
   if (!b.title || !String(b.title).trim()) return res.status(400).json({ error: 'title required' });
   if (!b.start_at || !b.end_at) return res.status(400).json({ error: 'start_at and end_at required' });
@@ -551,6 +562,7 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
 // fresh pairing token, no reads/results) so the same roster can time another
 // event without overwriting the original race's results.
 router.post('/contests/:id/duplicate', requireAuth, (req, res) => {
+  if (!canOrganize(req.user)) return res.status(403).json({ error: 'only admins can create races' });
   const src = getContest(req.params.id);
   if (!src) return res.status(404).json({ error: 'contest not found' });
   if (!isOrganizer(src, req.user)) return res.status(403).json({ error: 'organizer only' });
@@ -824,4 +836,4 @@ router.post('/contests/:id/webhooks', requireAuth, (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
-module.exports = { router, getContest, canView, votingOpen, blindActive, isOrganizer, sweepEndedContests };
+module.exports = { router, getContest, canView, votingOpen, blindActive, isOrganizer, canOrganize, sweepEndedContests };

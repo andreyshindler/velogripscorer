@@ -112,8 +112,15 @@ test('deleting a user who owns races is refused', async () => {
 
   const now = new Date().toISOString();
   const later = new Date(Date.now() + 3600_000).toISOString();
-  await request(app).post('/api/contests').set('Authorization', `Bearer ${ownerToken}`)
-    .send({ title: 'Owned race', kind: 'race', category: 'other', start_at: now, end_at: later });
+  // Organizing is admin-only in curated mode; briefly allow this regular user to
+  // own a race so we can assert deletion is refused.
+  process.env.OPEN_REGISTRATION = '1';
+  try {
+    await request(app).post('/api/contests').set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'Owned race', kind: 'race', category: 'other', start_at: now, end_at: later });
+  } finally {
+    delete process.env.OPEN_REGISTRATION;
+  }
 
   const res = await request(app).delete(`/api/admin/users/${ownerId}`).set('Authorization', `Bearer ${adminToken}`);
   assert.equal(res.status, 409, 'cannot delete a user who owns races');

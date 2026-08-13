@@ -157,6 +157,11 @@ router.get('/leagues/:id/standings', async (req, res) => {
 // ---- admin writes ----
 
 router.post('/leagues', requireAuth, (req, res) => {
+  // Curated mode (default): only admins organize. Open self-service mode
+  // (OPEN_REGISTRATION, dev/tests) lets any registered user create leagues.
+  if (req.user.role !== 'admin' && process.env.OPEN_REGISTRATION !== '1') {
+    return res.status(403).json({ error: 'only admins can create leagues' });
+  }
   const { name, season, settings, preset } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   let normalized;

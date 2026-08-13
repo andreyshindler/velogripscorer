@@ -140,7 +140,8 @@ function adminBadge(role) {
 
 function renderChrome() {
   const authArea = document.getElementById('auth-area');
-  document.getElementById('nav-startlists').hidden = !state.user;
+  // Race management (Start lists) is admin-only; marshals only operate checkpoints.
+  document.getElementById('nav-startlists').hidden = !(state.user && state.user.role === 'admin');
   // The Checkpoints nav appears only for users a race has shared a checkpoint
   // with (organizers reach it from the race's Manage tab instead).
   const navCp = document.getElementById('nav-checkpoints');
@@ -680,6 +681,7 @@ async function pickLocationOnMap(onPick) {
 
 async function viewStartLists() {
   if (!state.user) { location.hash = '#/login'; return; }
+  if (state.user.role !== 'admin') { location.hash = '#/'; return; } // admins manage races
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <h1 style="margin:0">${t('my_startlists')}</h1>
@@ -2306,6 +2308,7 @@ async function viewProfile(id) {
 // League management for the signed-in user (their own leagues + own races).
 async function viewMyLeagues() {
   if (!state.user) { location.hash = '#/login'; return; }
+  if (state.user.role !== 'admin') { location.hash = '#/'; return; } // admins manage leagues
   main.innerHTML = `
     <div class="brand-row">
       <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
@@ -2322,7 +2325,7 @@ async function viewLeagues() {
       <img class="hero-logo" src="${BASE}/velogrip-logo.png" alt="VeloGrip" width="739" height="553">
       <h1 class="page-title-center">${t('leagues_title')}</h1>
     </div>
-    ${state.user ? `<div style="text-align:center;margin:0 0 18px">
+    ${state.user && state.user.role === 'admin' ? `<div style="text-align:center;margin:0 0 18px">
       <a class="btn secondary" href="#/myleagues">➕ ${t('my_leagues_title')}</a></div>` : ''}
     ${leagues.length ? `<div class="grid">${leagues.map((l) => {
       const allRacesDone = l.race_count > 0 && l.finished_race_count === l.race_count;
