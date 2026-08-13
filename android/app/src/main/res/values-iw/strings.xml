@@ -60,7 +60,7 @@
     <string name="filter_bib">סנן לפי מספר חזה…</string>
     <string name="no_matching_bib">אין מספר חזה תואם.</string>
     <string name="all_riders_recorded">כל הרוכבים נרשמו ✓</string>
-    <string name="lap_tally">הקפה %1$d: %2$d</string>
+    <string name="lap_label">הקפה %1$d</string>
     <string name="all_laps_recorded">כל %1$d ההקפות כבר נרשמו לרוכב הזה</string>
     <string name="sign_in_to_join">התחבר קודם כדי שנקודת הביקורת תישמר בחשבון שלך</string>
     <string name="sync_offline">● לא מקוון — %1$d חציות נשמרו, יועלו כשהחיבור יחזור</string>

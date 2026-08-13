@@ -112,16 +112,21 @@
                 android:textSize="16sp"
                 android:visibility="gone" />
 
-            <!-- Per-lap tally: how many riders reached each lap this session -->
-            <TextView
-                android:id="@+id/cpLapBreakdown"
+            <!-- Per-lap counters: one counter per lap, shown for multi-lap races -->
+            <HorizontalScrollView
+                android:id="@+id/cpLapCountersScroll"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center_horizontal"
-                android:textColor="@color/text_muted"
-                android:textSize="14sp"
-                android:visibility="gone" />
+                android:layout_marginTop="8dp"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/cpLapCounters"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
 
             <TextView
                 android:id="@+id/cpSync"

@@ -50,11 +50,11 @@ public class CheckpointActivity extends BaseActivity {
     // recorded now (not any left over from a previous session on the same race).
     private long sessionStartMs = 0;
 
-    private View chooser, readerPanel, manualPanel;
-    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, lapBreakdown;
+    private View chooser, readerPanel, manualPanel, lapCountersScroll;
+    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent;
     private Button connect;
     private EditText filter;
-    private LinearLayout bibGrid;
+    private LinearLayout bibGrid, lapCounters;
     private List<RaceStore.Racer> racers = new ArrayList<>();
     private final Map<String, Integer> taps = new HashMap<>();
     private Map<String, Integer> lapCaps = new HashMap<>(); // distance -> laps (tap cap)
@@ -88,7 +88,8 @@ public class CheckpointActivity extends BaseActivity {
         last = findViewById(R.id.cpLast);
         manualStatus = findViewById(R.id.cpManualStatus);
         recent = findViewById(R.id.cpRecent);
-        lapBreakdown = findViewById(R.id.cpLapBreakdown);
+        lapCounters = findViewById(R.id.cpLapCounters);
+        lapCountersScroll = findViewById(R.id.cpLapCountersScroll);
         connect = findViewById(R.id.cpConnect);
         filter = findViewById(R.id.cpFilter);
         bibGrid = findViewById(R.id.cpBibGrid);
@@ -358,23 +359,58 @@ public class CheckpointActivity extends BaseActivity {
         }
     }
 
-    // Break this session's passes down by lap: how many riders reached lap 1, lap
-    // 2, and so on (a rider with N passes counts toward every lap up to N). Hidden
-    // for single-lap races, where it would just repeat the total.
+    // A separate counter per lap: each shows how many riders reached that lap this
+    // session (a rider with N passes counts toward every lap up to N). For a
+    // single-lap race there's just the one total counter (the big number above).
     private void updateLapBreakdown() {
-        if (sessionStartMs <= 0) { lapBreakdown.setVisibility(View.GONE); return; }
+        if (sessionStartMs <= 0) { lapCountersScroll.setVisibility(View.GONE); return; }
         Map<String, Integer> counts = store.passCountsSince(sessionStartMs);
         int maxLap = 0;
         for (int v : counts.values()) if (v > maxLap) maxLap = v;
-        if (maxLap < 2) { lapBreakdown.setVisibility(View.GONE); return; }
-        int[] tally = new int[maxLap + 1];
-        for (int v : counts.values()) for (int l = 1; l <= v; l++) tally[l]++;
-        StringBuilder sb = new StringBuilder();
-        for (int l = 1; l <= maxLap; l++) {
-            if (l > 1) sb.append("    ");
-            sb.append(getString(R.string.lap_tally, l, tally[l]));
+        // Show every expected lap (from the configured caps) even before anyone
+        // has reached it, so the marshal sees all the lap counters up front.
+        for (int cap : lapCaps.values()) if (cap > maxLap) maxLap = cap;
+
+        if (maxLap < 2) { // single-lap: keep just the big total counter
+            lapCountersScroll.setVisibility(View.GONE);
+            count.setVisibility(View.VISIBLE);
+            countLabel.setVisibility(View.VISIBLE);
+            return;
         }
-        lapBreakdown.setText(sb);
-        lapBreakdown.setVisibility(View.VISIBLE);
+        // Multi-lap: the per-lap counters replace the single total.
+        count.setVisibility(View.GONE);
+        countLabel.setVisibility(View.GONE);
+        int[] tally = new int[maxLap + 1];
+        for (int v : counts.values()) for (int l = 1; l <= Math.min(v, maxLap); l++) tally[l]++;
+        lapCounters.removeAllViews();
+        for (int l = 1; l <= maxLap; l++) lapCounters.addView(lapCounter(l, tally[l]));
+        lapCountersScroll.setVisibility(View.VISIBLE);
+    }
+
+    /** One lap's counter tile: a big number over a "Lap N" label. */
+    private View lapCounter(int lap, int value) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(dp(10), 0, dp(10), 0);
+        box.setLayoutParams(lp);
+        box.setMinimumWidth(dp(56));
+
+        TextView num = new TextView(this);
+        num.setText(String.valueOf(value));
+        num.setTextSize(40);
+        num.setTypeface(null, Typeface.BOLD);
+        num.setTextColor(getColor(R.color.velogrip_green));
+        num.setGravity(Gravity.CENTER);
+        TextView lbl = new TextView(this);
+        lbl.setText(getString(R.string.lap_label, lap));
+        lbl.setTextSize(13);
+        lbl.setTextColor(getColor(R.color.text_muted));
+        lbl.setGravity(Gravity.CENTER);
+        box.addView(num);
+        box.addView(lbl);
+        return box;
     }
 }
