@@ -38,7 +38,6 @@
     <string name="reader_connected">● Reader connected</string>
     <string name="reader_connecting">◌ Connecting to reader…</string>
     <string name="no_reader">No reader set — tap Connect reader</string>
-    <string name="connect_reader">Connect reader</string>
     <string name="stop_checkpoint">Stop checkpoint</string>
     <string name="all_uploaded">All uploaded ✓</string>
     <string name="sync_offline_short">Offline — will upload when back online</string>

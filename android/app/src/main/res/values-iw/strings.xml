@@ -38,7 +38,6 @@
     <string name="reader_connected">● הקורא מחובר</string>
     <string name="reader_connecting">◌ מתחבר לקורא…</string>
     <string name="no_reader">לא הוגדר קורא — הקש חבר קורא</string>
-    <string name="connect_reader">חבר קורא</string>
     <string name="stop_checkpoint">עצור נקודת ביקורת</string>
     <string name="all_uploaded">הכל הועלה ✓</string>
     <string name="sync_offline_short">לא מקוון — יועלה כשהחיבור יחזור</string>
