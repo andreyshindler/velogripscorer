@@ -193,8 +193,8 @@ public final class Uploader {
     /** Joins this race as a checkpoint using the short code shown on the web
      *  Manage tab (no login needed). Returns the response JSON, which carries a
      *  freshly-minted checkpoint reader token to pair this phone with. */
-    public static String joinCheckpoint(String serverUrl, String code, String name) throws IOException {
-        HttpURLConnection conn = openStatic(serverUrl, "/api/join/checkpoint", "POST", null);
+    public static String joinCheckpoint(String serverUrl, String code, String name, String jwt) throws IOException {
+        HttpURLConnection conn = openStatic(serverUrl, "/api/join/checkpoint", "POST", jwt);
         byte[] body = ("{\"code\":" + jsonString(code) + ",\"name\":" + jsonString(name) + "}")
                 .getBytes(StandardCharsets.UTF_8);
         conn.setDoOutput(true);

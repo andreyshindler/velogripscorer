@@ -228,9 +228,21 @@ public class JoinCheckpointActivity extends BaseActivity {
         status.setVisibility(View.VISIBLE);
         status.setText(R.string.joining);
         final String server = prefs.serverUrl();
+        // If the marshal is signed in, send their token so the server reuses their
+        // existing checkpoint for this race instead of creating a new one each scan.
+        final String token0 = jwt;
+        final String savedEmail = prefs.accountEmail(), savedPass = prefs.accountPass();
         new Thread(() -> {
             try {
-                JSONObject res = new JSONObject(Uploader.joinCheckpoint(server, c, nm));
+                String useToken = token0;
+                // Not signed in yet but credentials are saved -> log in so the join
+                // is authenticated (server reuses this marshal's checkpoint).
+                if (useToken == null && savedPass != null && !savedPass.isEmpty()) {
+                    try {
+                        useToken = new JSONObject(Uploader.login(server, savedEmail, savedPass)).getString("token");
+                    } catch (Exception ignore) { /* fall back to anonymous join */ }
+                }
+                JSONObject res = new JSONObject(Uploader.joinCheckpoint(server, c, nm, useToken));
                 final String token = res.getString("token");
                 final String title = res.optString("contest_title", "");
                 final String cpName = res.optString("name", nm);

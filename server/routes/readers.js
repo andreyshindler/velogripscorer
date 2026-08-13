@@ -87,6 +87,17 @@ router.post('/join/checkpoint', (req, res) => {
   const contest = db.prepare("SELECT * FROM contests WHERE checkpoint_code = ? AND kind = 'race'").get(raw);
   if (!contest) return res.status(404).json({ error: 'invalid join code' });
 
+  // A signed-in marshal re-joining the same race reuses their existing
+  // checkpoint instead of minting a duplicate each time they scan the QR.
+  if (req.user) {
+    const mine = db
+      .prepare("SELECT token, name FROM readers WHERE contest_id = ? AND role = 'checkpoint' AND created_by = ? ORDER BY id LIMIT 1")
+      .get(contest.id, req.user.id);
+    if (mine) {
+      return res.json({ ok: true, token: mine.token, name: mine.name, reused: true, contest_id: contest.id, contest_title: contest.title });
+    }
+  }
+
   // Cap checkpoints per race so a leaked code can't create readers without bound.
   const cpCount = db
     .prepare("SELECT COUNT(*) AS n FROM readers WHERE contest_id = ? AND role = 'checkpoint'")
@@ -97,9 +108,9 @@ router.post('/join/checkpoint', (req, res) => {
   if (!name) name = `Checkpoint ${cpCount + 1}`;
   const location = String(req.body?.location || '').trim().slice(0, 80);
   const token = `vgr_${crypto.randomBytes(24).toString('hex')}`;
-  db.prepare('INSERT INTO readers (contest_id, name, token, location, role) VALUES (?,?,?,?,?)')
-    .run(contest.id, name, token, location, 'checkpoint');
-  auditLog(null, 'reader.join', 'contest', contest.id, `checkpoint ${name}`);
+  db.prepare('INSERT INTO readers (contest_id, name, token, location, role, created_by) VALUES (?,?,?,?,?,?)')
+    .run(contest.id, name, token, location, 'checkpoint', req.user ? req.user.id : null);
+  auditLog(req.user ? req.user.id : null, 'reader.join', 'contest', contest.id, `checkpoint ${name}`);
   res.status(201).json({
     ok: true, token, name,
     contest_id: contest.id, contest_title: contest.title,

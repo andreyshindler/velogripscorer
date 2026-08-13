@@ -113,6 +113,30 @@ test('a phone joins as a checkpoint with the short code (auto-provisions a token
   assert.equal(r.splits[joined.id].elapsed, '0:45.0', 'joined checkpoint split at +45s');
 });
 
+test('a signed-in marshal re-joining reuses their checkpoint (no duplicate)', async () => {
+  const c = (await request(app).get(`/api/contests/${contest.id}`).set(auth(org))).body;
+  const marshal = (await request(app).post('/api/auth/register')
+    .send({ email: 'rescan@test.co', password: 'password123', username: 'rescanner' })).body;
+
+  const first = await request(app).post('/api/join/checkpoint').set(auth(marshal))
+    .send({ code: c.checkpoint_code, name: 'KM 3' });
+  assert.equal(first.status, 201);
+  const before = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers.length;
+
+  // Same marshal scans again -> reuse, no new checkpoint.
+  const again = await request(app).post('/api/join/checkpoint').set(auth(marshal))
+    .send({ code: c.checkpoint_code, name: 'KM 3 (rescan)' });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.reused, true);
+  assert.equal(again.body.token, first.body.token, 'same checkpoint token');
+  const after = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers.length;
+  assert.equal(after, before, 'no duplicate checkpoint created');
+
+  // An anonymous join (no account) still creates a fresh checkpoint.
+  const anon = await request(app).post('/api/join/checkpoint').send({ code: c.checkpoint_code });
+  assert.equal(anon.status, 201);
+});
+
 test('an authorized operator sees the join code in their own account; others do not', async () => {
   const op = (await request(app).post('/api/auth/register')
     .send({ email: 'cp-op@test.co', password: 'password123', name: 'Marshal' })).body;

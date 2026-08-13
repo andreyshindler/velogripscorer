@@ -402,6 +402,14 @@ router.post('/contests/:id/checkpoint-token', requireAuth, (req, res) => {
   if (!isOrganizer(contest, req.user) && !isCollaborator(contest, req.user)) {
     return res.status(403).json({ error: 'not authorized for this race' });
   }
+  // Reuse this account's existing checkpoint for the race (so picking/re-scanning
+  // doesn't pile up duplicates).
+  const mine = db
+    .prepare("SELECT token, name FROM readers WHERE contest_id = ? AND role = 'checkpoint' AND created_by = ? ORDER BY id LIMIT 1")
+    .get(contest.id, req.user.id);
+  if (mine) {
+    return res.json({ ok: true, token: mine.token, name: mine.name, reused: true, contest_id: contest.id, contest_title: contest.title });
+  }
   const cpCount = db
     .prepare("SELECT COUNT(*) AS n FROM readers WHERE contest_id = ? AND role = 'checkpoint'")
     .get(contest.id).n;
@@ -410,8 +418,8 @@ router.post('/contests/:id/checkpoint-token', requireAuth, (req, res) => {
   if (!name) name = `Checkpoint ${cpCount + 1}`;
   const location = String(req.body?.location || '').trim().slice(0, 80);
   const token = `vgr_${crypto.randomBytes(24).toString('hex')}`;
-  db.prepare('INSERT INTO readers (contest_id, name, token, location, role) VALUES (?,?,?,?,?)')
-    .run(contest.id, name, token, location, 'checkpoint');
+  db.prepare('INSERT INTO readers (contest_id, name, token, location, role, created_by) VALUES (?,?,?,?,?,?)')
+    .run(contest.id, name, token, location, 'checkpoint', req.user.id);
   auditLog(req.user.id, 'reader.checkpoint-token', 'contest', contest.id, name);
   res.status(201).json({ ok: true, token, name, contest_id: contest.id, contest_title: contest.title });
 });

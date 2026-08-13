@@ -341,6 +341,10 @@ for (const stmt of [
   // Optional handle a user can log in with instead of their email. Unique
   // (case-insensitive) among users who set one; NULL/'' for those who don't.
   `ALTER TABLE users ADD COLUMN username TEXT`,
+  // The user who provisioned a checkpoint reader by joining (NULL for organizer-
+  // added or anonymous code joins). Lets a signed-in marshal re-scan the same
+  // race and get their existing checkpoint back instead of a duplicate.
+  `ALTER TABLE readers ADD COLUMN created_by INTEGER`,
 ]) {
   try {
     db.exec(stmt);
