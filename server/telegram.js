@@ -200,13 +200,13 @@ function btn(text, data) { return { text, callback_data: data }; }
 // A persistent reply keyboard so the argument-less commands are one tap away.
 // The labels map back to their slash commands in handleText.
 const COMMAND_LABELS = {
-  '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add',
+  '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '🔁 Laps': '/laps',
   '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league', '❓ Help': '/help',
 };
 function mainKeyboard() {
   return {
     keyboard: [
-      [{ text: '🏁 Races' }, { text: '📋 List' }],
+      [{ text: '🏁 Races' }, { text: '📋 List' }, { text: '🔁 Laps' }],
       [{ text: '➕ Add' }, { text: '📄 CSV' }, { text: '📑 PDF' }],
       [{ text: '🏆 League' }, { text: '❓ Help' }],
     ],
@@ -278,6 +278,8 @@ const HELP = [
   '/edit &lt;bib&gt; — edit a racer (buttons: name, bib, category, distance, team, gender, wave, chip, status), or:',
   '   <code>/edit 101 name=New Name cat=M45 wave=Sport epc=E280A1</code>',
   '/del &lt;bib&gt; — remove a racer',
+  '/laps — number of laps per distance (checkpoints cap taps by it):',
+  '   <code>/laps 3</code> (all distances) · <code>/laps MTB 4</code> (one) · <code>/laps 0</code> (clear)',
   '/csv — download the results CSV',
   '/pdf — download the results PDF',
   '/league — season league standings + CSV/PDF',
@@ -416,6 +418,59 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const lines = racers.slice(0, 60).map(racerLine);
     const more = racers.length > 60 ? `\n… and ${racers.length - 60} more (filter with /list <text>).` : '';
     await send.message(chatId, `<b>${racers.length} racers</b>\n${lines.join('\n')}${more}`);
+  }
+
+  // Number of laps per race, capped by distance. Checkpoints use these to cap
+  // manual bib taps, and multi-lap results/lap-time tables key off them too.
+  //   /laps            → show the current laps for each distance
+  //   /laps 3          → set every distance to 3 laps
+  //   /laps MTB 4      → set one distance
+  //   /laps 0 (or MTB 0) → clear (no limit)
+  async function cmdLaps(chatId, rest) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const got = await A('GET', `/contests/${c.id}/lap-targets`);
+    const data = (got && got.json) || { lap_targets: {}, distances: [] };
+    const distances = data.distances || [];
+    const current = { ...(data.lap_targets || {}) };
+    const arg = String(rest || '').trim();
+
+    if (!distances.length) {
+      await send.message(chatId, 'This race has no distances yet. Add a start list with distances first, then set the laps.');
+      return;
+    }
+    const show = (laps) => distances
+      .map((d) => `• <b>${esc(d)}</b>: ${laps[d] ? `${laps[d]} lap${laps[d] > 1 ? 's' : ''}` : '— (no limit)'}`)
+      .join('\n');
+
+    if (!arg) {
+      await send.message(chatId,
+        `<b>Laps per distance — ${esc(c.title)}</b>\n${show(current)}\n\n` +
+        `Set them:\n<code>/laps 3</code> — all distances to 3\n` +
+        `<code>/laps ${esc(distances[0])} 4</code> — one distance\n` +
+        `<code>/laps 0</code> — clear (no limit)`);
+      return;
+    }
+
+    let newTargets;
+    if (/^\d+$/.test(arg)) { // a bare number sets every distance at once
+      const n = parseInt(arg, 10);
+      newTargets = {};
+      for (const d of distances) newTargets[d] = n; // 0 → dropped server-side → no limit
+    } else {
+      const m = arg.match(/^(.*?)[\s=]+(\d+)$/); // "<distance> <n>" or "<distance>=<n>"
+      if (!m) { await send.message(chatId, 'Usage: <code>/laps 3</code> (all) or <code>/laps MTB 4</code> (one).'); return; }
+      const real = distances.find((d) => d.toLowerCase() === m[1].trim().toLowerCase());
+      if (!real) { await send.message(chatId, `Unknown distance “${esc(m[1].trim())}”. Known: ${distances.map(esc).join(', ')}`); return; }
+      newTargets = { ...current, [real]: parseInt(m[2], 10) };
+    }
+
+    const patch = await A('PATCH', `/contests/${c.id}/lap-targets`, { lap_targets: newTargets });
+    if (!patch || patch.status >= 400) {
+      await send.message(chatId, `⚠️ ${esc((patch && patch.json && patch.json.error) || 'could not save laps')}`);
+      return;
+    }
+    await send.message(chatId, `✅ Saved.\n${show((patch.json && patch.json.lap_targets) || {})}`);
   }
 
   // Resolve a wave name to its id for this race, creating it if new (mirrors the
@@ -802,6 +857,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       case '/edit': return cmdEdit(chatId, rest);
       case '/del':
       case '/delete': return cmdDel(chatId, rest);
+      case '/laps': return cmdLaps(chatId, rest);
       case '/csv': return cmdCsv(chatId);
       case '/pdf': return cmdPdf(chatId);
       case '/league': return cmdLeague(chatId);
@@ -1206,6 +1262,7 @@ const OPERATOR_COMMANDS = [
   { command: 'add', description: 'Add a racer' },
   { command: 'edit', description: 'Edit a racer: /edit <bib>' },
   { command: 'del', description: 'Delete a racer: /del <bib>' },
+  { command: 'laps', description: 'Laps per race: /laps 3, /laps MTB 4' },
   { command: 'csv', description: 'Download the results CSV' },
   { command: 'pdf', description: 'Download the results PDF' },
   { command: 'league', description: 'Season league standings' },
