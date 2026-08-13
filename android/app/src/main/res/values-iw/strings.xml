@@ -61,6 +61,9 @@
     <string name="no_matching_bib">אין מספר חזה תואם.</string>
     <string name="all_riders_recorded">כל הרוכבים נרשמו ✓</string>
     <string name="stop_and_clear">עצור ונקה</string>
+    <string name="checkpoint_checking">בודק את מצב המרוץ…</string>
+    <string name="checkpoint_wait_for_start">המרוץ עדיין לא התחיל. תוכל להפעיל את נקודת הביקורת ברגע שהמארגן יתחיל את המרוץ.</string>
+    <string name="checkpoint_refresh">↻ רענן</string>
     <string name="stop_checkpoint_confirm">לעצור את נקודת הביקורת? %1$d הקריאות שנרשמו יימחקו — כאן ובשרת — כדי שהמפגש הבא יתחיל מאפס. אי אפשר לבטל.</string>
     <string name="lap_label">הקפה %1$d</string>
     <string name="all_laps_recorded">כל %1$d ההקפות כבר נרשמו לרוכב הזה</string>

@@ -51,8 +51,11 @@ public class CheckpointActivity extends BaseActivity {
     // recorded now (not any left over from a previous session on the same race).
     private long sessionStartMs = 0;
 
-    private View chooser, readerPanel, manualPanel, lapCountersScroll;
-    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent;
+    private View chooser, readerPanel, manualPanel, lapCountersScroll, waiting;
+    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, waitingMsg;
+    private boolean checkingGate = false;
+    private final android.os.Handler gateHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable gatePoll = () -> { if (mode == MODE_NONE) checkGate(); };
     private Button connect;
     private EditText filter;
     private LinearLayout bibGrid, lapCounters;
@@ -94,9 +97,12 @@ public class CheckpointActivity extends BaseActivity {
         connect = findViewById(R.id.cpConnect);
         filter = findViewById(R.id.cpFilter);
         bibGrid = findViewById(R.id.cpBibGrid);
+        waiting = findViewById(R.id.cpWaiting);
+        waitingMsg = findViewById(R.id.cpWaitingMsg);
 
         title.setText(prefs.contestTitle());
         findViewById(R.id.cpHome).setOnClickListener(v -> goHome());
+        findViewById(R.id.cpWaitingRefresh).setOnClickListener(v -> checkGate());
         findViewById(R.id.cpModeReader).setOnClickListener(v -> pickReader());
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
@@ -116,12 +122,51 @@ public class CheckpointActivity extends BaseActivity {
         // Re-arm the reader if a scan just set the address.
         if (mode == MODE_READER && !serviceStarted && !prefs.readerHost().isEmpty()) startBridge(false);
         render(false, store.pendingCount(), true);
+        // Gate: a marshal can only start the checkpoint once the organizer has
+        // started the race (a wave has a gun time).
+        if (mode == MODE_NONE) checkGate();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        gateHandler.removeCallbacks(gatePoll);
         try { unregisterReceiver(receiver); } catch (IllegalArgumentException ignored) { }
+    }
+
+    // ---- Race-start gate -------------------------------------------------------
+
+    // Refresh wave status from the server and reveal the mode chooser only if the
+    // race has started; otherwise show the waiting screen and poll again shortly.
+    private void checkGate() {
+        if (mode != MODE_NONE || checkingGate) return;
+        checkingGate = true;
+        gateHandler.removeCallbacks(gatePoll);
+        chooser.setVisibility(View.GONE);
+        waiting.setVisibility(View.VISIBLE);
+        waitingMsg.setText(R.string.checkpoint_checking);
+        new Thread(() -> {
+            try { StartListSync.download(prefs, store); } catch (Exception ignored) { /* fall back to cached waves */ }
+            final boolean started = raceStarted();
+            runOnUiThread(() -> {
+                checkingGate = false;
+                if (mode != MODE_NONE) return; // marshal already past the gate
+                if (started) {
+                    waiting.setVisibility(View.GONE);
+                    chooser.setVisibility(View.VISIBLE);
+                } else {
+                    chooser.setVisibility(View.GONE);
+                    waiting.setVisibility(View.VISIBLE);
+                    waitingMsg.setText(R.string.checkpoint_wait_for_start);
+                    gateHandler.postDelayed(gatePoll, 15000); // auto-detect the start
+                }
+            });
+        }).start();
+    }
+
+    private boolean raceStarted() {
+        for (RaceStore.Wave w : store.waves()) if (w.startedAtMs != null) return true;
+        return false;
     }
 
     // ---- Mode selection --------------------------------------------------------
