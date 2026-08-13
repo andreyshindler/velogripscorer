@@ -61,6 +61,9 @@
     <string name="no_matching_bib">אין מספר חזה תואם.</string>
     <string name="all_riders_recorded">כל הרוכבים נרשמו ✓</string>
     <string name="stop_and_clear">עצור ונקה</string>
+    <string name="leave_checkpoint_title">לצאת מנקודת הביקורת?</string>
+    <string name="leave_checkpoint_msg">נקודת הביקורת עדיין רושמת. להשאיר אותה פועלת ברקע, או לעצור?</string>
+    <string name="keep_running">להשאיר פועל</string>
     <string name="checkpoint_checking">בודק את מצב המרוץ…</string>
     <string name="checkpoint_wait_for_start">המרוץ עדיין לא התחיל — אפשר לחבר קורא ולראות את המספרים, אבל אי אפשר לרשום מעבר עד שהמארגן יתחיל את המרוץ.</string>
     <string name="checkpoint_not_started_tap">המרוץ עדיין לא התחיל.</string>

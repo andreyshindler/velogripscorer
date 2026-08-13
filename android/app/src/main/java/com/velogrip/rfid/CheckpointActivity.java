@@ -109,7 +109,7 @@ public class CheckpointActivity extends BaseActivity {
         chooserConn = findViewById(R.id.cpConnChooser);
 
         title.setText(prefs.contestTitle());
-        findViewById(R.id.cpHome).setOnClickListener(v -> goHome());
+        findViewById(R.id.cpHome).setOnClickListener(v -> onHome());
         findViewById(R.id.cpWaitingRefresh).setOnClickListener(v -> checkGate());
         findViewById(R.id.cpConnOnline).setOnClickListener(v -> pickConnectivity(false));
         findViewById(R.id.cpConnOffline).setOnClickListener(v -> pickConnectivity(true));
@@ -402,6 +402,19 @@ public class CheckpointActivity extends BaseActivity {
     }
 
     // ---- Shared ----------------------------------------------------------------
+
+    // Home while a checkpoint is active: don't silently leave the reader/service
+    // running — ask whether to keep recording in the background or stop it.
+    private void onHome() {
+        if (mode == MODE_NONE) { goHome(); finish(); return; } // nothing running yet
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.leave_checkpoint_title)
+                .setMessage(R.string.leave_checkpoint_msg)
+                .setPositiveButton(R.string.stop_checkpoint, (d, w) -> stopAndExit())
+                .setNeutralButton(R.string.keep_running, (d, w) -> { goHome(); finish(); })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
 
     private void goHome() {
         Intent i = new Intent(this, MainActivity.class);
