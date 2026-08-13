@@ -208,15 +208,19 @@ router.post('/ingest/lap-targets', (req, res) => {
   const reader = readerFromToken(req);
   if (!reader) return res.status(401).json({ error: 'unknown reader token' });
   const src = req.body?.lap_targets;
-  const clean = {};
+  // Merge-fill: the finish phone only supplies distances the organizer hasn't
+  // set in the web, so an organizer-defined cap is never overwritten by a device.
+  const contest = getContest(reader.contest_id);
+  let merged = {};
+  try { merged = JSON.parse(contest.lap_targets || '{}'); } catch { merged = {}; }
   if (src && typeof src === 'object') {
     for (const [dist, n] of Object.entries(src)) {
       const laps = Number(n);
-      if (Number.isInteger(laps) && laps >= 1 && laps <= 999) clean[String(dist).slice(0, 80)] = laps;
+      const key = String(dist).slice(0, 80);
+      if (Number.isInteger(laps) && laps >= 1 && laps <= 999 && !(key in merged)) merged[key] = laps;
     }
   }
-  const patch = { lap_targets: JSON.stringify(clean) };
-  db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(patch.lap_targets, reader.contest_id);
+  db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(JSON.stringify(merged), reader.contest_id);
   if (typeof req.body?.record_laps === 'boolean') {
     db.prepare('UPDATE contests SET record_laps = ? WHERE id = ?').run(req.body.record_laps ? 1 : 0, reader.contest_id);
   }

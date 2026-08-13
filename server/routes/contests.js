@@ -391,6 +391,44 @@ router.delete('/contests/:id/collaborators/:cid', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Per-distance lap counts for the race, so a checkpoint marshal tapping bibs is
+// capped at how many times each rider passes. Defined here (server-authoritative)
+// rather than only on the finish phone, so the cap works even when no finish
+// device has published its local lap config. Returns the race's distinct
+// distances alongside the stored counts so the web can render one input each.
+router.get('/contests/:id/lap-targets', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  let lapTargets = {};
+  try { lapTargets = JSON.parse(contest.lap_targets || '{}'); } catch { lapTargets = {}; }
+  const distances = db
+    .prepare(
+      `SELECT DISTINCT distance FROM tag_assignments
+       WHERE contest_id = ? AND distance IS NOT NULL AND distance != '' ORDER BY distance`
+    )
+    .all(contest.id)
+    .map((r) => r.distance);
+  res.json({ lap_targets: lapTargets, distances, record_laps: contest.record_laps });
+});
+
+router.patch('/contests/:id/lap-targets', requireAuth, (req, res) => {
+  const contest = getContest(req.params.id);
+  if (!contest) return res.status(404).json({ error: 'contest not found' });
+  if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
+  const src = req.body?.lap_targets;
+  if (!src || typeof src !== 'object') return res.status(400).json({ error: 'lap_targets object required' });
+  const clean = {};
+  for (const [dist, n] of Object.entries(src)) {
+    const laps = Number(n);
+    // A blank/0 entry means "no cap for this distance" — just omit it.
+    if (Number.isInteger(laps) && laps >= 1 && laps <= 999) clean[String(dist).slice(0, 80)] = laps;
+  }
+  db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(JSON.stringify(clean), contest.id);
+  auditLog(req.user.id, 'contest.lap-targets', 'contest', contest.id, JSON.stringify(clean));
+  res.json({ ok: true, lap_targets: clean });
+});
+
 // A registered operator (or the organizer) mints a checkpoint token for a race
 // they're authorized for — the app's "sign in & pick your race" flow, so the
 // marshal never types the join code. Same result as POST /join/checkpoint, but

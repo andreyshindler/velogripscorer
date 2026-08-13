@@ -1762,18 +1762,21 @@ function racerEditForm(a, waves) {
 
 async function renderManage(box, c) {
   const generation = renderGeneration;
-  const [{ tags }, wavesData, readersData, collabData, marshalData] = await Promise.all([
+  const [{ tags }, wavesData, readersData, collabData, marshalData, lapData] = await Promise.all([
     api(`/contests/${c.id}/tags`),
     api(`/contests/${c.id}/waves`),
     api(`/contests/${c.id}/readers`).catch(() => ({ readers: [] })),
     api(`/contests/${c.id}/collaborators`).catch(() => ({ collaborators: [] })),
     api(`/contests/${c.id}/marshal-candidates`).catch(() => ({ marshals: [] })),
+    api(`/contests/${c.id}/lap-targets`).catch(() => ({ lap_targets: {}, distances: [] })),
   ]);
   if (generation !== renderGeneration) return;
   const waves = wavesData.waves;
   const checkpoints = (readersData.readers || []).filter((r) => r.role === 'checkpoint');
   const collaborators = collabData.collaborators || [];
   const marshals = marshalData.marshals || [];
+  const lapTargets = lapData.lap_targets || {};
+  const lapDistances = lapData.distances || [];
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
@@ -1838,6 +1841,19 @@ async function renderManage(box, c) {
           <input id="cp-location" maxlength="80" style="display:block;margin-top:4px"></label>
         <button class="btn small">${t('add_checkpoint')}</button>
       </form>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h4 style="margin:0">${t('laps_per_distance')}</h4>
+      <p class="muted" style="margin:4px 0;font-size:.82rem">${t('laps_per_distance_help')}</p>
+      ${lapDistances.length ? `
+      <form id="lap-targets-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:8px">
+        ${lapDistances.map((d) => `
+          <label style="margin:0">${esc(d)}
+            <input class="lap-target-input" data-distance="${esc(d)}" type="number" min="1" max="999"
+                   value="${lapTargets[d] != null ? Number(lapTargets[d]) : ''}"
+                   placeholder="—" style="display:block;margin-top:4px;width:90px"></label>`).join('')}
+        <button class="btn small">${t('save_settings')}</button>
+      </form>` : `<p class="muted" style="margin:8px 0 0;font-size:.82rem">${t('laps_no_distances')}</p>`}
 
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
       <h4 style="margin:0">${t('checkpoint_operators')}</h4>
@@ -1993,6 +2009,19 @@ async function renderManage(box, c) {
       }});
       toast(t('saved'));
       viewContest(c.id, 'manage');
+    } catch (err) { toast(err.message, true); }
+  };
+  const lapForm = $('#lap-targets-form');
+  if (lapForm) lapForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const body = { lap_targets: {} };
+    lapForm.querySelectorAll('.lap-target-input').forEach((inp) => {
+      const v = parseInt(inp.value, 10);
+      if (Number.isInteger(v) && v >= 1) body.lap_targets[inp.dataset.distance] = v;
+    });
+    try {
+      await api(`/contests/${c.id}/lap-targets`, { method: 'PATCH', body });
+      toast(t('saved'));
     } catch (err) { toast(err.message, true); }
   };
   box.querySelectorAll('.cp-copy').forEach((btn) => {

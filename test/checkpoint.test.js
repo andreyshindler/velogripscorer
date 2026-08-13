@@ -292,3 +292,42 @@ test('import-reads merges an offline checkpoint file (elapsed seconds)', async (
   assert.equal(r.laps, 1);
   assert.equal(r.elapsed, '2:00.0');
 });
+
+test('organizer defines per-distance lap targets; checkpoint syncs them', async () => {
+  // A racer on a named distance, so the race exposes that distance to configure.
+  await request(app).post(`/api/contests/${contest.id}/tags`).set(auth(org))
+    .send({ epc: 'AAAA0200', bib: '200', participant: 'Racer 200', wave_id: wave.id, category: 'A', distance: '50K' });
+
+  // The distance shows up with no cap set yet.
+  let lt = (await request(app).get(`/api/contests/${contest.id}/lap-targets`).set(auth(org))).body;
+  assert.ok(lt.distances.includes('50K'), 'race distance is listed');
+  assert.equal(lt.lap_targets['50K'], undefined, 'no cap defined yet');
+
+  // Organizer sets 3 laps for 50K.
+  const patch = await request(app).patch(`/api/contests/${contest.id}/lap-targets`).set(auth(org))
+    .send({ lap_targets: { '50K': 3 } });
+  assert.equal(patch.status, 200);
+  assert.equal(patch.body.lap_targets['50K'], 3);
+
+  // The checkpoint's start-list sync carries the cap to the phone.
+  const sl = (await request(app).get('/api/ingest/startlist').set('X-Reader-Token', cpTok)).body;
+  assert.equal(sl.lap_targets['50K'], 3, 'checkpoint learns the cap');
+
+  // A finish device's auto-publish never overwrites an organizer-set cap,
+  // but does fill a distance the organizer left blank.
+  await request(app).post('/api/ingest/lap-targets').set('X-Reader-Token', finishTok)
+    .send({ lap_targets: { '50K': 9, '100K': 5 } });
+  lt = (await request(app).get(`/api/contests/${contest.id}/lap-targets`).set(auth(org))).body;
+  assert.equal(lt.lap_targets['50K'], 3, 'organizer value preserved');
+  assert.equal(lt.lap_targets['100K'], 5, 'device filled the blank distance');
+});
+
+test('a non-organizer cannot read or set lap targets', async () => {
+  const stranger = (await request(app).post('/api/auth/register')
+    .send({ email: 'cp-stranger2@test.co', password: 'password123', name: 'Nobody' })).body;
+  const get = await request(app).get(`/api/contests/${contest.id}/lap-targets`).set(auth(stranger));
+  assert.equal(get.status, 403);
+  const patch = await request(app).patch(`/api/contests/${contest.id}/lap-targets`).set(auth(stranger))
+    .send({ lap_targets: { '50K': 1 } });
+  assert.equal(patch.status, 403);
+});
