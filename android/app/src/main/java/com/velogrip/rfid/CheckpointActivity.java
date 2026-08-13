@@ -4,15 +4,25 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.velogrip.rfid.db.RaceStore;
 import com.velogrip.rfid.net.StartListSync;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Checkpoint mode: a stripped-down screen for a marshal operating a checkpoint.
@@ -35,7 +45,10 @@ public class CheckpointActivity extends BaseActivity {
     private View chooser, readerPanel, manualPanel;
     private TextView title, count, countLabel, sync, reader, last, manualStatus, recent;
     private Button connect;
-    private EditText bib;
+    private EditText filter;
+    private LinearLayout bibGrid;
+    private List<RaceStore.Racer> racers = new ArrayList<>();
+    private final Map<String, Integer> taps = new HashMap<>();
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
@@ -67,7 +80,8 @@ public class CheckpointActivity extends BaseActivity {
         manualStatus = findViewById(R.id.cpManualStatus);
         recent = findViewById(R.id.cpRecent);
         connect = findViewById(R.id.cpConnect);
-        bib = findViewById(R.id.cpBib);
+        filter = findViewById(R.id.cpFilter);
+        bibGrid = findViewById(R.id.cpBibGrid);
 
         title.setText(prefs.contestTitle());
         findViewById(R.id.cpHome).setOnClickListener(v -> goHome());
@@ -75,8 +89,12 @@ public class CheckpointActivity extends BaseActivity {
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
         findViewById(R.id.cpReaderSettings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
-        findViewById(R.id.cpRecord).setOnClickListener(v -> recordManual());
         findViewById(R.id.cpStop).setOnClickListener(v -> stopAndExit());
+        filter.addTextChangedListener(new TextWatcher() {
+            @Override public void afterTextChanged(Editable s) { buildGrid(s.toString().trim()); }
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+        });
     }
 
     @Override
@@ -144,26 +162,98 @@ public class CheckpointActivity extends BaseActivity {
                         : getString(R.string.start_list_failed);
             }
             final String text = msg;
-            runOnUiThread(() -> manualStatus.setText(text));
+            runOnUiThread(() -> {
+                manualStatus.setText(text);
+                racers = store.racers();
+                filter.setVisibility(racers.isEmpty() ? View.GONE : View.VISIBLE);
+                buildGrid("");
+            });
         }).start();
     }
 
-    private void recordManual() {
-        String b = bib.getText().toString().trim();
-        if (b.isEmpty()) return;
-        RaceStore.Racer racer = null;
-        for (RaceStore.Racer r : store.racers()) {
-            if (b.equals(r.bib)) { racer = r; break; }
+    /** A tappable tile per bib in the start list; tap = record that racer's pass. */
+    private void buildGrid(String q) {
+        bibGrid.removeAllViews();
+        final int cols = 3;
+        LinearLayout row = null;
+        int shown = 0;
+        for (RaceStore.Racer r : racers) {
+            if (r.epc == null || r.epc.isEmpty()) continue;
+            if (!q.isEmpty() && (r.bib == null || !r.bib.contains(q))) continue;
+            if (shown % cols == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                bibGrid.addView(row, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            }
+            row.addView(makeTile(r));
+            shown++;
         }
-        if (racer == null || racer.epc.isEmpty()) {
-            Toast.makeText(this, getString(R.string.bib_not_found, b), Toast.LENGTH_SHORT).show();
-            return;
+        if (row != null) for (int i = shown % cols; i != 0 && i < cols; i++) row.addView(spacer());
+        if (shown == 0) {
+            TextView empty = new TextView(this);
+            empty.setText(R.string.no_matching_bib);
+            empty.setTextColor(getColor(R.color.text_muted));
+            bibGrid.addView(empty);
         }
-        store.recordPassing(racer.epc, System.currentTimeMillis());
-        recent.setText(getString(R.string.recorded_bib, racer.bib,
-                racer.name == null ? "" : racer.name));
-        bib.setText("");
+    }
+
+    private View makeTile(RaceStore.Racer r) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMargins(dp(4), dp(4), dp(4), dp(4));
+        tile.setLayoutParams(lp);
+        tile.setPadding(dp(6), dp(12), dp(6), dp(12));
+        tile.setClickable(true);
+
+        TextView bibTv = new TextView(this);
+        bibTv.setTextSize(22);
+        bibTv.setTypeface(null, Typeface.BOLD);
+        bibTv.setGravity(Gravity.CENTER);
+        TextView nameTv = new TextView(this);
+        nameTv.setText(r.name == null ? "" : r.name);
+        nameTv.setTextSize(11);
+        nameTv.setMaxLines(1);
+        nameTv.setEllipsize(TextUtils.TruncateAt.END);
+        nameTv.setGravity(Gravity.CENTER);
+        tile.addView(bibTv);
+        tile.addView(nameTv);
+
+        styleTile(tile, bibTv, nameTv, r.bib, taps.getOrDefault(r.bib, 0));
+        tile.setOnClickListener(v -> tapBib(r, tile, bibTv, nameTv));
+        return tile;
+    }
+
+    private void tapBib(RaceStore.Racer r, View tile, TextView bibTv, TextView nameTv) {
+        store.recordPassing(r.epc, System.currentTimeMillis());
+        int n = taps.getOrDefault(r.bib, 0) + 1;
+        taps.put(r.bib, n);
+        styleTile(tile, bibTv, nameTv, r.bib, n);
+        recent.setText(getString(R.string.recorded_bib, r.bib, r.name == null ? "" : r.name));
         render(false, store.pendingCount(), true);
+    }
+
+    private void styleTile(View tile, TextView bibTv, TextView nameTv, String bib, int count) {
+        boolean on = count > 0;
+        tile.setBackgroundColor(getColor(on ? R.color.velogrip_green : R.color.tile_idle_bg));
+        int tc = getColor(on ? R.color.on_accent : R.color.tile_idle_text);
+        bibTv.setTextColor(tc);
+        nameTv.setTextColor(tc);
+        bibTv.setText(count > 1 ? bib + "  ×" + count : bib);
+    }
+
+    private View spacer() {
+        View s = new View(this);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 1, 1f);
+        lp.setMargins(dp(4), dp(4), dp(4), dp(4));
+        s.setLayoutParams(lp);
+        return s;
+    }
+
+    private int dp(int v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
     // ---- Shared ----------------------------------------------------------------

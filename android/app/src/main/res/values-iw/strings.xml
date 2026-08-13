@@ -57,6 +57,8 @@
     <string name="start_list_failed">לא ניתן לטעון את רשימת הזינוק. התחבר פעם אחת ונסה שוב.</string>
     <string name="bib_not_found">מספר חזה %1$s אינו ברשימת הזינוק</string>
     <string name="recorded_bib">✓ %1$s %2$s</string>
+    <string name="filter_bib">סנן לפי מספר חזה…</string>
+    <string name="no_matching_bib">אין מספר חזה תואם.</string>
     <string name="sync_offline">● לא מקוון — %1$d חציות נשמרו, יועלו כשהחיבור יחזור</string>
     <string name="sync_uploading">↑ מעלה — נותרו %1$d חציות</string>
     <string name="join_checkpoint_note">טיפ: סרוק את קוד ה-QR בלשונית הניהול באתר כדי למלא את הקוד אוטומטית. לאחר מכן הגדר את חיבור הקורא והתחל לתזמן — החציות נשלחות בזמן אמת, או נצברות וממוזגות כשמתחברים מחדש.</string>

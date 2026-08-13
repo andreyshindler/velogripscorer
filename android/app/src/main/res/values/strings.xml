@@ -57,6 +57,8 @@
     <string name="start_list_failed">Couldn\'t load the start list. Connect once, then retry.</string>
     <string name="bib_not_found">Bib %1$s isn\'t in the start list</string>
     <string name="recorded_bib">✓ %1$s %2$s</string>
+    <string name="filter_bib">Filter by bib…</string>
+    <string name="no_matching_bib">No matching bib.</string>
     <string name="sync_offline">● Offline — %1$d passes saved, will upload when back online</string>
     <string name="sync_uploading">↑ Uploading — %1$d passes left</string>
     <string name="join_checkpoint_note">Tip: scan the QR on the web Manage tab to fill the code in automatically. Next, set up the reader connection and start timing — your passes upload live, or buffer and merge when you reconnect.</string>
