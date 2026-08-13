@@ -51,8 +51,11 @@ public class CheckpointActivity extends BaseActivity {
     // recorded now (not any left over from a previous session on the same race).
     private long sessionStartMs = 0;
 
-    private View chooser, readerPanel, manualPanel, lapCountersScroll, waiting;
-    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, waitingMsg;
+    private View chooser, readerPanel, manualPanel, lapCountersScroll, waiting, listPanel;
+    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, waitingMsg, testResult;
+    private boolean gridTappable = false; // manual mode taps; reader mode is a live view
+    private boolean testing = false;      // waiting for a tag during a reader test
+    private final Map<String, RaceStore.Racer> racerByEpc = new HashMap<>();
     private boolean checkingGate = false;
     private boolean raceStarted = false; // recording is unlocked once the race starts
     private boolean connChosen = false;  // has the marshal picked online / offline yet
@@ -75,8 +78,13 @@ public class CheckpointActivity extends BaseActivity {
             boolean readerConnected = i.getBooleanExtra(BridgeService.EXTRA_READER_CONNECTED, false);
             long pending = i.getLongExtra(BridgeService.EXTRA_PENDING, 0);
             boolean online = i.getBooleanExtra(BridgeService.EXTRA_ONLINE, true);
+            String testEpc = i.getStringExtra(BridgeService.EXTRA_TEST_EPC);
+            if (testEpc != null && !testEpc.isEmpty()) onTestResult(testEpc);
             String epc = i.getStringExtra(BridgeService.EXTRA_LAST_EPC);
-            if (epc != null && !epc.isEmpty()) lastEpc = epc;
+            if (epc != null && !epc.isEmpty()) {
+                lastEpc = epc;
+                if (mode == MODE_READER) markRead(epc); // reflect the reader read on the live grid
+            }
             render(readerConnected, pending, online);
         }
     };
@@ -107,6 +115,8 @@ public class CheckpointActivity extends BaseActivity {
         waiting = findViewById(R.id.cpWaiting);
         waitingMsg = findViewById(R.id.cpWaitingMsg);
         chooserConn = findViewById(R.id.cpConnChooser);
+        listPanel = findViewById(R.id.cpListPanel);
+        testResult = findViewById(R.id.cpTestResult);
 
         title.setText(prefs.contestTitle());
         findViewById(R.id.cpHome).setOnClickListener(v -> onHome());
@@ -116,6 +126,7 @@ public class CheckpointActivity extends BaseActivity {
         findViewById(R.id.cpModeReader).setOnClickListener(v -> pickReader());
         findViewById(R.id.cpModeManual).setOnClickListener(v -> pickManual());
         connect.setOnClickListener(v -> startActivity(new Intent(this, ScanReaderActivity.class)));
+        findViewById(R.id.cpTestReader).setOnClickListener(v -> testReader());
         findViewById(R.id.cpReaderSettings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.cpStop).setOnClickListener(v -> stopAndExit());
         filter.addTextChangedListener(new TextWatcher() {
@@ -205,7 +216,10 @@ public class CheckpointActivity extends BaseActivity {
         chooser.setVisibility(View.GONE);
         showCounts();
         readerPanel.setVisibility(View.VISIBLE);
+        listPanel.setVisibility(View.VISIBLE);   // show the bib list as a live read view
+        gridTappable = false;                     // reader records; the grid is view-only
         findViewById(R.id.cpStop).setVisibility(View.VISIBLE);
+        loadStartList();
         if (!prefs.readerHost().isEmpty()) startBridge(false);
     }
 
@@ -215,9 +229,54 @@ public class CheckpointActivity extends BaseActivity {
         chooser.setVisibility(View.GONE);
         showCounts();
         manualPanel.setVisibility(View.VISIBLE);
+        listPanel.setVisibility(View.VISIBLE);
+        gridTappable = true;                      // tap bibs to record
         findViewById(R.id.cpStop).setVisibility(View.VISIBLE);
         startBridge(true); // upload-only: no reader socket
         loadStartList();
+    }
+
+    // ---- Reader test -----------------------------------------------------------
+
+    // Arm a one-shot test: the next tag the reader sees is reported (number +
+    // success) and NOT recorded, so the marshal can verify the reader works.
+    private void testReader() {
+        testing = true;
+        testResult.setVisibility(View.VISIBLE);
+        testResult.setTextColor(getColor(R.color.text_muted));
+        testResult.setText(R.string.test_waiting);
+        startService(new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_TEST));
+        gateHandler.removeCallbacks(testTimeout);
+        gateHandler.postDelayed(testTimeout, 15000);
+    }
+
+    private final Runnable testTimeout = () -> {
+        if (!testing) return;
+        testing = false;
+        testResult.setTextColor(0xFFC0392B);
+        testResult.setText(R.string.test_no_tag);
+    };
+
+    private void onTestResult(String epc) {
+        testing = false;
+        gateHandler.removeCallbacks(testTimeout);
+        testResult.setVisibility(View.VISIBLE);
+        testResult.setTextColor(0xFF2E7D32);
+        testResult.setText(getString(R.string.checkpoint_test_ok, epc));
+    }
+
+    // A reader read lands on the live grid: bump that racer's tile (visual only —
+    // the reader already recorded the pass).
+    private void markRead(String formattedEpc) {
+        String raw = formattedEpc.split(" ")[0].toUpperCase(java.util.Locale.US);
+        RaceStore.Racer r = racerByEpc.get(raw);
+        if (r == null || r.bib == null || r.bib.isEmpty()) return;
+        int max = maxTaps(r);
+        int cur = taps.getOrDefault(r.bib, 0);
+        if (cur >= max) return; // already at the lap cap
+        taps.put(r.bib, cur + 1);
+        recent.setText(getString(R.string.recorded_bib, r.bib, r.name == null ? "" : r.name));
+        buildGrid(filter.getText().toString().trim());
     }
 
     private void showCounts() {
@@ -256,6 +315,10 @@ public class CheckpointActivity extends BaseActivity {
                 manualStatus.setText(text);
                 racers = store.racers();
                 lapCaps = store.lapTargets();
+                racerByEpc.clear();
+                for (RaceStore.Racer rc : racers) {
+                    if (rc.epc != null && !rc.epc.isEmpty()) racerByEpc.put(rc.epc.toUpperCase(java.util.Locale.US), rc);
+                }
                 filter.setVisibility(racers.isEmpty() ? View.GONE : View.VISIBLE);
                 buildGrid("");
             });
@@ -319,7 +382,7 @@ public class CheckpointActivity extends BaseActivity {
         tile.addView(nameTv);
 
         styleTile(tile, bibTv, nameTv, r.bib, taps.getOrDefault(r.bib, 0), maxTaps(r));
-        tile.setOnClickListener(v -> tapBib(r, tile, bibTv, nameTv));
+        if (gridTappable) tile.setOnClickListener(v -> tapBib(r, tile, bibTv, nameTv));
         return tile;
     }
 

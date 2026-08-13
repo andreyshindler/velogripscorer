@@ -64,6 +64,10 @@
     <string name="leave_checkpoint_title">לצאת מנקודת הביקורת?</string>
     <string name="leave_checkpoint_msg">נקודת הביקורת עדיין רושמת. להשאיר אותה פועלת ברקע, או לעצור?</string>
     <string name="keep_running">להשאיר פועל</string>
+    <string name="test_reader">🔎 בדיקת קורא</string>
+    <string name="test_waiting">קרב את תג הבדיקה לקורא…</string>
+    <string name="checkpoint_test_ok">✓ הבדיקה הצליחה — %1$s</string>
+    <string name="test_no_tag">לא זוהה תג. בדוק את חיבור הקורא ונסה שוב.</string>
     <string name="checkpoint_checking">בודק את מצב המרוץ…</string>
     <string name="checkpoint_wait_for_start">המרוץ עדיין לא התחיל — אפשר לחבר קורא ולראות את המספרים, אבל אי אפשר לרשום מעבר עד שהמארגן יתחיל את המרוץ.</string>
     <string name="checkpoint_not_started_tap">המרוץ עדיין לא התחיל.</string>

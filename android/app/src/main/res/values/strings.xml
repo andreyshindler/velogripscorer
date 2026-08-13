@@ -64,6 +64,10 @@
     <string name="leave_checkpoint_title">Leave the checkpoint?</string>
     <string name="leave_checkpoint_msg">The checkpoint is still recording. Keep it running in the background, or stop it?</string>
     <string name="keep_running">Keep running</string>
+    <string name="test_reader">🔎 Test reader</string>
+    <string name="test_waiting">Hold your test tag to the reader…</string>
+    <string name="checkpoint_test_ok">✓ Test successful — %1$s</string>
+    <string name="test_no_tag">No tag detected. Check the reader connection and try again.</string>
     <string name="checkpoint_checking">Checking race status…</string>
     <string name="checkpoint_wait_for_start">The race hasn\'t started yet — you can connect a reader and view the bibs, but you can\'t record a pass until the organizer starts the race.</string>
     <string name="checkpoint_not_started_tap">The race hasn\'t started yet.</string>

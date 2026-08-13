@@ -234,6 +234,23 @@
                     android:text="@string/scan_for_reader" />
 
                 <Button
+                    android:id="@+id/cpTestReader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/test_reader"
+                    style="?android:attr/buttonBarButtonStyle" />
+
+                <TextView
+                    android:id="@+id/cpTestResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+
+                <Button
                     android:id="@+id/cpReaderSettings"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -258,6 +275,16 @@
                     android:layout_marginTop="16dp"
                     android:textColor="@color/text_muted"
                     android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Bib list: tappable in manual mode, a live read view in reader mode.
+                 Shared, so it shows for both (built in code). -->
+            <LinearLayout
+                android:id="@+id/cpListPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
 
                 <EditText
                     android:id="@+id/cpFilter"
@@ -272,11 +299,11 @@
                     android:id="@+id/cpRecent"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
                     android:layout_marginTop="10dp"
                     android:textColor="@color/text_primary"
                     android:textSize="15sp" />
 
-                <!-- Tappable grid of every bib in the start list (built in code). -->
                 <LinearLayout
                     android:id="@+id/cpBibGrid"
                     android:layout_width="match_parent"

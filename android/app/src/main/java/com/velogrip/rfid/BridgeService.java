@@ -47,6 +47,7 @@ public class BridgeService extends Service {
     public static final String ACTION_START = "com.velogrip.rfid.START";
     public static final String ACTION_STOP = "com.velogrip.rfid.STOP";
     public static final String ACTION_STATUS = "com.velogrip.rfid.STATUS";
+    public static final String ACTION_TEST = "com.velogrip.rfid.TEST"; // arm a one-shot reader test
 
     public static final String EXTRA_RUNNING = "running";
     public static final String EXTRA_READER_CONNECTED = "readerConnected";
@@ -58,6 +59,7 @@ public class BridgeService extends Service {
     // RFID reader socket (no reader hardware at this checkpoint).
     public static final String EXTRA_MANUAL_ONLY = "manualOnly";
     public static final String EXTRA_LAST_EPC = "lastEpc";
+    public static final String EXTRA_TEST_EPC = "testEpc"; // a tag seen during a reader test
     public static final String EXTRA_LOG = "log";
 
     // "_v2": a fresh channel id so setShowBadge(false) actually applies —
@@ -72,6 +74,7 @@ public class BridgeService extends Service {
     // Whether the last server sync attempt succeeded — drives the on-screen
     // "offline / N buffered" indicator. Starts true (optimistic).
     private final AtomicBoolean online = new AtomicBoolean(true);
+    private final AtomicBoolean testMode = new AtomicBoolean(false); // one-shot reader test
     private boolean manualOnly = false;
     private final AtomicLong uploadedTotal = new AtomicLong(0);
     private final Map<String, Long> lastSeen = new HashMap<>();
@@ -103,6 +106,10 @@ public class BridgeService extends Service {
             stopBridge();
             stopSelf();
             return START_NOT_STICKY;
+        }
+        if (ACTION_TEST.equals(action)) {
+            testMode.set(true); // next tag read is reported as a test, not recorded
+            return START_STICKY;
         }
         manualOnly = intent != null && intent.getBooleanExtra(EXTRA_MANUAL_ONLY, false);
         startBridge();
@@ -261,6 +268,18 @@ public class BridgeService extends Service {
     }
 
     private void handleReads(List<TagRead> reads) {
+        // Reader test: report the first tag seen (any tag, on the start list or not)
+        // and record nothing — the marshal is just verifying the reader reads.
+        if (testMode.get() && !reads.isEmpty()) {
+            testMode.set(false);
+            TagRead t = reads.get(0);
+            Intent status = statusIntent(null);
+            status.putExtra(EXTRA_TEST_EPC, t.epc
+                    + (t.rssi != null ? String.format(Locale.US, " (%.0f dBm)", t.rssi) : ""));
+            sendBroadcast(status);
+            beep();
+            return;
+        }
         long now = System.currentTimeMillis();
         int window = prefs.dedupeWindowMs();
         // Fresh gun check per batch (not the 5 s roster cache) so beeps fire
