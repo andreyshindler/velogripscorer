@@ -111,6 +111,15 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <Button
+            android:id="@+id/logoutButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/log_out"
+            android:textColor="#C0392B"
+            style="?android:attr/buttonBarButtonStyle" />
+
         <TextView style="@style/SettingsHeader" android:text="@string/section_server" />
 
         <TextView style="@style/SettingsLabel" android:text="@string/label_reader_token" />

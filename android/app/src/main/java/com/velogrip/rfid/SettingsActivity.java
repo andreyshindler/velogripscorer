@@ -93,6 +93,21 @@ public class SettingsActivity extends BaseActivity {
             finish();
         });
 
+        Button logout = findViewById(R.id.logoutButton);
+        logout.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
+                .setMessage(R.string.logout_confirm)
+                .setPositiveButton(R.string.log_out, (d, w) -> {
+                    prefs.logout();
+                    Toast.makeText(this, R.string.logged_out, Toast.LENGTH_SHORT).show();
+                    android.content.Intent i = new android.content.Intent(this, MainActivity.class);
+                    i.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    startActivity(i);
+                    finish();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show());
+
         // Selecting LLRP defaults the port to the standard 5084 (like the
         // "RFID-LLRP" option in commercial timing apps).
         protocol.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {

@@ -353,6 +353,9 @@
     <string name="label_password">Password</string>
     <string name="show_password">Show password</string>
     <string name="login_pick_race">Log in &amp; choose race</string>
+    <string name="log_out">Log out</string>
+    <string name="logout_confirm">Log out and unpair this device from its race? Your account and reader settings for signing back in are kept.</string>
+    <string name="logged_out">Logged out.</string>
     <string name="login_needs_fields">Enter server URL, email and password first.</string>
     <string name="no_races_on_account">No races on this account yet — create one on the website.</string>
     <string name="no_unraced_startlists">All start lists have already been timed. Finished races are hidden here.</string>

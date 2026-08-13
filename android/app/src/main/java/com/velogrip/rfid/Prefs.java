@@ -186,6 +186,18 @@ public final class Prefs {
                 .putString("accountPass", password).apply();
     }
 
+    /** Sign out: forget the saved account and unpair this device from its race
+     *  (so it stops auto-connecting and a different account can sign in). Keeps
+     *  device/hardware settings like the server URL and reader connection. */
+    public void logout() {
+        sp.edit()
+                .remove("accountPass")
+                .remove("readerToken")
+                .remove("contestId")
+                .remove("contestTitle")
+                .apply();
+    }
+
     /** Point the app at a server URL (used when a checkpoint QR deep link carries
      *  the base URL, so a fresh phone self-configures without typing it). */
     public void setServerUrl(String url) {
