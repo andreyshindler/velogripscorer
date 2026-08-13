@@ -221,6 +221,21 @@ public final class RaceStore extends SQLiteOpenHelper {
         return count("SELECT COUNT(*) FROM passings");
     }
 
+    /** Passes recorded per chip since a timestamp (epc -> count) — used to tally
+     *  how many riders reached each lap in the current checkpoint session. */
+    public java.util.Map<String, Integer> passCountsSince(long sinceMs) {
+        java.util.Map<String, Integer> out = new java.util.HashMap<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT epc, COUNT(*) FROM passings WHERE read_at >= ? GROUP BY epc",
+                new String[]{String.valueOf(sinceMs)});
+        try {
+            while (c.moveToNext()) out.put(c.getString(0), c.getInt(1));
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
     /** Wipes the stored race (start list, waves, passings) before pairing a new one. */
     public void clearRace() {
         SQLiteDatabase db = getWritableDatabase();

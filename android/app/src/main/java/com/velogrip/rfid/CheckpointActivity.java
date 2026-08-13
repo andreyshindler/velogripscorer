@@ -46,9 +46,12 @@ public class CheckpointActivity extends BaseActivity {
     // on-screen counter shows this session's passes — not the race's running total
     // (the buffer is kept for offline upload and survives a stop/re-join).
     private long sessionBase = -1;
+    // When this checkpoint session began, so the per-lap tally only counts passes
+    // recorded now (not any left over from a previous session on the same race).
+    private long sessionStartMs = 0;
 
     private View chooser, readerPanel, manualPanel;
-    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent;
+    private TextView title, count, countLabel, sync, reader, last, manualStatus, recent, lapBreakdown;
     private Button connect;
     private EditText filter;
     private LinearLayout bibGrid;
@@ -85,6 +88,7 @@ public class CheckpointActivity extends BaseActivity {
         last = findViewById(R.id.cpLast);
         manualStatus = findViewById(R.id.cpManualStatus);
         recent = findViewById(R.id.cpRecent);
+        lapBreakdown = findViewById(R.id.cpLapBreakdown);
         connect = findViewById(R.id.cpConnect);
         filter = findViewById(R.id.cpFilter);
         bibGrid = findViewById(R.id.cpBibGrid);
@@ -122,7 +126,7 @@ public class CheckpointActivity extends BaseActivity {
 
     private void pickReader() {
         mode = MODE_READER;
-        if (sessionBase < 0) sessionBase = store.passingCount();
+        if (sessionBase < 0) { sessionBase = store.passingCount(); sessionStartMs = System.currentTimeMillis(); }
         chooser.setVisibility(View.GONE);
         showCounts();
         readerPanel.setVisibility(View.VISIBLE);
@@ -132,7 +136,7 @@ public class CheckpointActivity extends BaseActivity {
 
     private void pickManual() {
         mode = MODE_MANUAL;
-        if (sessionBase < 0) sessionBase = store.passingCount();
+        if (sessionBase < 0) { sessionBase = store.passingCount(); sessionStartMs = System.currentTimeMillis(); }
         chooser.setVisibility(View.GONE);
         showCounts();
         manualPanel.setVisibility(View.VISIBLE);
@@ -332,6 +336,7 @@ public class CheckpointActivity extends BaseActivity {
     private void render(boolean readerConnected, long pending, boolean online) {
         long total = store.passingCount();
         count.setText(String.valueOf(sessionBase < 0 ? total : Math.max(0, total - sessionBase)));
+        updateLapBreakdown();
         if (mode == MODE_READER) {
             if (readerConnected) {
                 reader.setText(R.string.reader_connected);
@@ -351,5 +356,25 @@ public class CheckpointActivity extends BaseActivity {
         } else {
             sync.setText(getString(online ? R.string.uploading_n : R.string.offline_n, pending));
         }
+    }
+
+    // Break this session's passes down by lap: how many riders reached lap 1, lap
+    // 2, and so on (a rider with N passes counts toward every lap up to N). Hidden
+    // for single-lap races, where it would just repeat the total.
+    private void updateLapBreakdown() {
+        if (sessionStartMs <= 0) { lapBreakdown.setVisibility(View.GONE); return; }
+        Map<String, Integer> counts = store.passCountsSince(sessionStartMs);
+        int maxLap = 0;
+        for (int v : counts.values()) if (v > maxLap) maxLap = v;
+        if (maxLap < 2) { lapBreakdown.setVisibility(View.GONE); return; }
+        int[] tally = new int[maxLap + 1];
+        for (int v : counts.values()) for (int l = 1; l <= v; l++) tally[l]++;
+        StringBuilder sb = new StringBuilder();
+        for (int l = 1; l <= maxLap; l++) {
+            if (l > 1) sb.append("    ");
+            sb.append(getString(R.string.lap_tally, l, tally[l]));
+        }
+        lapBreakdown.setText(sb);
+        lapBreakdown.setVisibility(View.VISIBLE);
     }
 }

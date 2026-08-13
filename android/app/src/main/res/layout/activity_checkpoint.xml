@@ -112,6 +112,17 @@
                 android:textSize="16sp"
                 android:visibility="gone" />
 
+            <!-- Per-lap tally: how many riders reached each lap this session -->
+            <TextView
+                android:id="@+id/cpLapBreakdown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_horizontal"
+                android:textColor="@color/text_muted"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/cpSync"
                 android:layout_width="wrap_content"
