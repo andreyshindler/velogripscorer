@@ -2620,7 +2620,8 @@ async function viewAdmin(section) {
   const box = document.getElementById('admin-box');
 
   if (section === 'users') {
-    const { users } = await api('/admin/users');
+    const usersData = await api('/admin/users');
+    const users = usersData.users;
     const pending = users.filter((u) => !u.approved);
     const pendingHtml = `
       <div class="card mt">
@@ -2640,9 +2641,15 @@ async function viewAdmin(section) {
       <tbody>${users.filter((u) => u.approved).map((u) => `
         <tr><td>${u.id}</td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${u.reputation}</td>
         <td style="white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">
+          ${u.id === state.user.id ? '' : `<button class="btn small secondary" data-role="${u.id}" data-to="${u.role === 'admin' ? 'voter' : 'admin'}" data-name="${esc(u.name)}">${u.role === 'admin' ? t('remove_admin') : t('make_admin')}</button>`}
           <button class="btn small ${u.is_banned ? 'secondary' : 'danger'}" data-ban="${u.id}" data-to="${u.is_banned ? 0 : 1}">${u.is_banned ? 'Unban' : t('ban_user')}</button>
           ${u.role === 'admin' ? '' : `<button class="btn small danger" data-del="${u.id}" data-name="${esc(u.name)}">${t('delete_user')}</button>`}
-        </td></tr>`).join('')}</tbody></table></div>`;
+        </td></tr>`).join('')}</tbody></table></div>`
+      + (usersData.reset_enabled ? `<div class="card mt" style="border-color:var(--danger)">
+          <h3 style="margin-top:0;color:var(--danger)">${t('reset_test_data')}</h3>
+          <p class="muted" style="font-size:.85rem">${t('reset_test_help')}</p>
+          <button class="btn small danger" id="reset-test-data">🗑 ${t('reset_test_data')}</button>
+        </div>` : '');
     box.querySelectorAll('[data-approve]').forEach((btn) => {
       btn.onclick = async () => {
         try { await api(`/admin/users/${btn.dataset.approve}/approve`, { method: 'POST' }); toast(t('user_approved')); viewAdmin('users'); }
@@ -2669,6 +2676,20 @@ async function viewAdmin(section) {
         catch (err) { toast(err.message, true); }
       };
     });
+    box.querySelectorAll('[data-role]').forEach((btn) => {
+      btn.onclick = async () => {
+        const to = btn.dataset.to;
+        if (!confirm(t(to === 'admin' ? 'make_admin_confirm' : 'remove_admin_confirm', { name: btn.dataset.name }))) return;
+        try { await api(`/admin/users/${btn.dataset.role}/role`, { method: 'POST', body: { role: to } }); toast(t('role_changed')); viewAdmin('users'); }
+        catch (err) { toast(err.message, true); }
+      };
+    });
+    const resetBtn = box.querySelector('#reset-test-data');
+    if (resetBtn) resetBtn.onclick = async () => {
+      if (prompt(t('reset_confirm_prompt')) !== 'RESET') return;
+      try { await api('/admin/reset-test-data', { method: 'POST', body: { confirm: 'RESET' } }); toast(t('reset_done')); viewAdmin('users'); }
+      catch (err) { toast(err.message, true); }
+    };
   } else if (section === 'leagues') {
     await renderLeagueManager(box, 'admin', () => viewAdmin('leagues'));
   } else {

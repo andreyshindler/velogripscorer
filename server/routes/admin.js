@@ -98,7 +98,53 @@ router.get('/admin/users', (req, res) => {
   const rows = db
     .prepare('SELECT id, email, username, name, role, reputation, is_banned, approved, created_at FROM users ORDER BY id DESC LIMIT 200')
     .all();
-  res.json({ users: rows });
+  // reset_enabled gates the destructive "reset test data" tool — only on a
+  // server explicitly started with ALLOW_TEST_RESET=1 (i.e. staging), never prod.
+  res.json({ users: rows, reset_enabled: process.env.ALLOW_TEST_RESET === '1' });
+});
+
+// Promote a user to admin or demote back to a regular user.
+router.post('/admin/users/:id/role', (req, res) => {
+  const id = Number(req.params.id);
+  const role = req.body?.role === 'admin' ? 'admin' : 'voter';
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'user not found' });
+  if (id === req.user.id) return res.status(400).json({ error: 'you cannot change your own role' });
+  if (role === 'voter' && user.role === 'admin') {
+    const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
+    if (admins <= 1) return res.status(400).json({ error: 'cannot remove the last admin' });
+  }
+  if (role === 'admin') db.prepare("UPDATE users SET role = 'admin', approved = 1 WHERE id = ?").run(id);
+  else db.prepare("UPDATE users SET role = 'voter' WHERE id = ?").run(id);
+  auditLog(req.user.id, role === 'admin' ? 'admin.promote_user' : 'admin.demote_user', 'user', id);
+  if (role === 'admin') notify(id, 'account_approved', 'You are now an administrator.');
+  res.json({ ok: true, role });
+});
+
+// Wipe all races and non-admin users for a clean test environment. Guarded by
+// ALLOW_TEST_RESET (off in production) + an explicit typed confirmation. Admin
+// accounts are kept so the operator stays logged in.
+const RESET_TABLES = [
+  'score_history', 'votes', 'comments', 'reports', 'awards', 'entries', 'participants',
+  'follows', 'prizes', 'criteria', 'notifications', 'webhooks', 'tag_reads', 'tag_assignments',
+  'waves', 'readers', 'league_races', 'contest_collaborators', 'leagues', 'contests', 'runners',
+];
+router.post('/admin/reset-test-data', (req, res) => {
+  if (process.env.ALLOW_TEST_RESET !== '1') {
+    return res.status(403).json({ error: 'test reset is disabled on this server' });
+  }
+  if (req.body?.confirm !== 'RESET') return res.status(400).json({ error: 'type RESET to confirm' });
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      for (const t of RESET_TABLES) db.prepare(`DELETE FROM ${t}`).run();
+      db.prepare("DELETE FROM users WHERE role != 'admin'").run(); // keep admins
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+  auditLog(req.user.id, 'admin.reset_test_data', 'system', null);
+  res.json({ ok: true });
 });
 
 // Approve a pending self-registration so the account can log in.
