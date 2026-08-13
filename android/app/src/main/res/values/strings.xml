@@ -60,6 +60,7 @@
     <string name="filter_bib">Filter by bib…</string>
     <string name="no_matching_bib">No matching bib.</string>
     <string name="all_laps_recorded">All %1$d laps already recorded for this rider</string>
+    <string name="sign_in_to_join">Sign in first so this checkpoint is saved to your account</string>
     <string name="sync_offline">● Offline — %1$d passes saved, will upload when back online</string>
     <string name="sync_uploading">↑ Uploading — %1$d passes left</string>
     <string name="join_checkpoint_note">Tip: scan the QR on the web Manage tab to fill the code in automatically. Next, set up the reader connection and start timing — your passes upload live, or buffer and merge when you reconnect.</string>

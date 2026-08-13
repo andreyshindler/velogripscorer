@@ -35,6 +35,9 @@ public class JoinCheckpointActivity extends BaseActivity {
     private TextView racesHeader, status;
     private LinearLayout signInForm, racesBox;
     private String jwt;
+    // A code the marshal scanned/typed before signing in — finished automatically
+    // once they authenticate, so their checkpoint is saved to their account.
+    private String pendingCode, pendingName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -137,10 +140,21 @@ public class JoinCheckpointActivity extends BaseActivity {
                         .getJSONArray("races");
                 runOnUiThread(() -> {
                     signIn.setEnabled(true);
-                    status.setVisibility(View.GONE);
                     prefs.saveAccount(mail, pass);
                     signInForm.setVisibility(View.GONE);
-                    showRaces(races);
+                    if (pendingCode != null) {
+                        // They arrived via a scanned/typed code — finish that join now
+                        // that we know who they are, rather than making them pick again.
+                        final String c = pendingCode, nm = pendingName;
+                        pendingCode = null;
+                        pendingName = null;
+                        status.setVisibility(View.VISIBLE);
+                        status.setText(R.string.joining);
+                        doJoin(c, nm);
+                    } else {
+                        status.setVisibility(View.GONE);
+                        showRaces(races);
+                    }
                 });
             } catch (Exception e) {
                 final String msg = e.getMessage();
@@ -224,19 +238,34 @@ public class JoinCheckpointActivity extends BaseActivity {
             Toast.makeText(this, R.string.join_needs_code, Toast.LENGTH_LONG).show();
             return;
         }
+        // The checkpoint must be saved to the marshal's account, so the join has to
+        // be authenticated. With no live session and no saved credentials, ask them
+        // to sign in first — then the join finishes on its own (see connect()).
+        if (jwt == null && prefs.accountPass().isEmpty()) {
+            pendingCode = c;
+            pendingName = nm;
+            signInForm.setVisibility(View.VISIBLE);
+            status.setVisibility(View.VISIBLE);
+            status.setText(R.string.sign_in_to_join);
+            email.requestFocus();
+            return;
+        }
         join.setEnabled(false);
         status.setVisibility(View.VISIBLE);
         status.setText(R.string.joining);
+        doJoin(c, nm);
+    }
+
+    // Mint (or reuse) this marshal's checkpoint for the code, authenticated so the
+    // server records created_by = this user. Uses the live session token, or logs
+    // in from saved credentials. Runs on a worker thread.
+    private void doJoin(final String c, final String nm) {
         final String server = prefs.serverUrl();
-        // If the marshal is signed in, send their token so the server reuses their
-        // existing checkpoint for this race instead of creating a new one each scan.
         final String token0 = jwt;
         final String savedEmail = prefs.accountEmail(), savedPass = prefs.accountPass();
         new Thread(() -> {
             try {
                 String useToken = token0;
-                // Not signed in yet but credentials are saved -> log in so the join
-                // is authenticated (server reuses this marshal's checkpoint).
                 if (useToken == null && savedPass != null && !savedPass.isEmpty()) {
                     try {
                         useToken = new JSONObject(Uploader.login(server, savedEmail, savedPass)).getString("token");
