@@ -124,6 +124,12 @@ public final class Uploader {
         return code >= 200 && code < 300;
     }
 
+    /** Clears every read this checkpoint recorded on the server (fresh count). */
+    public boolean clearReads() throws IOException {
+        int code = post("/api/ingest/clear-reads", "{}");
+        return code >= 200 && code < 300;
+    }
+
     /** Downloads the start list JSON (racers, waves, timing settings). */
     public String downloadStartList() throws IOException {
         HttpURLConnection conn = open("/api/ingest/startlist", "GET");

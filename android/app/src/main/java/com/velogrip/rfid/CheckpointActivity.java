@@ -19,6 +19,7 @@ import android.widget.Toast;
 
 import com.velogrip.rfid.db.RaceStore;
 import com.velogrip.rfid.net.StartListSync;
+import com.velogrip.rfid.net.Uploader;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -328,11 +329,26 @@ public class CheckpointActivity extends BaseActivity {
         startActivity(i);
     }
 
+    // Confirm before stopping: it clears this checkpoint's readings (here and on
+    // the server) so the next session starts from a clean count.
     private void stopAndExit() {
-        // Context.startService(Intent) — stop the bridge.
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.stop_checkpoint)
+                .setMessage(getString(R.string.stop_checkpoint_confirm, store.passingCount()))
+                .setPositiveButton(R.string.stop_and_clear, (d, w) -> doStopAndReset())
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void doStopAndReset() {
         startService(new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_STOP));
-        goHome();
-        finish();
+        final String server = prefs.serverUrl(), token = prefs.readerToken();
+        new Thread(() -> {
+            // Clear the server's read count for this checkpoint, then the local buffer.
+            try { new Uploader(server, token).clearReads(); } catch (Exception ignored) { }
+            try { store.clearPassings(); } catch (Exception ignored) { }
+            runOnUiThread(() -> { goHome(); finish(); });
+        }).start();
     }
 
     private void render(boolean readerConnected, long pending, boolean online) {

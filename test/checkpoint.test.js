@@ -348,3 +348,21 @@ test('race-wide lap count reaches the checkpoint via the start list', async () =
     .send({ race_laps: 0 });
   assert.equal(clear.body.race_laps, null);
 });
+
+test('a checkpoint can clear its own reads; the finish reader cannot', async () => {
+  // Record a read on the checkpoint, confirm it counts, then clear it.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', cpTok)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: at(120) }] });
+  let readers = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers;
+  const before = readers.find((r) => r.token === cpTok).read_count;
+  assert.ok(before >= 1, 'checkpoint has reads');
+
+  const clr = await request(app).post('/api/ingest/clear-reads').set('X-Reader-Token', cpTok).send({});
+  assert.equal(clr.status, 200);
+  readers = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers;
+  assert.equal(readers.find((r) => r.token === cpTok).read_count, 0, 'checkpoint reads cleared');
+
+  // The finish (primary) reader may not self-clear.
+  const bad = await request(app).post('/api/ingest/clear-reads').set('X-Reader-Token', finishTok).send({});
+  assert.equal(bad.status, 400);
+});

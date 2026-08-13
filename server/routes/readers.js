@@ -175,6 +175,22 @@ router.post('/ingest/reads', (req, res) => {
   res.json({ ok: true, accepted: accepted.length, rejected: reads.length - accepted.length });
 });
 
+// Clear every read this checkpoint has recorded (reader-token auth). Used when a
+// marshal stops the checkpoint and wants a clean count for the next session.
+// Restricted to checkpoint readers so a finish/primary reader can never wipe its
+// own crossings this way. Broadcasts so the web read count / results refresh.
+router.post('/ingest/clear-reads', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  if (reader.role !== 'checkpoint') return res.status(400).json({ error: 'only checkpoint readers can self-clear' });
+  const info = db.prepare('DELETE FROM tag_reads WHERE reader_id = ? AND contest_id = ?')
+    .run(reader.id, reader.contest_id);
+  sseBroadcast(reader.contest_id, 'tag_reads', {
+    reader: { id: reader.id, name: reader.name, location: reader.location }, reads: [],
+  });
+  res.json({ ok: true, cleared: info.changes });
+});
+
 // Start-list download for the offline timing app (reader-token auth):
 // everything the phone needs to run the race with no connectivity.
 router.get('/ingest/startlist', (req, res) => {

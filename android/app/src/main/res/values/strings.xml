@@ -60,6 +60,8 @@
     <string name="filter_bib">Filter by bib…</string>
     <string name="no_matching_bib">No matching bib.</string>
     <string name="all_riders_recorded">All riders recorded ✓</string>
+    <string name="stop_and_clear">Stop &amp; clear</string>
+    <string name="stop_checkpoint_confirm">Stop this checkpoint? Its %1$d recorded readings will be cleared — here and on the server — so the next session starts fresh. This can\'t be undone.</string>
     <string name="lap_label">Lap %1$d</string>
     <string name="all_laps_recorded">All %1$d laps already recorded for this rider</string>
     <string name="sign_in_to_join">Sign in first so this checkpoint is saved to your account</string>
