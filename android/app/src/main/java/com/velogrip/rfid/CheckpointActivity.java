@@ -300,6 +300,7 @@ public class CheckpointActivity extends BaseActivity {
     private void startBridge(boolean manualOnly) {
         Intent i = new Intent(this, BridgeService.class).setAction(BridgeService.ACTION_START);
         i.putExtra(BridgeService.EXTRA_MANUAL_ONLY, manualOnly);
+        i.putExtra(BridgeService.EXTRA_CHECKPOINT, true); // stamp + upload reads in server time
         // No upload suppression: the loop buffers while there's no signal and
         // flushes automatically the moment the phone regains network. Offline mode
         // only bypasses the race-start gate.
@@ -438,7 +439,8 @@ public class CheckpointActivity extends BaseActivity {
             Toast.makeText(this, getString(R.string.all_laps_recorded, max), Toast.LENGTH_SHORT).show();
             return;
         }
-        store.recordPassing(r.epc, System.currentTimeMillis());
+        // Stamp in server time now, so the split is right even if the clock shifts.
+        store.recordPassing(r.epc, prefs.toServerTime(System.currentTimeMillis()));
         int n = cur + 1;
         taps.put(r.bib, n);
         recent.setText(getString(R.string.recorded_bib, r.bib, r.name == null ? "" : r.name));

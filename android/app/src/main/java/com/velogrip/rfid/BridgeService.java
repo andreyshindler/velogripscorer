@@ -58,6 +58,7 @@ public class BridgeService extends Service {
     // Manual checkpoint: upload the marshal's tapped passes without opening the
     // RFID reader socket (no reader hardware at this checkpoint).
     public static final String EXTRA_MANUAL_ONLY = "manualOnly";
+    public static final String EXTRA_CHECKPOINT = "checkpoint"; // stamp+upload reads in server time
     public static final String EXTRA_LAST_EPC = "lastEpc";
     public static final String EXTRA_TEST_EPC = "testEpc"; // a tag seen during a reader test
     public static final String EXTRA_LOG = "log";
@@ -76,6 +77,7 @@ public class BridgeService extends Service {
     private final AtomicBoolean online = new AtomicBoolean(true);
     private final AtomicBoolean testMode = new AtomicBoolean(false); // one-shot reader test
     private boolean manualOnly = false;
+    private boolean checkpoint = false; // reads are stamped + uploaded in server time
     private final AtomicLong uploadedTotal = new AtomicLong(0);
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
@@ -112,6 +114,7 @@ public class BridgeService extends Service {
             return START_STICKY;
         }
         manualOnly = intent != null && intent.getBooleanExtra(EXTRA_MANUAL_ONLY, false);
+        checkpoint = intent != null && intent.getBooleanExtra(EXTRA_CHECKPOINT, false);
         startBridge();
         return START_STICKY;
     }
@@ -292,7 +295,13 @@ public class BridgeService extends Service {
             Long prev = lastSeen.get(read.epc);
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
-            store.addPassing(read);
+            // A checkpoint stamps reads in server time now, so splits survive a later
+            // clock jump; the finish device keeps device time (reconciled server-side).
+            if (checkpoint) {
+                store.addPassing(new TagRead(read.epc, read.rssi, prefs.toServerTime(read.readAtMs), read.antenna));
+            } else {
+                store.addPassing(read);
+            }
             // Beep once the first time each racer is detected in a started race.
             String racerKey = epcRacer.get(read.epc);
             if (racerKey == null) racerKey = "e:" + read.epc; // no roster: key by chip
@@ -374,7 +383,7 @@ public class BridgeService extends Service {
                 }
                 List<RaceStore.Passing> batch = store.pendingUpload(BATCH_SIZE);
                 if (batch.isEmpty()) continue;
-                if (uploader.upload(batch)) {
+                if (uploader.upload(batch, checkpoint)) {
                     store.markUploaded(batch.get(batch.size() - 1).id);
                     uploadedTotal.addAndGet(batch.size());
                     online.set(true);

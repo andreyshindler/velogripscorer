@@ -70,6 +70,13 @@ public final class Prefs {
     public int raceLaps() { return sp.getInt("raceLaps", 0); }
     public void setRaceLaps(int laps) { sp.edit().putInt("raceLaps", Math.max(0, laps)).apply(); }
 
+    // Device→server clock offset (server − device), learned on each online sync.
+    // A checkpoint bakes this into every read's time at record time, so splits are
+    // correct even if the phone's clock jumps later (e.g. NTP on reconnect).
+    public long serverClockOffsetMs() { return sp.getLong("serverClockOffsetMs", 0); }
+    public void setServerClockOffset(long ms) { sp.edit().putLong("serverClockOffsetMs", ms).apply(); }
+    public long toServerTime(long deviceMs) { return deviceMs + serverClockOffsetMs(); }
+
     // Hardware setup: whether an RFID reader is used for this race. Off means
     // manual-only timing (no reader connection shown in the race console).
     public boolean chipTiming() { return sp.getBoolean("chipTiming", true); }

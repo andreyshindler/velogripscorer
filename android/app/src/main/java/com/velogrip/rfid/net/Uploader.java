@@ -39,6 +39,12 @@ public final class Uploader {
 
     /** Uploads a batch of passings; returns true when the server acknowledged it. */
     public boolean upload(List<RaceStore.Passing> batch) throws IOException {
+        return upload(batch, false);
+    }
+
+    /** preReconciled: the reads are already in server time (a checkpoint baked in
+     *  the clock offset at record time), so the server applies no further offset. */
+    public boolean upload(List<RaceStore.Passing> batch, boolean preReconciled) throws IOException {
         StringBuilder json = new StringBuilder("{\"reads\":[");
         for (int i = 0; i < batch.size(); i++) {
             RaceStore.Passing row = batch.get(i);
@@ -50,9 +56,14 @@ public final class Uploader {
             if (row.manual) json.append(",\"manual\":true");
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
-        // client_time = this device's clock now, so the server can reconcile our
-        // reads to server time (fixes split times if this phone's clock is off).
-        json.append("],\"client_time\":\"").append(iso.format(new Date())).append("\"}");
+        json.append(']');
+        if (preReconciled) {
+            json.append(",\"pre_reconciled\":true}");
+        } else {
+            // client_time = this device's clock now, so the server can reconcile our
+            // reads to server time (fixes split times if this phone's clock is off).
+            json.append(",\"client_time\":\"").append(iso.format(new Date())).append("\"}");
+        }
         int code = post("/api/ingest/reads", json.toString());
         if (code == 401) throw new IOException("server rejected reader token (401)");
         return code >= 200 && code < 300;

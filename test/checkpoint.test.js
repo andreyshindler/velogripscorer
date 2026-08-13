@@ -366,3 +366,23 @@ test('a checkpoint can clear its own reads; the finish reader cannot', async () 
   const bad = await request(app).post('/api/ingest/clear-reads').set('X-Reader-Token', finishTok).send({});
   assert.equal(bad.status, 400);
 });
+
+test('pre-reconciled checkpoint reads keep their server-time stamp (no offset)', async () => {
+  // Give the checkpoint a stale clock offset via a normal (client_time) read.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', cpTok)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: at(30) }], client_time: new Date(Date.now() - 60_000).toISOString() });
+  let r0 = (await request(app).get(`/api/contests/${contest.id}/readers`).set(auth(org))).body.readers
+    .find((x) => x.token === cpTok);
+  // (offset may be non-zero now; clear the reads so the split test below is clean)
+  await request(app).post('/api/ingest/clear-reads').set('X-Reader-Token', cpTok).send({});
+
+  // A pre-reconciled read at gun+90s: the server takes read_at verbatim (offset
+  // cleared), so the split is exactly +90s despite the stale offset set above.
+  const resp = await request(app).post('/api/ingest/reads').set('X-Reader-Token', cpTok)
+    .send({ reads: [{ epc: 'AAAA0100', read_at: at(90) }], pre_reconciled: true });
+  assert.equal(resp.status, 200);
+
+  const res = await request(app).get(`/api/contests/${contest.id}/race-results`).set(auth(org));
+  const r = res.body.results.find((x) => x.bib === '100');
+  assert.equal(r.splits[cp1.id].elapsed, '1:30.0', 'split = gun + 90s, unshifted by any offset');
+});

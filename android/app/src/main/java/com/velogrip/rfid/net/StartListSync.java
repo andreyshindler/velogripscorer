@@ -30,6 +30,11 @@ public final class StartListSync {
         // manual taps at how many times a rider passes.
         if (json.has("record_laps")) prefs.setRecordLaps(json.optInt("record_laps", 1) != 0);
         prefs.setRaceLaps(json.isNull("race_laps") ? 0 : json.optInt("race_laps", 0));
+        // Learn the device↔server clock offset while we're online, so checkpoint
+        // reads can be stamped in server time at record time.
+        if (json.has("server_now") && !json.isNull("server_now")) {
+            prefs.setServerClockOffset(parseIso(json.getString("server_now")) - System.currentTimeMillis());
+        }
         JSONObject lapTargets = json.optJSONObject("lap_targets");
         if (lapTargets != null) {
             java.util.Iterator<String> keys = lapTargets.keys();

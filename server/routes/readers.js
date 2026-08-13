@@ -138,7 +138,13 @@ router.post('/ingest/reads', (req, res) => {
   if (!token) return res.status(401).json({ error: 'X-Reader-Token header required' });
   const reader = db.prepare('SELECT * FROM readers WHERE token = ?').get(String(token));
   if (!reader) return res.status(401).json({ error: 'unknown reader token' });
-  recordClockOffset(reader, req.body?.client_time);
+  if (req.body?.pre_reconciled === true) {
+    // Reads are already in server time (the device baked in the offset it learned
+    // while online), so no server-side offset — and clear any stale one.
+    if (reader.clock_offset_ms) db.prepare('UPDATE readers SET clock_offset_ms = 0 WHERE id = ?').run(reader.id);
+  } else {
+    recordClockOffset(reader, req.body?.client_time);
+  }
 
   const reads = Array.isArray(req.body?.reads) ? req.body.reads.slice(0, MAX_BATCH) : null;
   if (!reads) return res.status(400).json({ error: 'reads array required' });
@@ -214,6 +220,7 @@ router.get('/ingest/startlist', (req, res) => {
     record_laps: contest.record_laps,
     lap_targets: lapTargets,
     race_laps: contest.race_laps,
+    server_now: new Date().toISOString(), // lets a checkpoint learn the device↔server clock offset
     waves,
     racers: tags,
   });
