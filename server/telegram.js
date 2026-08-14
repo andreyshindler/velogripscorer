@@ -276,6 +276,30 @@ function racerLine(r) {
   return bits.join(' — ');
 }
 
+// Numeric bib order (non-numeric bibs sort last).
+function bibNum(bib) {
+  const n = parseInt(String(bib), 10);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+}
+// One compact line for a big roster: bib + name (+ status). Full details are one
+// tap away via /edit <bib>. Keeps every rider on a single line.
+function racerCompact(r) {
+  const status = r.racer_status ? ` <i>[${esc(r.racer_status)}]</i>` : '';
+  return `<b>#${esc(r.bib || '?')}</b> ${esc(r.participant || '')}${status}`;
+}
+// A one-glance breakdown: riders per distance/category, plus the gender split.
+function rosterSummary(racers) {
+  const dist = {}, gen = {};
+  for (const r of racers) {
+    const d = r.distance || r.category || '—';
+    dist[d] = (dist[d] || 0) + 1;
+    if (r.gender) gen[r.gender] = (gen[r.gender] || 0) + 1;
+  }
+  const dS = Object.entries(dist).map(([k, v]) => `${esc(k)}: ${v}`).join(' · ');
+  const gS = Object.entries(gen).map(([k, v]) => `${esc(k)} ${v}`).join(' · ');
+  return [dS, gS].filter(Boolean).join('   —   ');
+}
+
 const HELP = [
   '<b>VeloGrip start-list bot</b>',
   '',
@@ -430,16 +454,37 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       }
       return;
     }
-    // A big roster (e.g. 67 riders) overflows Telegram's 4096-char message limit,
-    // which silently fails — so send it in chunks well under the cap.
-    const CHUNK = 3500;
-    let buf = `<b>${racers.length} racers</b>`;
+    // Big roster: a summary, then one compact line per rider (bib + name),
+    // sorted by bib and grouped by wave when the race has more than one.
+    racers.sort((a, b) => bibNum(a.bib) - bibNum(b.bib));
+    const byWave = new Map();
     for (const r of racers) {
-      const line = racerLine(r);
+      const w = r.wave_name || '';
+      if (!byWave.has(w)) byWave.set(w, []);
+      byWave.get(w).push(r);
+    }
+    const multiWave = byWave.size > 1;
+
+    const lines = [
+      `📋 <b>${racers.length} racers</b>${q ? ` matching “${esc(q)}”` : ''}`,
+      rosterSummary(racers),
+      '<i>sorted by bib · filter: /list &lt;text&gt; · edit: /edit &lt;bib&gt;</i>',
+      '',
+    ];
+    for (const [w, list] of byWave) {
+      if (multiWave) lines.push(`🚩 <b>${esc(w || '—')}</b> (${list.length})`);
+      for (const r of list) lines.push(racerCompact(r));
+      if (multiWave) lines.push('');
+    }
+
+    // Chunk well under Telegram's 4096-char message limit.
+    const CHUNK = 3500;
+    let buf = '';
+    for (const line of lines) {
       if (buf.length + line.length + 1 > CHUNK) { await send.message(chatId, buf); buf = ''; }
       buf += (buf ? '\n' : '') + line;
     }
-    if (buf) await send.message(chatId, buf);
+    if (buf.trim()) await send.message(chatId, buf);
   }
 
   // Number of laps for the selected race — bound to that race. A bare number is
