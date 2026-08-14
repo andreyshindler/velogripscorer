@@ -416,7 +416,11 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const q = String(query || '').trim().toLowerCase();
     let racers = await listRacers(c.id);
     if (q) racers = racers.filter((r) => `${r.bib} ${r.participant} ${r.category} ${r.team}`.toLowerCase().includes(q));
-    if (!racers.length) { await send.message(chatId, q ? 'No matching racers.' : 'This race has no racers yet. Use /add.'); return; }
+    if (!racers.length) {
+      await send.message(chatId, q ? 'No matching racers.'
+        : '📭 This race has <b>no start list on the server</b> yet. Upload it in the web (Manage → start list), add racers with ➕ / <code>/add</code>, or pair the finish app so it uploads.');
+      return;
+    }
     // Small result sets get per-racer edit/delete buttons; large ones a text list.
     if (racers.length <= 8) {
       for (const r of racers) {
@@ -926,9 +930,14 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         { reply_markup: kb([[btn('🔀 Switch race', 'go:races')]]) });
     }
     if (category === 'startlist') {
-      return send.message(chatId,
-        `${header}\n\nStart list — view or add racers. Edit or remove one: <code>/edit &lt;bib&gt;</code> · <code>/del &lt;bib&gt;</code>.`,
-        { reply_markup: kb([[btn('📋 View', 'go:list'), btn('➕ Add', 'go:add')]]) });
+      // Render the roster right here (this path already drew the menu reliably),
+      // then offer Add — no extra tap, and the empty state is unmistakable.
+      await send.message(chatId,
+        `${header}\n\nAdd a racer with ➕ or <code>/add</code>. Edit / remove: <code>/edit &lt;bib&gt;</code> · <code>/del &lt;bib&gt;</code>.`,
+        { reply_markup: kb([[btn('➕ Add', 'go:add')]]) });
+      const c = await activeContest(chatId);
+      if (c) return cmdList(chatId, '');
+      return undefined;
     }
     if (category === 'setup') {
       return send.message(chatId, `${header}\n\nRace setup.`,
