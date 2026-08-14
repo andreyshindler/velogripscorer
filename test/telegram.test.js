@@ -442,3 +442,31 @@ test('/laps binds the lap count to the selected race', async () => {
   await text(ALLOWED, '/laps NoSuchDistance 4');
   assert.match(send.last('message').text, /Unknown distance/);
 });
+
+test('/operators adds a checkpoint marshal and removes via button', async () => {
+  await tap(ALLOWED, `use:${contestId}`);
+  await request(app).post('/api/auth/register')
+    .send({ email: 'tg-marshal@test.co', password: 'password123', username: 'tgmarshal' });
+  const collabsOf = async () =>
+    (await api('GET', `/contests/${contestId}/collaborators`, { token: organizer.token })).json.collaborators;
+
+  // Add by email.
+  send.reset();
+  await text(ALLOWED, '/operators tg-marshal@test.co');
+  assert.match(send.last('message').text, /Or add by email/); // the refreshed operator list
+  let collabs = await collabsOf();
+  const row = collabs.find((u) => u.email === 'tg-marshal@test.co');
+  assert.ok(row, 'marshal added as an operator');
+
+  // /operators shows them with a remove button.
+  send.reset();
+  await text(ALLOWED, '/operators');
+  const flat = JSON.stringify(send.calls.map((m) => m.extra && m.extra.reply_markup));
+  assert.ok(flat.includes(`opdel:${row.id}`), 'a remove button is offered');
+
+  // Remove via the button.
+  send.reset();
+  await tap(ALLOWED, `opdel:${row.id}`);
+  collabs = await collabsOf();
+  assert.ok(!collabs.some((u) => u.email === 'tg-marshal@test.co'), 'marshal removed');
+});

@@ -201,6 +201,7 @@ function btn(text, data) { return { text, callback_data: data }; }
 // The labels map back to their slash commands in handleText.
 const COMMAND_LABELS = {
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '🔁 Laps': '/laps',
+  '👥 Marshals': '/operators',
   '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league', '❓ Help': '/help',
 };
 function mainKeyboard() {
@@ -208,7 +209,7 @@ function mainKeyboard() {
     keyboard: [
       [{ text: '🏁 Races' }, { text: '📋 List' }, { text: '🔁 Laps' }],
       [{ text: '➕ Add' }, { text: '📄 CSV' }, { text: '📑 PDF' }],
-      [{ text: '🏆 League' }, { text: '❓ Help' }],
+      [{ text: '👥 Marshals' }, { text: '🏆 League' }, { text: '❓ Help' }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -280,6 +281,7 @@ const HELP = [
   '/del &lt;bib&gt; — remove a racer',
   '/laps — number of laps per distance (checkpoints cap taps by it):',
   '   <code>/laps 3</code> (all distances) · <code>/laps MTB 4</code> (one) · <code>/laps 0</code> (clear)',
+  '/operators — checkpoint marshals: list, pick one to add, or <code>/operators email</code>',
   '/csv — download the results CSV',
   '/pdf — download the results PDF',
   '/league — season league standings + CSV/PDF',
@@ -479,6 +481,71 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     }
     const j = patch.json || {};
     await send.message(chatId, `✅ ${confirm}.\n${show(j.lap_targets || {}, j.race_laps)}`);
+  }
+
+  // Checkpoint operators (marshals): a registered user the organizer authorizes,
+  // who then sees the race's join code in their own account and can pair a
+  // checkpoint phone. Mirrors the web Manage tab's "Checkpoint operators".
+  //   /operators                 → list current operators + pick a marshal to add
+  //   /operators someone@mail.com → add by email
+  async function cmdOperators(chatId, rest) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const arg = String(rest || '').trim();
+    if (arg) {
+      const res = await A('POST', `/contests/${c.id}/collaborators`, { email: arg.toLowerCase() });
+      if (!res || res.status >= 400) {
+        await send.message(chatId, `⚠️ ${esc((res && res.json && res.json.error) || 'could not add operator')}`);
+        return;
+      }
+      await send.message(chatId, `✅ Added ${esc(res.json.name || res.json.email)} as a checkpoint operator.`);
+    }
+    return showOperators(chatId, c);
+  }
+
+  async function showOperators(chatId, c) {
+    const collabs = ((await A('GET', `/contests/${c.id}/collaborators`)).json || {}).collaborators || [];
+    const marshals = ((await A('GET', `/contests/${c.id}/marshal-candidates`)).json || {}).marshals || [];
+    if (collabs.length) {
+      await send.message(chatId, `<b>Checkpoint operators — ${esc(c.title)}</b>`);
+      for (const u of collabs) {
+        await send.message(chatId, `👤 ${esc(u.name || u.email)}${u.email ? ` — ${esc(u.email)}` : ''}`, {
+          reply_markup: kb([[btn('🗑 Remove', `opdel:${u.id}`)]]),
+        });
+      }
+    } else {
+      await send.message(chatId, `No checkpoint operators yet for <b>${esc(c.title)}</b>.`);
+    }
+    if (marshals.length) {
+      const rows = marshals.slice(0, 20).map((m) =>
+        [btn(`➕ ${m.username || m.name || m.email}`.slice(0, 60), `opadd:${m.id}`)]);
+      await send.message(chatId, 'Add a marshal:', { reply_markup: kb(rows) });
+    }
+    await send.message(chatId, 'Or add by email: <code>/operators someone@example.com</code>');
+  }
+
+  async function addOperator(chatId, userId) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const res = await A('POST', `/contests/${c.id}/collaborators`, { user_id: Number(userId) });
+    if (!res || res.status >= 400) {
+      await send.message(chatId, `⚠️ ${esc((res && res.json && res.json.error) || 'could not add operator')}`);
+      return;
+    }
+    await send.message(chatId, `✅ Added ${esc(res.json.name || res.json.email)} as a checkpoint operator.`);
+    return showOperators(chatId, c);
+  }
+
+  async function removeOperator(chatId, cid) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const res = await A('DELETE', `/contests/${c.id}/collaborators/${cid}`);
+    if (!res || res.status >= 400) {
+      await send.message(chatId, `⚠️ ${esc((res && res.json && res.json.error) || 'could not remove operator')}`);
+      return;
+    }
+    await send.message(chatId, '✅ Removed.');
+    return showOperators(chatId, c);
   }
 
   // Resolve a wave name to its id for this race, creating it if new (mirrors the
@@ -866,6 +933,8 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       case '/del':
       case '/delete': return cmdDel(chatId, rest);
       case '/laps': return cmdLaps(chatId, rest);
+      case '/operators':
+      case '/marshals': return cmdOperators(chatId, rest);
       case '/csv': return cmdCsv(chatId);
       case '/pdf': return cmdPdf(chatId);
       case '/league': return cmdLeague(chatId);
@@ -882,6 +951,8 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'rappr') return approveRunner(chatId, a, b, cq.from);
     if (tag === 'rrej') return rejectRunner(chatId, a, cq.from);
     if (tag === 'use') return useRace(chatId, a);
+    if (tag === 'opadd') return addOperator(chatId, a);
+    if (tag === 'opdel') return removeOperator(chatId, a);
     if (tag === 'rl') return listRacesFlat(chatId, a === 'none' ? 'none' : a);
     if (tag === 'racesback') return cmdRaces(chatId, '');
     if (tag === 'lg') return showLeague(chatId, a);
@@ -1271,6 +1342,7 @@ const OPERATOR_COMMANDS = [
   { command: 'edit', description: 'Edit a racer: /edit <bib>' },
   { command: 'del', description: 'Delete a racer: /del <bib>' },
   { command: 'laps', description: 'Laps per race: /laps 3, /laps MTB 4' },
+  { command: 'operators', description: 'Checkpoint marshals: add / remove' },
   { command: 'csv', description: 'Download the results CSV' },
   { command: 'pdf', description: 'Download the results PDF' },
   { command: 'league', description: 'Season league standings' },
