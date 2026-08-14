@@ -941,18 +941,23 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   }
 
   // An inline action button runs the matching command (with no arguments).
+  // Awaited + guarded so a failure surfaces as a message instead of silence.
   async function runMenuAction(chatId, action) {
-    switch (action) {
-      case 'races': return cmdRaces(chatId, '');
-      case 'list': return cmdList(chatId, '');
-      case 'add': return cmdAdd(chatId, '');
-      case 'laps': return cmdLaps(chatId, '');
-      case 'operators': return cmdOperators(chatId, '');
-      case 'emails': return emailList(chatId);
-      case 'csv': return cmdCsv(chatId);
-      case 'pdf': return cmdPdf(chatId);
-      case 'league': return cmdLeague(chatId);
-      default: return;
+    try {
+      switch (action) {
+        case 'races': return await cmdRaces(chatId, '');
+        case 'list': return await cmdList(chatId, '');
+        case 'add': return await cmdAdd(chatId, '');
+        case 'laps': return await cmdLaps(chatId, '');
+        case 'operators': return await cmdOperators(chatId, '');
+        case 'emails': return await emailList(chatId);
+        case 'csv': return await cmdCsv(chatId);
+        case 'pdf': return await cmdPdf(chatId);
+        case 'league': return await cmdLeague(chatId);
+        default: return await send.message(chatId, 'Unknown menu action.');
+      }
+    } catch (err) {
+      return send.message(chatId, `⚠️ ${esc(String((err && err.message) || err))}`);
     }
   }
 
