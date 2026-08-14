@@ -281,11 +281,12 @@ function bibNum(bib) {
   const n = parseInt(String(bib), 10);
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 }
-// One compact line for a big roster: bib + name (+ status). Full details are one
-// tap away via /edit <bib>. Keeps every rider on a single line.
+// One compact line per rider: bib + name + category (+ status). Everything on a
+// single line; full details are one tap away via /edit <bib>.
 function racerCompact(r) {
-  const status = r.racer_status ? ` <i>[${esc(r.racer_status)}]</i>` : '';
-  return `<b>#${esc(r.bib || '?')}</b> ${esc(r.participant || '')}${status}`;
+  const cat = r.category ? `  <i>${esc(r.category)}</i>` : '';
+  const status = r.racer_status ? ` [${esc(r.racer_status)}]` : '';
+  return `<b>#${esc(r.bib || '?')}</b> ${esc(r.participant || '')}${cat}${status}`;
 }
 // A one-glance breakdown: riders per distance/category, plus the gender split.
 function rosterSummary(racers) {
@@ -434,57 +435,40 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     await send.message(chatId, `✅ Managing <b>${esc(c.title)}</b> — ${racers.length} racer(s).\nUse the buttons below, or /edit &lt;bib&gt; · /del &lt;bib&gt;.`, { reply_markup: mainKeyboard() });
   }
 
-  async function cmdList(chatId, query) {
+  // Remembers each chat's active /list filter so page buttons keep it.
+  const listQuery = new Map();
+  const PAGE_SIZE = 20;
+
+  // Render one page of the roster. editMsgId edits that message in place (used by
+  // the Prev/Next buttons); otherwise a fresh message is sent.
+  async function cmdList(chatId, query, page = 0, editMsgId = null) {
     const c = await needRace(chatId);
     if (!c) return;
     const q = String(query || '').trim().toLowerCase();
+    listQuery.set(chatId, q);
     let racers = await listRacers(c.id);
     if (q) racers = racers.filter((r) => `${r.bib} ${r.participant} ${r.category} ${r.team}`.toLowerCase().includes(q));
+
+    const out = (text, extra = {}) => (editMsgId ? send.editMessage(chatId, editMsgId, text, extra) : send.message(chatId, text, extra));
+
     if (!racers.length) {
-      await send.message(chatId, q ? 'No matching racers.'
+      return out(q ? 'No matching racers.'
         : '📭 This race has <b>no start list on the server</b> yet. Upload it in the web (Manage → start list), add racers with ➕ / <code>/add</code>, or pair the finish app so it uploads.');
-      return;
     }
-    // Small result sets get per-racer edit/delete buttons; large ones a text list.
-    if (racers.length <= 8) {
-      for (const r of racers) {
-        await send.message(chatId, racerLine(r), {
-          reply_markup: kb([[btn('✏️ Edit', `edit:${r.bib}`), btn('🗑 Delete', `del:${r.bib}`)]]),
-        });
-      }
-      return;
-    }
-    // Big roster: a summary, then one compact line per rider (bib + name),
-    // sorted by bib and grouped by wave when the race has more than one.
+
     racers.sort((a, b) => bibNum(a.bib) - bibNum(b.bib));
-    const byWave = new Map();
-    for (const r of racers) {
-      const w = r.wave_name || '';
-      if (!byWave.has(w)) byWave.set(w, []);
-      byWave.get(w).push(r);
-    }
-    const multiWave = byWave.size > 1;
+    const pageCount = Math.ceil(racers.length / PAGE_SIZE);
+    const p = Math.max(0, Math.min(page, pageCount - 1));
+    const slice = racers.slice(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE);
 
-    const lines = [
-      `📋 <b>${racers.length} racers</b>${q ? ` matching “${esc(q)}”` : ''}`,
-      rosterSummary(racers),
-      '<i>sorted by bib · filter: /list &lt;text&gt; · edit: /edit &lt;bib&gt;</i>',
-      '',
-    ];
-    for (const [w, list] of byWave) {
-      if (multiWave) lines.push(`🚩 <b>${esc(w || '—')}</b> (${list.length})`);
-      for (const r of list) lines.push(racerCompact(r));
-      if (multiWave) lines.push('');
-    }
+    const head = `📋 <b>${racers.length} racers</b>${q ? ` · “${esc(q)}”` : ''}${pageCount > 1 ? ` · page ${p + 1}/${pageCount}` : ''}`;
+    const text = [head, rosterSummary(racers), '', ...slice.map(racerCompact),
+      '', '<i>edit: /edit &lt;bib&gt; · filter: /list &lt;text&gt;</i>'].join('\n');
 
-    // Chunk well under Telegram's 4096-char message limit.
-    const CHUNK = 3500;
-    let buf = '';
-    for (const line of lines) {
-      if (buf.length + line.length + 1 > CHUNK) { await send.message(chatId, buf); buf = ''; }
-      buf += (buf ? '\n' : '') + line;
-    }
-    if (buf.trim()) await send.message(chatId, buf);
+    const nav = [];
+    if (p > 0) nav.push(btn('◀ Prev', `lp:${p - 1}`));
+    if (p < pageCount - 1) nav.push(btn('Next ▶', `lp:${p + 1}`));
+    return out(text, nav.length ? { reply_markup: kb([nav]) } : {});
   }
 
   // Number of laps for the selected race — bound to that race. A bare number is
@@ -1077,6 +1061,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'rrej') return rejectRunner(chatId, a, cq.from);
     if (tag === 'use') return useRace(chatId, a);
     if (tag === 'go') return runMenuAction(chatId, a);
+    if (tag === 'lp') return cmdList(chatId, listQuery.get(chatId) || '', Number(a) || 0, cq.message && cq.message.message_id);
     if (tag === 'opadd') return addOperator(chatId, a);
     if (tag === 'opdel') return removeOperator(chatId, a);
     if (tag === 'rl') return listRacesFlat(chatId, a === 'none' ? 'none' : a);
@@ -1431,6 +1416,7 @@ function tgSender(botToken) {
   return {
     call,
     message: (chatId, text, extra = {}) => call('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }),
+    editMessage: (chatId, messageId, text, extra = {}) => call('editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }),
     answerCallback: (id, text) => call('answerCallbackQuery', { callback_query_id: id, text: text || undefined }),
     async document(chatId, filename, content, caption) {
       // content is a CSV string or a PDF Buffer; Blob accepts both.

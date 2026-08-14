@@ -48,6 +48,7 @@ function makeSend() {
     reset() { this.calls.length = 0; },
     last(type) { return [...this.calls].reverse().find((c) => c.type === type); },
     async message(chatId, text, extra) { this.calls.push({ type: 'message', chatId, text, extra }); },
+    async editMessage(chatId, messageId, text, extra) { this.calls.push({ type: 'edit', chatId, messageId, text, extra }); },
     async answerCallback(id) { this.calls.push({ type: 'answer', id }); },
     async document(chatId, filename, content, caption) { this.calls.push({ type: 'document', chatId, filename, content, caption }); },
   };
@@ -59,7 +60,7 @@ const { handleUpdate } = createBotCore({ api, send });
 let uid = 0;
 const ALLOWED = 42;
 const text = (userId, t) => handleUpdate({ update_id: ++uid, message: { from: { id: userId }, chat: { id: userId }, text: t } });
-const tap = (userId, data) => handleUpdate({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: userId }, message: { chat: { id: userId } }, data } });
+const tap = (userId, data) => handleUpdate({ update_id: ++uid, callback_query: { id: `cq${++uid}`, from: { id: userId }, message: { message_id: uid, chat: { id: userId } }, data } });
 const pad = (s) => String(s).padStart(24, '0'); // EPCs are stored as full 24-char ids
 
 let organizer, contestId;
@@ -487,21 +488,35 @@ test('/operators adds a checkpoint marshal and removes via button', async () => 
   assert.ok(!collabs.some((u) => u.email === 'tg-marshal@test.co'), 'marshal removed');
 });
 
-test('/list chunks a big roster so no message exceeds Telegram limits', async () => {
+test('/list paginates a big roster 20 per page, showing category, with working nav', async () => {
   const big = (await api('POST', '/contests',
     { token: organizer.token, body: { kind: 'race', title: 'Big race', start_at: past, end_at: future } })).json;
   for (let i = 1; i <= 70; i++) {
     await api('POST', `/contests/${big.id}/tags`, { token: organizer.token, body: {
       epc: String(i).padStart(24, '0'), bib: String(100 + i),
-      participant: 'רוכב עם שם מאוד מאוד מאוד ארוך לבדיקת חלוקה למקטעים מספר ' + i, category: 'MTB',
+      participant: 'רוכב מספר ' + i, category: (i % 2 ? 'M40' : 'M50'),
     }});
   }
   await tap(ALLOWED, `use:${big.id}`);
+
+  // Page 1: 20 riders, category shown, a Next button (no Prev), under the limit.
   send.reset();
   await text(ALLOWED, '/list');
-  const msgs = send.calls.filter((c) => c.type === 'message');
-  assert.ok(msgs.length >= 2, 'a 70-rider roster is split across multiple messages');
-  for (const m of msgs) assert.ok(m.text.length <= 4096, `each message stays under Telegram's 4096 limit (was ${m.text.length})`);
-  const all = msgs.map((m) => m.text).join('\n');
-  assert.ok(all.includes('#101') && all.includes('#170'), 'every rider is covered (first + last bib present)');
+  const m1 = send.last('message');
+  assert.ok(m1.text.length <= 4096, 'a page fits in one message');
+  assert.match(m1.text, /page 1\/4/);
+  assert.ok(m1.text.includes('#101') && m1.text.includes('#120') && !m1.text.includes('#121'), 'shows exactly the first 20 bibs');
+  assert.match(m1.text, /M40|M50/, 'category is shown on the line');
+  const nav1 = JSON.stringify(m1.extra.reply_markup);
+  assert.ok(nav1.includes('lp:1') && !nav1.includes('lp:'.concat('-')), 'Next present, no Prev on page 1');
+
+  // Tap Next → edits the message in place to page 2 (bibs 121–140), with Prev + Next.
+  send.reset();
+  await tap(ALLOWED, 'lp:1');
+  const e = send.last('edit');
+  assert.ok(e, 'pagination edits the message in place');
+  assert.match(e.text, /page 2\/4/);
+  assert.ok(e.text.includes('#121') && e.text.includes('#140') && !e.text.includes('#120'), 'page 2 shows the next 20');
+  const nav2 = JSON.stringify(e.extra.reply_markup);
+  assert.ok(nav2.includes('lp:0') && nav2.includes('lp:2'), 'Prev + Next on a middle page');
 });
