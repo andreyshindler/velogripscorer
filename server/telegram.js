@@ -199,17 +199,24 @@ function btn(text, data) { return { text, callback_data: data }; }
 
 // A persistent reply keyboard so the argument-less commands are one tap away.
 // The labels map back to their slash commands in handleText.
+// The persistent keyboard is now 4 concern groups + Help. Tapping a group opens
+// an inline sub-menu (see openMenu), so each button maps cleanly to what it does.
+const CATEGORY = {
+  '🏁 Race': 'race', '👤 Start list': 'startlist', '⚙️ Setup': 'setup', '📊 Results': 'results',
+};
+// Direct labels (Help) and the OLD flat-keyboard labels, kept so a phone still
+// showing the previous keyboard keeps working until it refreshes.
 const COMMAND_LABELS = {
+  '❓ Help': '/help',
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '🔁 Laps': '/laps',
-  '👥 Marshals': '/operators',
-  '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league', '❓ Help': '/help',
+  '👥 Marshals': '/operators', '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league',
 };
 function mainKeyboard() {
   return {
     keyboard: [
-      [{ text: '🏁 Races' }, { text: '📋 List' }, { text: '🔁 Laps' }],
-      [{ text: '➕ Add' }, { text: '📄 CSV' }, { text: '📑 PDF' }],
-      [{ text: '👥 Marshals' }, { text: '🏆 League' }, { text: '❓ Help' }],
+      [{ text: '🏁 Race' }, { text: '👤 Start list' }],
+      [{ text: '⚙️ Setup' }, { text: '📊 Results' }],
+      [{ text: '❓ Help' }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -271,6 +278,8 @@ function racerLine(r) {
 
 const HELP = [
   '<b>VeloGrip start-list bot</b>',
+  '',
+  'Use the menu buttons below — <b>🏁 Race · 👤 Start list · ⚙️ Setup · 📊 Results</b> — or type a command:',
   '',
   '/races — browse races by league (or /races &lt;text&gt; to search all)',
   '/list [text] — show racers (optionally filtered)',
@@ -899,10 +908,60 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
 
   // ---- routing ----
 
+  // ---- grouped menu ----
+
+  // Every menu screen leads with the race in context, so the buttons below it
+  // always have something to act on (or a nudge to pick a race).
+  async function raceHeader(chatId) {
+    const c = await activeContest(chatId);
+    if (!c) return '⚠️ No race selected — tap 🏁 Race to choose one.';
+    return `📍 Managing: <b>${esc(c.title)}</b>`;
+  }
+
+  // A group button → an inline sub-menu of just that group's actions.
+  async function openMenu(chatId, category) {
+    const header = await raceHeader(chatId);
+    if (category === 'race') {
+      return send.message(chatId, `${header}\n\nPick or switch the race you're managing.`,
+        { reply_markup: kb([[btn('🔀 Switch race', 'go:races')]]) });
+    }
+    if (category === 'startlist') {
+      return send.message(chatId,
+        `${header}\n\nStart list — view or add racers. Edit or remove one: <code>/edit &lt;bib&gt;</code> · <code>/del &lt;bib&gt;</code>.`,
+        { reply_markup: kb([[btn('📋 View', 'go:list'), btn('➕ Add', 'go:add')]]) });
+    }
+    if (category === 'setup') {
+      return send.message(chatId, `${header}\n\nRace setup.`,
+        { reply_markup: kb([[btn('🔁 Laps', 'go:laps'), btn('👥 Marshals', 'go:operators')], [btn('✉️ Emails', 'go:emails')]]) });
+    }
+    if (category === 'results') {
+      return send.message(chatId, `${header}\n\nResults &amp; exports.`,
+        { reply_markup: kb([[btn('📄 CSV', 'go:csv'), btn('📑 PDF', 'go:pdf')], [btn('🏆 League', 'go:league')]]) });
+    }
+  }
+
+  // An inline action button runs the matching command (with no arguments).
+  async function runMenuAction(chatId, action) {
+    switch (action) {
+      case 'races': return cmdRaces(chatId, '');
+      case 'list': return cmdList(chatId, '');
+      case 'add': return cmdAdd(chatId, '');
+      case 'laps': return cmdLaps(chatId, '');
+      case 'operators': return cmdOperators(chatId, '');
+      case 'emails': return emailList(chatId);
+      case 'csv': return cmdCsv(chatId);
+      case 'pdf': return cmdPdf(chatId);
+      case 'league': return cmdLeague(chatId);
+      default: return;
+    }
+  }
+
   async function handleText(chatId, text) {
     text = COMMAND_LABELS[text] || text; // a reply-keyboard tap arrives as its label
     const st = getState(chatId);
     if (text === '/cancel') { setState(chatId, null); await send.message(chatId, 'Cancelled.'); return; }
+    // A group button opens its sub-menu (and interrupts any half-finished wizard).
+    if (CATEGORY[text]) { if (st) setState(chatId, null); return openMenu(chatId, CATEGORY[text]); }
     if (st && st.flow === 'add' && text === '/skip') { await wizardStep(chatId, st, ''); return; }
     // In a wizard and the user typed a value (not a new command)
     if (st && st.flow === 'add' && !text.startsWith('/')) { await wizardStep(chatId, st, text); return; }
@@ -951,6 +1010,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'rappr') return approveRunner(chatId, a, b, cq.from);
     if (tag === 'rrej') return rejectRunner(chatId, a, cq.from);
     if (tag === 'use') return useRace(chatId, a);
+    if (tag === 'go') return runMenuAction(chatId, a);
     if (tag === 'opadd') return addOperator(chatId, a);
     if (tag === 'opdel') return removeOperator(chatId, a);
     if (tag === 'rl') return listRacesFlat(chatId, a === 'none' ? 'none' : a);

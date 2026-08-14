@@ -101,15 +101,31 @@ test('/races then /use selects the race', async () => {
   assert.match(send.last('message').text, /Managing/);
 });
 
-test('command buttons: /start shows the keyboard and label taps map to commands', async () => {
+test('grouped menu: /start shows the category keyboard; groups open sub-menus', async () => {
   send.reset();
   await text(ALLOWED, '/start');
   const kb = send.last('message').extra.reply_markup;
   assert.ok(kb && kb.keyboard, 'a persistent reply keyboard is attached');
   const labels = kb.keyboard.flat().map((b) => b.text);
-  assert.ok(labels.includes('🏁 Races') && labels.includes('➕ Add') && labels.includes('📄 CSV'));
+  assert.ok(labels.includes('🏁 Race') && labels.includes('⚙️ Setup') && labels.includes('📊 Results'));
 
-  // tapping the "🏁 Races" button sends its label text — it must act like /races
+  // Tapping a group opens an inline sub-menu of its actions.
+  send.reset();
+  await text(ALLOWED, '📊 Results');
+  const results = JSON.stringify(send.last('message').extra.reply_markup);
+  assert.ok(results.includes('go:csv') && results.includes('go:pdf') && results.includes('go:league'));
+
+  send.reset();
+  await text(ALLOWED, '⚙️ Setup');
+  const setup = JSON.stringify(send.last('message').extra.reply_markup);
+  assert.ok(setup.includes('go:laps') && setup.includes('go:operators'), 'Setup offers Laps + Marshals');
+
+  // An inline action runs its command: Switch race → the race picker.
+  send.reset();
+  await tap(ALLOWED, 'go:races');
+  assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
+
+  // The old flat-keyboard labels still work (a phone showing the previous keyboard).
   send.reset();
   await text(ALLOWED, '🏁 Races');
   assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
