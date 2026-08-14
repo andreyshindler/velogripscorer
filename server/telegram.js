@@ -430,9 +430,16 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       }
       return;
     }
-    const lines = racers.slice(0, 60).map(racerLine);
-    const more = racers.length > 60 ? `\n… and ${racers.length - 60} more (filter with /list <text>).` : '';
-    await send.message(chatId, `<b>${racers.length} racers</b>\n${lines.join('\n')}${more}`);
+    // A big roster (e.g. 67 riders) overflows Telegram's 4096-char message limit,
+    // which silently fails — so send it in chunks well under the cap.
+    const CHUNK = 3500;
+    let buf = `<b>${racers.length} racers</b>`;
+    for (const r of racers) {
+      const line = racerLine(r);
+      if (buf.length + line.length + 1 > CHUNK) { await send.message(chatId, buf); buf = ''; }
+      buf += (buf ? '\n' : '') + line;
+    }
+    if (buf) await send.message(chatId, buf);
   }
 
   // Number of laps for the selected race — bound to that race. A bare number is
@@ -1370,7 +1377,11 @@ function tgSender(botToken) {
       body: JSON.stringify(params),
       signal: AbortSignal.timeout(35000),
     });
-    return res.json().catch(() => ({}));
+    const json = await res.json().catch(() => ({}));
+    // Telegram returns 200 with {ok:false} on API errors — log so a rejected
+    // send (e.g. "message is too long") isn't a silent no-op.
+    if (json && json.ok === false) console.warn(`telegram ${method} failed: ${json.description || res.status}`);
+    return json;
   };
   return {
     call,

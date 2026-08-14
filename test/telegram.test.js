@@ -486,3 +486,22 @@ test('/operators adds a checkpoint marshal and removes via button', async () => 
   collabs = await collabsOf();
   assert.ok(!collabs.some((u) => u.email === 'tg-marshal@test.co'), 'marshal removed');
 });
+
+test('/list chunks a big roster so no message exceeds Telegram limits', async () => {
+  const big = (await api('POST', '/contests',
+    { token: organizer.token, body: { kind: 'race', title: 'Big race', start_at: past, end_at: future } })).json;
+  for (let i = 1; i <= 70; i++) {
+    await api('POST', `/contests/${big.id}/tags`, { token: organizer.token, body: {
+      epc: String(i).padStart(24, '0'), bib: String(100 + i),
+      participant: 'רוכב עם שם מאוד מאוד מאוד ארוך לבדיקת חלוקה למקטעים מספר ' + i, category: 'MTB',
+    }});
+  }
+  await tap(ALLOWED, `use:${big.id}`);
+  send.reset();
+  await text(ALLOWED, '/list');
+  const msgs = send.calls.filter((c) => c.type === 'message');
+  assert.ok(msgs.length >= 2, 'a 70-rider roster is split across multiple messages');
+  for (const m of msgs) assert.ok(m.text.length <= 4096, `each message stays under Telegram's 4096 limit (was ${m.text.length})`);
+  const all = msgs.map((m) => m.text).join('\n');
+  assert.ok(all.includes('#101') && all.includes('#170'), 'every rider is covered (first + last bib present)');
+});
