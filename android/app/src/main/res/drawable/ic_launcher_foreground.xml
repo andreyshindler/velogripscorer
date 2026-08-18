@@ -1,29 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Blue-gauge speedometer, matching the web app icon (public/icon.svg).
+     viewport 512 (same coords as the SVG); scaled to the adaptive-icon safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- stylized RFID waves + tag -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,66 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M50,52 A18,18 0 0,1 56,66" />
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M58,42 A30,30 0 0,1 68,66" />
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M66,32 A42,42 0 0,1 80,66" />
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group android:pivotX="256" android:pivotY="256" android:scaleX="0.9" android:scaleY="0.9">
+
+        <!-- outer 270° arc, open at the bottom (translucent track) -->
+        <path
+            android:pathData="M159,372 A150,150 0 1 1 353,372"
+            android:strokeColor="#FFFFFF" android:strokeAlpha="0.3"
+            android:strokeWidth="26" android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <!-- coloured progress portion (left → top → upper right) -->
+        <path
+            android:pathData="M159,372 A150,150 0 0 1 372,175"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="26" android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- tick marks -->
+        <group android:pivotX="256" android:pivotY="256" android:rotation="-135"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256" android:pivotY="256" android:rotation="-90"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256" android:pivotY="256" android:rotation="-45"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256" android:pivotY="256" android:rotation="0"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256" android:pivotY="256" android:rotation="45"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256" android:pivotY="256" android:rotation="90"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256" android:pivotY="256" android:rotation="135"><path android:pathData="M256,140 L256,168" android:strokeColor="#FFFFFF" android:strokeAlpha="0.85" android:strokeWidth="9" android:strokeLineCap="round" /></group>
+
+        <!-- needle -->
+        <group android:pivotX="256" android:pivotY="256" android:rotation="58">
+            <path android:pathData="M256,256 L244,250 L256,120 L268,250 Z" android:fillColor="#FFFFFF" />
+        </group>
+
+        <!-- centre hub -->
+        <path android:pathData="M222,256 a34,34 0 1,0 68,0 a34,34 0 1,0 -68,0 z" android:fillColor="#0B39C4" />
+        <path android:pathData="M222,256 a34,34 0 1,0 68,0 a34,34 0 1,0 -68,0 z" android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="10" />
+        <path android:pathData="M246,256 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 z" android:fillColor="#FFFFFF" />
+    </group>
 </vector>
