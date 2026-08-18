@@ -23,7 +23,7 @@ async function register(email, name) {
 }
 const auth = (s) => ({ Authorization: `Bearer ${s.token}` });
 
-let org, contest, reader, wave;
+let org, contest, reader, wave, gunElite;
 
 test('setup: contest with start list on the web', async () => {
   org = await register('sync-org@test.co', 'Sync Organizer');
@@ -56,7 +56,7 @@ test('app downloads the start list with only its reader token', async () => {
 });
 
 test('app uploads gun times; existing server gun time is kept unless forced', async () => {
-  const gun = new Date(Date.now() - 300_000).toISOString();
+  const gun = gunElite = new Date(Date.now() - 300_000).toISOString();
   const up = await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', reader.token)
     .send({ name: 'elite', started_at: gun });
   assert.equal(up.status, 200);
@@ -78,7 +78,7 @@ test('app uploads gun times; existing server gun time is kept unless forced', as
 });
 
 test('offline race round-trip: gun time + queued reads produce server results', async () => {
-  const gun = new Date(Date.now() - 300_000).toISOString();
+  const gun = gunElite; // the exact gun the 'elite' wave was started with above
   // phone already uploaded wave start above (gun); now its outbox flushes reads
   const res = await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
     reads: [
