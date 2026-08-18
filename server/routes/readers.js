@@ -783,10 +783,11 @@ router.patch('/contests/:id/timing-settings', requireAuth, (req, res) => {
   if (!contest) return;
   const suppress = Number(req.body?.suppress_secs);
   const lapGap = Number(req.body?.min_lap_gap_secs);
-  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ?, record_laps = ? WHERE id = ?').run(
+  db.prepare('UPDATE contests SET suppress_secs = ?, min_lap_gap_secs = ?, record_laps = ?, leader_ends_race = ? WHERE id = ?').run(
     Number.isFinite(suppress) && suppress >= 0 ? Math.round(suppress) : contest.suppress_secs,
     Number.isFinite(lapGap) && lapGap >= 0 ? Math.round(lapGap) : contest.min_lap_gap_secs,
     typeof req.body?.record_laps === 'boolean' ? (req.body.record_laps ? 1 : 0) : contest.record_laps,
+    typeof req.body?.leader_ends_race === 'boolean' ? (req.body.leader_ends_race ? 1 : 0) : contest.leader_ends_race,
     contest.id
   );
   res.json({ ok: true });

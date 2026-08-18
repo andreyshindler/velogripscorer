@@ -66,6 +66,20 @@ function computeRaceResults(contest, { category } = {}) {
   const suppressMs = contest.suppress_secs * 1000;
   const lapGapMs = contest.min_lap_gap_secs * 1000;
 
+  // MTB/XCO "leader ends the race" rule: when the first rider completes the
+  // target lap count, the race is over — everyone still on course finishes only
+  // their current lap. Needs a lap target (per-distance, else race-wide) and a
+  // multi-lap race. Applied as a cutoff after all crossings are known (below).
+  let lapTargets = {};
+  try { lapTargets = contest.lap_targets ? JSON.parse(contest.lap_targets) : {}; } catch { lapTargets = {}; }
+  const targetFor = (distance) => {
+    const d = Number(lapTargets[distance]);
+    if (Number.isFinite(d) && d > 0) return d;
+    const r = Number(contest.race_laps);
+    return Number.isFinite(r) && r > 0 ? r : null;
+  };
+  const leaderRule = contest.leader_ends_race === 1 && contest.record_laps === 1;
+
   // Racers can carry two chips (Chip ID + Chip ID2): assignments sharing a
   // non-empty bib are merged, and a read from either chip counts.
   const groups = new Map();
@@ -135,8 +149,43 @@ function computeRaceResults(contest, { category } = {}) {
       // elapsed of each counted crossing, for the per-lap view
       lap_splits: crossings.map((t) => formatElapsed(t - startMs)),
       lap_ms: crossings.map((t) => t - startMs),
+      // kept only when the leader rule is on, stripped before returning.
+      ...(leaderRule ? { _crossings: crossings.slice(), _startMs: startMs, _target: targetFor(a.distance || '') } : {}),
     };
   });
+
+  // Apply the leader cutoff once every racer's crossings are known. The cutoff
+  // is the earliest wall-clock time any rider completes the target laps (first
+  // overall finisher ends it for the whole field). Each racer then finishes on
+  // the first crossing that reaches the target OR falls at/after the cutoff —
+  // their current lap — and any crossing after that is ignored.
+  if (leaderRule) {
+    let cutoff = Infinity;
+    for (const r of results) {
+      if (r.status === 'finished' && r._target && r._crossings.length >= r._target) {
+        cutoff = Math.min(cutoff, r._crossings[r._target - 1]);
+      }
+    }
+    if (Number.isFinite(cutoff)) {
+      for (const r of results) {
+        if (r.status !== 'finished' || !r._crossings) continue;
+        let idx = -1;
+        for (let i = 0; i < r._crossings.length; i++) {
+          if ((r._target && i + 1 >= r._target) || r._crossings[i] >= cutoff) { idx = i; break; }
+        }
+        if (idx === -1) continue; // never reached target nor crossed after cutoff — leave as-is
+        const kept = r._crossings.slice(0, idx + 1);
+        const last = kept[kept.length - 1];
+        r.laps = kept.length;
+        r.last_crossing_at = new Date(last).toISOString();
+        r.elapsed_ms = last - r._startMs;
+        r.elapsed = formatElapsed(last - r._startMs);
+        r.lap_splits = kept.map((t) => formatElapsed(t - r._startMs));
+        r.lap_ms = kept.map((t) => t - r._startMs);
+      }
+    }
+    for (const r of results) { delete r._crossings; delete r._startMs; delete r._target; }
+  }
 
   // Fastest time first (Webscorer default); more laps beats fewer for lap
   // races; DNS/DNF/DSQ and non-finishers sink to the bottom.

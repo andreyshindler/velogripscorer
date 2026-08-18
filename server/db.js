@@ -357,6 +357,10 @@ for (const stmt of [
   // the settings at creation and can be switched later to re-apply that type's
   // default point tables. '' = legacy leagues created before this field.
   `ALTER TABLE leagues ADD COLUMN preset TEXT NOT NULL DEFAULT ''`,
+  // MTB/XCO rule: when the first rider completes the target laps, the race is
+  // over — everyone still out finishes only their current lap. 1 = apply the
+  // rule in results (needs a lap target); 0 = every crossing counts (default).
+  `ALTER TABLE contests ADD COLUMN leader_ends_race INTEGER NOT NULL DEFAULT 0`,
 ]) {
   try {
     db.exec(stmt);
