@@ -717,7 +717,7 @@ public class RaceTimingActivity extends BaseActivity {
         if (onArrowTap != null) {
             TextView chevron = new TextView(this);
             chevron.setText("❯");
-            chevron.setTextColor(0xFF76B82A);
+            chevron.setTextColor(0xFFF5821F);
             chevron.setTextSize(15);
             chevron.setBackgroundResource(R.drawable.bg_chevron);
             chevron.setPadding(dp(9), dp(3), dp(9), dp(3));

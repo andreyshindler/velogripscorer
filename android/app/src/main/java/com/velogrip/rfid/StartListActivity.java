@@ -114,7 +114,7 @@ public class StartListActivity extends BaseActivity {
             boolean flagged = !r.status.isEmpty();
             TextView check = new TextView(this);
             check.setText(deleteMode == 1 ? "🗑" : flagged ? "✕" : "✓");
-            check.setTextColor(deleteMode == 1 ? 0xFFC0392B : flagged ? getColor(R.color.text_muted) : 0xFF76B82A);
+            check.setTextColor(deleteMode == 1 ? 0xFFC0392B : flagged ? getColor(R.color.text_muted) : 0xFFF5821F);
             check.setTextSize(18);
             check.setTypeface(null, android.graphics.Typeface.BOLD);
             check.setLayoutParams(new LinearLayout.LayoutParams(dp(30), LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -135,7 +135,7 @@ public class StartListActivity extends BaseActivity {
 
             TextView chevron = new TextView(this);
             chevron.setText("❯");
-            chevron.setTextColor(0xFF76B82A);
+            chevron.setTextColor(0xFFF5821F);
             chevron.setTextSize(15);
             chevron.setTypeface(null, android.graphics.Typeface.BOLD);
             chevron.setBackgroundResource(R.drawable.bg_chevron);

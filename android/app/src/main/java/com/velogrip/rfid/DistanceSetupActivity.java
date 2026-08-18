@@ -61,7 +61,7 @@ public class DistanceSetupActivity extends BaseActivity {
 
             TextView check = new TextView(this);
             check.setText("✓");
-            check.setTextColor(0xFF76B82A);
+            check.setTextColor(0xFFF5821F);
             check.setTextSize(18);
             check.setTypeface(null, android.graphics.Typeface.BOLD);
             check.setLayoutParams(new LinearLayout.LayoutParams(dp(34), LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -81,7 +81,7 @@ public class DistanceSetupActivity extends BaseActivity {
 
             TextView chevron = new TextView(this);
             chevron.setText("❯");
-            chevron.setTextColor(0xFF76B82A);
+            chevron.setTextColor(0xFFF5821F);
             chevron.setTextSize(16);
             chevron.setTypeface(null, android.graphics.Typeface.BOLD);
             chevron.setBackgroundResource(R.drawable.bg_chevron);

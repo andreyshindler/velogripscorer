@@ -80,7 +80,7 @@ public class CategorySetupActivity extends BaseActivity {
 
             TextView check = new TextView(this);
             check.setText(deleteMode ? "🗑" : "✓");
-            check.setTextColor(deleteMode ? 0xFFC0392B : (cat.enabled ? 0xFF76B82A : 0xFFBBBBBB));
+            check.setTextColor(deleteMode ? 0xFFC0392B : (cat.enabled ? 0xFFF5821F : 0xFFBBBBBB));
             check.setTextSize(18);
             check.setTypeface(null, android.graphics.Typeface.BOLD);
             check.setLayoutParams(new LinearLayout.LayoutParams(dp(34), LinearLayout.LayoutParams.WRAP_CONTENT));

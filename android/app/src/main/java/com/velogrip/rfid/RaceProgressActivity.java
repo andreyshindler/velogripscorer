@@ -144,7 +144,7 @@ public class RaceProgressActivity extends BaseActivity {
         if (chevron) {
             TextView ch = new TextView(this);
             ch.setText("❯");
-            ch.setTextColor(0xFF76B82A);
+            ch.setTextColor(0xFFF5821F);
             ch.setTextSize(15);
             ch.setTypeface(null, android.graphics.Typeface.BOLD);
             ch.setBackgroundResource(R.drawable.bg_chevron);

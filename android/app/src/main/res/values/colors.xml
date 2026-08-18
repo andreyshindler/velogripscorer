@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#0B39C4</color>
-    <color name="velogrip_green">#76B82A</color>
-    <color name="velogrip_dark">#1E4032</color>
+    <color name="velogrip_green">#F5821F</color>
+    <color name="velogrip_dark">#6B3A12</color>
 
     <!-- Semantic colors — LIGHT values. values-night/colors.xml overrides them
          when the toggle (or system) selects dark. -->

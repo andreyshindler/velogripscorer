@@ -74,7 +74,7 @@ public class SelectLapCountActivity extends BaseActivity {
         TextView check = new TextView(this);
         check.setTag("check:" + laps);
         check.setText("✓");
-        check.setTextColor(0xFF76B82A);
+        check.setTextColor(0xFFF5821F);
         check.setTextSize(18);
         check.setTypeface(null, android.graphics.Typeface.BOLD);
 

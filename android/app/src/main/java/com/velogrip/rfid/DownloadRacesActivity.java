@@ -176,7 +176,7 @@ public class DownloadRacesActivity extends BaseActivity {
         TextView title = new TextView(this);
         title.setText(race.optString("title"));
         title.setTextSize(18);
-        title.setTextColor(0xFF76B82A);
+        title.setTextColor(0xFFF5821F);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         TextView sub = new TextView(this);
         StringBuilder line = new StringBuilder(fmtDate(race.optString("start_at")));
