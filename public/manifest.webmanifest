@@ -1,0 +1,14 @@
+{
+  "name": "VeloGripScorer",
+  "short_name": "VeloGrip",
+  "description": "Online competition scoring and live results.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b39c4",
+  "theme_color": "#2f7bff",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}
