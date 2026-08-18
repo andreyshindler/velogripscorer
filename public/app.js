@@ -2367,8 +2367,9 @@ async function viewLeagues() {
       <a class="card contest-card" href="#/league/${l.id}" style="color:inherit;text-decoration:none">
         <div class="card-head">
           <div class="card-pills">
-            ${l.preset ? `<span class="pill tag">🏆 ${esc(t('league_preset_' + l.preset))}</span>` : ''}
-            ${l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : ''}
+            ${l.preset
+              ? `<span class="pill tag">🏆 ${esc(t('league_preset_' + l.preset))}</span>`
+              : (l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : '')}
             <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
           </div>
           ${canDelete ? `<span style="display:flex;gap:6px;margin-inline-start:auto">
