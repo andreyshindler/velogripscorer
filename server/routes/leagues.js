@@ -57,7 +57,7 @@ router.get('/leagues', (req, res) => {
   const status = req.query.status || '';
   const where = status === 'all' ? '1=1' : status ? 'l.status = ?' : "l.status != 'archived'";
   const rows = db.prepare(
-    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings, l.created_by,
+    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings, l.preset, l.created_by,
             (SELECT COUNT(*) FROM league_races lr WHERE lr.league_id = l.id) AS race_count,
             (SELECT COUNT(*) FROM league_races lr JOIN contests c ON c.id = lr.contest_id
               WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count,
@@ -174,8 +174,8 @@ router.post('/leagues', requireAuth, (req, res) => {
     return res.status(400).json({ error: String(err.message) });
   }
   const info = db.prepare(
-    'INSERT INTO leagues (name, season, settings, created_by) VALUES (?, ?, ?, ?)'
-  ).run(String(name).trim(), String(season || '').trim(), JSON.stringify(normalized), req.user.id);
+    'INSERT INTO leagues (name, season, settings, preset, created_by) VALUES (?, ?, ?, ?, ?)'
+  ).run(String(name).trim(), String(season || '').trim(), JSON.stringify(normalized), preset ? String(preset) : '', req.user.id);
   auditLog(req.user.id, 'league.create', 'league', info.lastInsertRowid, name);
   res.status(201).json({ league: leagueJson(getLeague(info.lastInsertRowid)) });
 });
@@ -184,22 +184,33 @@ router.patch('/leagues/:id', requireAuth, (req, res) => {
   const league = getLeague(req.params.id);
   if (!league) return res.status(404).json({ error: 'league not found' });
   if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
-  const { name, season, status, settings } = req.body || {};
+  const { name, season, status, settings, preset } = req.body || {};
   if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'name cannot be empty' });
   if (status !== undefined && !['active', 'finished', 'archived'].includes(status)) {
     return res.status(400).json({ error: 'invalid status' });
   }
+  // Switching the league type re-applies that preset's default point tables
+  // (standings are recomputed live, so the season table updates immediately).
+  // Any explicit settings sent alongside overlay the preset.
   let settingsJson;
-  if (settings !== undefined) {
+  let presetVal;
+  if (preset !== undefined) {
+    try {
+      const base = presetSettings(String(preset));
+      settingsJson = JSON.stringify(normalizeSettings({ ...base, ...(settings || {}) }));
+      presetVal = String(preset);
+    } catch (err) { return res.status(400).json({ error: String(err.message) }); }
+  } else if (settings !== undefined) {
     try { settingsJson = JSON.stringify(normalizeSettings(settings)); } catch (err) {
       return res.status(400).json({ error: String(err.message) });
     }
   }
-  db.prepare('UPDATE leagues SET name = ?, season = ?, status = ?, settings = ? WHERE id = ?').run(
+  db.prepare('UPDATE leagues SET name = ?, season = ?, status = ?, settings = ?, preset = ? WHERE id = ?').run(
     name !== undefined ? String(name).trim() : league.name,
     season !== undefined ? String(season).trim() : league.season,
     status !== undefined ? status : league.status,
     settingsJson !== undefined ? settingsJson : league.settings,
+    presetVal !== undefined ? presetVal : league.preset,
     league.id
   );
   auditLog(req.user.id, 'league.update', 'league', league.id, '');

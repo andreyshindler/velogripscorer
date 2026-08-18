@@ -326,6 +326,34 @@ test('league CRUD: create with defaults, patch settings, validation', async () =
   assert.equal(listed.body.leagues[0].organizer, 'VeloGrip', 'admin-created leagues credit the brand');
 });
 
+test('league type can be switched, re-applying that type’s default scoring', async () => {
+  // A running league starts on the default point table.
+  const created = await request(app).post('/api/leagues').set(auth(admin))
+    .send({ name: 'Switchable', season: '2026', preset: 'running' });
+  const lg = created.body.league;
+  assert.equal(lg.preset, 'running', 'preset is stored');
+  assert.equal(lg.settings.individual_points[0], 20);
+
+  // Switch to MTB → points and team mode become the MTB preset, preset persists.
+  const toMtb = await request(app).patch(`/api/leagues/${lg.id}`).set(auth(admin)).send({ preset: 'mtb' });
+  assert.equal(toMtb.status, 200);
+  assert.equal(toMtb.body.league.preset, 'mtb');
+  assert.deepEqual(toMtb.body.league.settings.individual_points, [26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2]);
+  assert.equal(toMtb.body.league.settings.team_scoring_mode, 'overall');
+
+  // It sticks after a reload, and switching back restores the running table.
+  const reloaded = (await request(app).get(`/api/leagues/${lg.id}`)).body.league;
+  assert.equal(reloaded.preset, 'mtb');
+  assert.equal(reloaded.settings.individual_points[0], 26);
+  const back = await request(app).patch(`/api/leagues/${lg.id}`).set(auth(admin)).send({ preset: 'running' });
+  assert.equal(back.body.league.settings.individual_points[0], 20);
+  assert.equal(back.body.league.preset, 'running');
+
+  // An unknown type is rejected.
+  assert.equal((await request(app).patch(`/api/leagues/${lg.id}`).set(auth(admin))
+    .send({ preset: 'nope' })).status, 400);
+});
+
 test('a non-owner (non-admin) cannot manage someone else\'s league', async () => {
   assert.equal((await request(app).patch(`/api/leagues/${league.id}`).set(auth(user)).send({ name: 'hijack' })).status, 403);
   assert.equal((await request(app).delete(`/api/leagues/${league.id}`).set(auth(user))).status, 403);

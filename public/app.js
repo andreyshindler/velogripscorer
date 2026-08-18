@@ -2830,6 +2830,7 @@ async function renderLeagueManager(box, scope, refresh) {
       `<optgroup label="${esc(t('league_group_in') + ' ' + name)}">${opts.join('')}</optgroup>`).join('');
     const contestOptions = `<optgroup label="${esc(t('league_group_free'))}">${freeOpts}</optgroup>${takenGroups}`;
     const s = league.settings;
+    const presetVal = league.preset || 'running';
     const card = document.createElement('div');
     card.className = 'card mt';
     card.innerHTML = `
@@ -2838,6 +2839,10 @@ async function renderLeagueManager(box, scope, refresh) {
                style="font-weight:700;font-size:1.02rem;flex:1 1 150px;min-width:140px">
         <input data-f="season" value="${esc(league.season || '')}" placeholder="2026" aria-label="${t('league_season')}" style="width:90px">
         <a href="#/league/${league.id}" class="btn small secondary" title="${t('league_tab_teams')}">↗</a>
+        <select data-f="preset" title="${t('league_preset')}" aria-label="${t('league_preset')}" style="width:auto;flex:0 0 auto;min-width:130px">
+          <option value="running" ${presetVal === 'running' ? 'selected' : ''}>${t('league_preset_running')}</option>
+          <option value="mtb" ${presetVal === 'mtb' ? 'selected' : ''}>${t('league_preset_mtb')}</option>
+        </select>
         <select data-f="status" style="width:auto;flex:0 0 auto;min-width:120px">
           ${['active', 'finished', 'archived'].map((st) => `<option value="${st}" ${league.status === st ? 'selected' : ''}>${st}</option>`).join('')}
         </select>
@@ -2879,6 +2884,20 @@ async function renderLeagueManager(box, scope, refresh) {
     card.querySelector('[data-f="status"]').onchange = async (e) => {
       try { await api(`/leagues/${league.id}`, { method: 'PATCH', body: { status: e.target.value } }); toast(t('league_saved')); }
       catch (err) { toast(err.message, true); }
+    };
+    // Switching the league type re-applies that type's default points and
+    // recomputes the standings. Confirm first — it overwrites custom scoring.
+    card.querySelector('[data-f="preset"]').onchange = async (e) => {
+      const val = e.target.value;
+      if (!confirm(t('league_confirm_preset', { type: t('league_preset_' + val) }))) {
+        e.target.value = league.preset || 'running';
+        return;
+      }
+      try {
+        await api(`/leagues/${league.id}`, { method: 'PATCH', body: { preset: val } });
+        toast(t('league_saved'));
+        refresh(); // re-render so the scoring editor shows the new point tables
+      } catch (err) { toast(err.message, true); e.target.value = league.preset || 'running'; }
     };
     // Rename / re-season: save on blur; an empty name reverts.
     const nameInp = card.querySelector('[data-f="name"]');

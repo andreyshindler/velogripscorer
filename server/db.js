@@ -353,6 +353,10 @@ for (const stmt of [
   // from the bot or web). Used as the cap when a rider's distance has no
   // per-distance override. NULL = no race-wide cap.
   `ALTER TABLE contests ADD COLUMN race_laps INTEGER`,
+  // The scoring preset a league's type maps to ('running' | 'mtb' | ''). Seeds
+  // the settings at creation and can be switched later to re-apply that type's
+  // default point tables. '' = legacy leagues created before this field.
+  `ALTER TABLE leagues ADD COLUMN preset TEXT NOT NULL DEFAULT ''`,
 ]) {
   try {
     db.exec(stmt);
