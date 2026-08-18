@@ -1227,7 +1227,10 @@ async function viewPublicResults(id, tab) {
   main.innerHTML = `
     <div class="pubresults">
       <h1 style="text-align:center;margin-bottom:2px">${esc(c.title)}</h1>
-      <p style="text-align:center;margin:0 0 12px;color:var(--muted)">${esc(fmtDate(c.start_at))} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
+      <p style="text-align:center;margin:0 0 ${c.started && c.status !== 'finished' ? '8px' : '12px'};color:var(--muted)">${esc(fmtDate(c.start_at))} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
+      ${c.started && c.status !== 'finished'
+        ? `<p style="text-align:center;margin:0 0 14px"><span class="pill live"><span class="live-dot"></span>${t('hero_live')}</span></p>`
+        : ''}
       ${raceInfoPanel(c, data.results)}
       <div class="pubtabs">
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/results/${id}/${k}">${t(key)}</a>`).join('')}
