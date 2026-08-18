@@ -581,6 +581,7 @@
     <string name="status_dns">DNS</string>
     <string name="post_to_web">פרסום לאתר</string>
     <string name="post_to_web_hint">פרסום ל‑srv1515969.hstgr.cloud/veloscorer</string>
+    <string name="post_to_web_hint_fmt">פרסום ל‑%1$s</string>
     <string name="post_results_hint">התוצאות מתפרסמות לאתר VeloGripScorer שלך</string>
     <string name="posting">מפרסם תוצאות…</string>
     <string name="post_success_title">התוצאות פורסמו!</string>

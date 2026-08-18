@@ -88,6 +88,7 @@
                         android:textSize="19sp"
                         android:textStyle="bold" />
                     <TextView
+                        android:id="@+id/postWebHint"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/post_to_web_hint"

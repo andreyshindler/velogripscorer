@@ -570,6 +570,7 @@
     <string name="status_dns">DNS</string>
     <string name="post_to_web">Post to the web</string>
     <string name="post_to_web_hint">Publish to srv1515969.hstgr.cloud/veloscorer</string>
+    <string name="post_to_web_hint_fmt">Publish to %1$s</string>
     <string name="post_results_hint">Results are published to your VeloGripScorer site</string>
     <string name="posting">Posting results…</string>
     <string name="post_success_title">Results published!</string>

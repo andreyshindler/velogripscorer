@@ -67,6 +67,13 @@ public class PostResultsActivity extends BaseActivity {
         String url = prefs.publicResultsUrl();
         ((TextView) findViewById(R.id.urlValue)).setText(url);
 
+        // Keep the publish hint in sync with the actual destination (staging vs
+        // production, or any custom server), not a hard-coded host.
+        String host = prefs.serverUrl().replaceFirst("^https?://", "").replaceAll("/+$", "");
+        if (!host.isEmpty()) {
+            ((TextView) findViewById(R.id.postWebHint)).setText(getString(R.string.post_to_web_hint_fmt, host));
+        }
+
         findViewById(R.id.postWeb).setOnClickListener(v -> postToWeb());
         findViewById(R.id.copyUrl).setOnClickListener(v -> {
             android.content.ClipboardManager cb =
