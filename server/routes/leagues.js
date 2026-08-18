@@ -63,8 +63,15 @@ router.get('/leagues', (req, res) => {
               WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count,
             (SELECT c.sport FROM league_races lr JOIN contests c ON c.id = lr.contest_id
               WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS sport,
+            -- Location of the NEXT scheduled race (soonest race yet to start);
+            -- if the season's races have all started, fall back to the most
+            -- recently started one.
             (SELECT c.location FROM league_races lr JOIN contests c ON c.id = lr.contest_id
-              WHERE lr.league_id = l.id ORDER BY lr.round LIMIT 1) AS location,
+              WHERE lr.league_id = l.id
+              ORDER BY (datetime(c.start_at) >= datetime('now')) DESC,
+                       CASE WHEN datetime(c.start_at) >= datetime('now') THEN datetime(c.start_at) END ASC,
+                       datetime(c.start_at) DESC
+              LIMIT 1) AS location,
             (SELECT u.name FROM users u WHERE u.id = l.created_by) AS creator_name,
             (SELECT u.role FROM users u WHERE u.id = l.created_by) AS creator_role
        FROM leagues l WHERE ${where} ORDER BY l.created_at DESC`

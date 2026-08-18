@@ -326,6 +326,24 @@ test('league CRUD: create with defaults, patch settings, validation', async () =
   assert.equal(listed.body.leagues[0].organizer, 'VeloGrip', 'admin-created leagues credit the brand');
 });
 
+test('league card location follows the next scheduled race, not round 1', async () => {
+  const day = 864e5;
+  const mkRace = async (title, startAt, location) => (await request(app).post('/api/contests').set(auth(admin))
+    .send({ title, kind: 'race', start_at: startAt, end_at: new Date(Date.parse(startAt) + day).toISOString(), location })).body;
+  const past = await mkRace('Round 1 (done)', new Date(Date.now() - 10 * day).toISOString(), 'Old Town');
+  const soon = await mkRace('Round 2 (upcoming)', new Date(Date.now() + 5 * day).toISOString(), 'Next City');
+  const far = await mkRace('Round 3 (later)', new Date(Date.now() + 40 * day).toISOString(), 'Far Away');
+
+  const lg = (await request(app).post('/api/leagues').set(auth(admin)).send({ name: 'Loc League', preset: 'running' })).body.league;
+  // Attach out of date order to prove it's start_at, not round, that decides.
+  for (const [c, round] of [[past, 1], [far, 3], [soon, 2]]) {
+    assert.equal((await request(app).post(`/api/leagues/${lg.id}/races`).set(auth(admin))
+      .send({ contest_id: c.id, round })).status, 201);
+  }
+  const card = (await request(app).get('/api/leagues?status=all')).body.leagues.find((l) => l.id === lg.id);
+  assert.equal(card.location, 'Next City', 'shows the soonest upcoming race, not round 1 (Old Town)');
+});
+
 test('league type can be switched, re-applying that type’s default scoring', async () => {
   // A running league starts on the default point table.
   const created = await request(app).post('/api/leagues').set(auth(admin))
