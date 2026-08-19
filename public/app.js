@@ -2426,16 +2426,16 @@ async function viewLeague(id, tab) {
         ${tabs.map(([k, key]) => `<a class="pubtab ${tab === k ? 'active' : ''}" href="#/league/${id}/${k}">${t(key)}</a>`).join('')}
       </div>
       <div style="text-align:center;margin:8px 0">
-        <button class="btn small secondary" id="lg-csv-ind">⬇ ${t('export_individual_csv')}</button>
-        <button class="btn small secondary" id="lg-csv-team">⬇ ${t('export_team_csv')}</button>
+        <button class="btn small secondary" id="lg-pdf-ind">⬇ ${t('individual_pdf')}</button>
+        <button class="btn small secondary" id="lg-pdf-team">⬇ ${t('team_pdf')}</button>
       </div>
       ${tab === 'races' ? '' : `<p class="muted" style="text-align:center;margin:0 0 8px;font-size:12.5px">${t('league_view_hint')}</p>`}
       <div id="lgbody"></div>
     </div>`;
-  document.getElementById('lg-csv-ind').onclick = () =>
-    downloadAuthed(`/leagues/${id}/standings?format=csv&table=individual`, `league-${id}-individual.csv`);
-  document.getElementById('lg-csv-team').onclick = () =>
-    downloadAuthed(`/leagues/${id}/standings?format=csv&table=team`, `league-${id}-team.csv`);
+  document.getElementById('lg-pdf-ind').onclick = () =>
+    downloadAuthed(`/leagues/${id}/standings?format=pdf&table=individual`, `league-${id}-individual.pdf`);
+  document.getElementById('lg-pdf-team').onclick = () =>
+    downloadAuthed(`/leagues/${id}/standings?format=pdf&table=team`, `league-${id}-team.pdf`);
 
   const body = document.getElementById('lgbody');
   if (tab === 'teams') body.innerHTML = leagueTeamsTable(teams, races);
