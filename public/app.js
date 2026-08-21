@@ -682,6 +682,10 @@ async function pickLocationOnMap(onPick) {
 async function viewStartLists() {
   if (!state.user) { location.hash = '#/login'; return; }
   if (state.user.role !== 'admin') { location.hash = '#/'; return; } // admins manage races
+  // Leagues the new race can be attached to right away (optional).
+  const { leagues: attachLeagues } = await api('/leagues?status=all').catch(() => ({ leagues: [] }));
+  const leagueOptions = `<option value="">${t('league_none')}</option>`
+    + (attachLeagues || []).map((l) => `<option value="${l.id}">${esc(l.name)}${l.season ? ' · ' + esc(l.season) : ''}</option>`).join('');
   main.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <h1 style="margin:0">${t('my_startlists')}</h1>
@@ -698,6 +702,8 @@ async function viewStartLists() {
           <div><label for="l-sport">${t('sport')}</label>
             <select id="l-sport">${SPORT_OPTIONS.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
         </div>
+        <label for="l-league">${t('league_optional')}</label>
+        <select id="l-league">${leagueOptions}</select>
         <label for="l-organizer">${t('organizer')}</label>
         <input id="l-organizer" value="${esc(state.user && state.user.role !== 'admin' ? state.user.name : 'VeloGrip')}" maxlength="80">
         <label for="l-location">${t('location')}</label>
@@ -764,6 +770,13 @@ async function viewStartLists() {
         const result = await api(`/contests/${contest.id}/startlist-file`, { method: 'POST', form });
         toast(t('import_done', { n: result.imported, s: result.skipped })
           + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
+      }
+      const leagueId = document.getElementById('l-league').value;
+      if (leagueId) {
+        try {
+          await api(`/leagues/${leagueId}/races`, { method: 'POST', body: { contest_id: contest.id } });
+          toast(t('league_attached'));
+        } catch (err) { toast(err.message, true); }
       }
       location.hash = `#/contest/${contest.id}/manage`;
     } catch (err) { toast(err.message, true); }
