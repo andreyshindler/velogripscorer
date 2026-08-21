@@ -40,6 +40,10 @@ public class LapSetupActivity extends BaseActivity {
         laps.setChecked(prefs.recordLaps());
         laps.setOnCheckedChangeListener((b, on) -> prefs.setRecordLaps(on));
 
+        Switch leader = findViewById(R.id.swLeaderEnds);
+        leader.setChecked(prefs.leaderEndsRace());
+        leader.setOnCheckedChangeListener((b, on) -> prefs.setLeaderEndsRace(on));
+
         int[] unsupported = {R.id.swFixedRelay, R.id.swFlexibleRelay,
                 R.id.swExcludeLaps, R.id.swSkipLaps, R.id.swCustomLapNames};
         for (int id : unsupported) {

@@ -29,6 +29,7 @@ public final class StartListSync {
         // Lap mode + race-wide + per-distance lap counts, so a checkpoint can cap
         // manual taps at how many times a rider passes.
         if (json.has("record_laps")) prefs.setRecordLaps(json.optInt("record_laps", 1) != 0);
+        if (json.has("leader_ends_race")) prefs.setLeaderEndsRace(json.optInt("leader_ends_race", 0) != 0);
         prefs.setRaceLaps(json.isNull("race_laps") ? 0 : json.optInt("race_laps", 0));
         // Learn the device↔server clock offset while we're online, so checkpoint
         // reads can be stamped in server time at record time.

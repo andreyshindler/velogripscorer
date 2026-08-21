@@ -218,6 +218,7 @@ router.get('/ingest/startlist', (req, res) => {
     suppress_secs: contest.suppress_secs,
     min_lap_gap_secs: contest.min_lap_gap_secs,
     record_laps: contest.record_laps,
+    leader_ends_race: contest.leader_ends_race,
     lap_targets: lapTargets,
     race_laps: contest.race_laps,
     server_now: new Date().toISOString(), // lets a checkpoint learn the device↔server clock offset
@@ -247,6 +248,10 @@ router.post('/ingest/lap-targets', (req, res) => {
   db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(JSON.stringify(merged), reader.contest_id);
   if (typeof req.body?.record_laps === 'boolean') {
     db.prepare('UPDATE contests SET record_laps = ? WHERE id = ?').run(req.body.record_laps ? 1 : 0, reader.contest_id);
+  }
+  // The timing app can also set the MTB leader-ends-race rule from its lap setup.
+  if (typeof req.body?.leader_ends_race === 'boolean') {
+    db.prepare('UPDATE contests SET leader_ends_race = ? WHERE id = ?').run(req.body.leader_ends_race ? 1 : 0, reader.contest_id);
   }
   res.json({ ok: true });
 });

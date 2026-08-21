@@ -132,6 +132,7 @@
     <string name="fixed_relay">שליחים קבוע:</string>
     <string name="flexible_relay">שליחים גמיש:</string>
     <string name="record_lap_times">רישום זמני הקפות:</string>
+    <string name="leader_ends_race">המוביל מסיים את המרוץ (אופני הרים):</string>
     <string name="exclude_laps">החרגת הקפות:</string>
     <string name="skip_laps">דילוג על הקפות:</string>
     <string name="customize_lap_names">שמות הקפות מותאמים:</string>

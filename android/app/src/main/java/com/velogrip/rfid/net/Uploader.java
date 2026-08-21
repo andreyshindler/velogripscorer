@@ -121,8 +121,9 @@ public final class Uploader {
 
     /** Publishes this device's per-distance lap counts + lap mode, so a checkpoint
      *  can cap manual taps at how many times a rider passes. */
-    public boolean uploadLapTargets(java.util.Map<String, Integer> laps, boolean recordLaps) throws IOException {
-        StringBuilder json = new StringBuilder("{\"record_laps\":").append(recordLaps).append(",\"lap_targets\":{");
+    public boolean uploadLapTargets(java.util.Map<String, Integer> laps, boolean recordLaps, boolean leaderEndsRace) throws IOException {
+        StringBuilder json = new StringBuilder("{\"record_laps\":").append(recordLaps)
+                .append(",\"leader_ends_race\":").append(leaderEndsRace).append(",\"lap_targets\":{");
         boolean first = true;
         for (java.util.Map.Entry<String, Integer> e : laps.entrySet()) {
             if (e.getKey() == null || e.getKey().isEmpty()) continue;

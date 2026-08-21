@@ -65,7 +65,7 @@ public class ProgressListActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized());
+                prefs.raceFinalized(), prefs.leaderEndsRace());
 
         int shown = 0;
         for (RaceEngine.Result r : results) {

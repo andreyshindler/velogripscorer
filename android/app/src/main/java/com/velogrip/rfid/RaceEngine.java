@@ -94,6 +94,31 @@ public final class RaceEngine {
                                        int suppressSecs, int minLapGapSecs, boolean recordLaps,
                                        Map<String, Integer> lapTargets, boolean finalizeLapsDown,
                                        long nowMs, long rollCallWindowMs, long rollCallClosedAt) {
+        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
+                lapTargets, finalizeLapsDown, nowMs, rollCallWindowMs, rollCallClosedAt, false);
+    }
+
+    /** As above plus the MTB "leader ends race" rule (opt-in). */
+    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
+                                       List<RaceStore.Passing> passings,
+                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
+                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown,
+                                       boolean leaderEndsRace) {
+        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
+                lapTargets, finalizeLapsDown, 0L, 0L, 0L, leaderEndsRace);
+    }
+
+    /**
+     * leaderEndsRace (MTB/XCO): once the first racer completes the target laps,
+     * the race is over — everyone still out finishes only their current lap and
+     * later crossings are ignored. Needs a lap target; inert otherwise.
+     */
+    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
+                                       List<RaceStore.Passing> passings,
+                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
+                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown,
+                                       long nowMs, long rollCallWindowMs, long rollCallClosedAt,
+                                       boolean leaderEndsRace) {
         Map<String, Long> gunByWave = new HashMap<>();
         for (RaceStore.Wave w : waves) {
             if (w.startedAtMs != null) gunByWave.put(w.name, w.startedAtMs);
@@ -118,14 +143,28 @@ public final class RaceEngine {
             group.add(racer);
         }
 
+        // Leader cutoff = the earliest wall-clock time any racer completes their
+        // target laps (first finisher ends it for the whole field). MAX_VALUE =
+        // nobody has finished the full distance yet, so the rule stays inert.
+        long cutoff = Long.MAX_VALUE;
+        if (leaderEndsRace) {
+            for (List<RaceStore.Racer> group : groups.values()) {
+                RaceStore.Racer racer = group.get(0);
+                if (!declaredStatus(group).isEmpty()) continue;
+                Long gun = gunByWave.get(racer.wave);
+                if (gun == null) continue;
+                int target = resolveTarget(recordLaps, lapTargets, racer.distance);
+                if (target == Integer.MAX_VALUE) continue;
+                List<Long> cr = buildCrossings(collectRaw(group, readsByEpc), gun, suppressMs, lapGapMs, target);
+                if (cr.size() >= target) cutoff = Math.min(cutoff, cr.get(target - 1));
+            }
+        }
+
         List<Result> results = new ArrayList<>();
         for (List<RaceStore.Racer> group : groups.values()) {
             RaceStore.Racer racer = group.get(0);
             // organizer-declared status (DNS/DNF/DSQ) overrides everything
-            String declared = "";
-            for (RaceStore.Racer member : group) {
-                if (member.status != null && !member.status.isEmpty()) { declared = member.status; break; }
-            }
+            String declared = declaredStatus(group);
             if (!declared.isEmpty()) {
                 results.add(new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, racer.gender,declared, 0, 0));
@@ -138,35 +177,24 @@ public final class RaceEngine {
                         racer.distance, racer.gender,"not_started", 0, 0));
                 continue;
             }
-            List<Read> raw = new ArrayList<>();
-            for (RaceStore.Racer member : group) {
-                List<Read> reads = readsByEpc.get(member.epc);
-                if (reads != null) raw.addAll(reads);
-            }
-            int target;
-            if (!recordLaps) target = 1;
-            else if (lapTargets == null) target = Integer.MAX_VALUE; // unlimited
-            else {
-                Integer t = lapTargets.get(racer.distance);
-                target = Math.max(1, t == null ? 1 : t);
-            }
-            List<Long> crossings = new ArrayList<>();
-            if (!raw.isEmpty()) {
-                Collections.sort(raw, new Comparator<Read>() {
-                    @Override public int compare(Read a, Read b) { return Long.compare(a.at, b.at); }
-                });
-                for (Read rd : raw) {
-                    // Manual operator taps are deliberate: they skip the RFID
-                    // start-suppression window and the lap-gap de-dup, so each
-                    // tap counts as one crossing.
-                    if (!rd.manual && rd.at < gun + suppressMs) continue;
-                    if (crossings.size() >= target) break; // race done for this racer
-                    if (rd.manual || crossings.isEmpty()
-                            || rd.at - crossings.get(crossings.size() - 1) >= lapGapMs) {
-                        crossings.add(rd.at);
-                    }
+            List<Read> raw = collectRaw(group, readsByEpc);
+            int target = resolveTarget(recordLaps, lapTargets, racer.distance);
+            List<Long> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target);
+
+            // Leader rule: finish on the first crossing that reaches the target
+            // OR falls at/after the cutoff (the current lap); drop the rest.
+            boolean cutByLeader = false;
+            if (leaderEndsRace && cutoff != Long.MAX_VALUE && !crossings.isEmpty()) {
+                int idx = -1;
+                for (int i = 0; i < crossings.size(); i++) {
+                    if ((target != Integer.MAX_VALUE && i + 1 >= target) || crossings.get(i) >= cutoff) { idx = i; break; }
+                }
+                if (idx >= 0) {
+                    crossings = new ArrayList<>(crossings.subList(0, idx + 1));
+                    cutByLeader = crossings.get(crossings.size() - 1) >= cutoff;
                 }
             }
+
             boolean unlimited = target == Integer.MAX_VALUE;
             // elapsed of each counted crossing, for per-lap split rows
             long[] splits = new long[crossings.size()];
@@ -183,7 +211,7 @@ public final class RaceEngine {
                 String s = (rollCallClosed && !seenSinceGun) ? "DNS" : "on_course";
                 res = new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, racer.gender, s, 0, 0);
-            } else if (!unlimited && crossings.size() < target && !finalizeLapsDown) {
+            } else if (!unlimited && crossings.size() < target && !finalizeLapsDown && !cutByLeader) {
                 // laps completed so far, still on course to the lap target
                 res = new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, racer.gender,"on_course", crossings.size(), 0);
@@ -211,6 +239,52 @@ public final class RaceEngine {
             if ("finished".equals(r.status)) r.rank = rank++;
         }
         return results;
+    }
+
+    /** Organizer-declared status (DNS/DNF/DSQ) on any chip of a merged racer. */
+    private static String declaredStatus(List<RaceStore.Racer> group) {
+        for (RaceStore.Racer m : group) {
+            if (m.status != null && !m.status.isEmpty()) return m.status;
+        }
+        return "";
+    }
+
+    /** All reads for a merged racer (a rider may carry two chips). */
+    private static List<Read> collectRaw(List<RaceStore.Racer> group, Map<String, List<Read>> readsByEpc) {
+        List<Read> raw = new ArrayList<>();
+        for (RaceStore.Racer m : group) {
+            List<Read> reads = readsByEpc.get(m.epc);
+            if (reads != null) raw.addAll(reads);
+        }
+        return raw;
+    }
+
+    /** Laps to finish: per-distance target, else 1; unlimited when no targets. */
+    private static int resolveTarget(boolean recordLaps, Map<String, Integer> lapTargets, String distance) {
+        if (!recordLaps) return 1;
+        if (lapTargets == null) return Integer.MAX_VALUE;
+        Integer t = lapTargets.get(distance);
+        return Math.max(1, t == null ? 1 : t);
+    }
+
+    /** Valid crossings (suppression + lap-gap applied), capped at the target. */
+    private static List<Long> buildCrossings(List<Read> raw, long gun, long suppressMs, long lapGapMs, int target) {
+        List<Long> crossings = new ArrayList<>();
+        if (raw.isEmpty()) return crossings;
+        Collections.sort(raw, new Comparator<Read>() {
+            @Override public int compare(Read a, Read b) { return Long.compare(a.at, b.at); }
+        });
+        for (Read rd : raw) {
+            // Manual operator taps are deliberate: they skip the RFID start-
+            // suppression window and the lap-gap de-dup, so each tap is a crossing.
+            if (!rd.manual && rd.at < gun + suppressMs) continue;
+            if (crossings.size() >= target) break; // race done for this racer
+            if (rd.manual || crossings.isEmpty()
+                    || rd.at - crossings.get(crossings.size() - 1) >= lapGapMs) {
+                crossings.add(rd.at);
+            }
+        }
+        return crossings;
     }
 
     /** 0.1-second precision, mm:ss.t or h:mm:ss.t — matches the web display. */

@@ -64,6 +64,10 @@ public final class Prefs {
     public void setMultiDistance(boolean on) { sp.edit().putBoolean("multiDistance", on).apply(); }
     public boolean recordLaps() { return sp.getBoolean("recordLaps", true); }
     public void setRecordLaps(boolean on) { sp.edit().putBoolean("recordLaps", on).apply(); }
+    // MTB/XCO: when the first rider completes the target laps, the race is over
+    // and everyone still out finishes only their current lap. Off by default.
+    public boolean leaderEndsRace() { return sp.getBoolean("leaderEndsRace", false); }
+    public void setLeaderEndsRace(boolean on) { sp.edit().putBoolean("leaderEndsRace", on).apply(); }
 
     // Race-wide lap count (0 = none) — the default checkpoint tap cap when a
     // rider's distance has no specific override.
@@ -185,6 +189,7 @@ public final class Prefs {
     /** A different race was loaded: race-specific choices return to defaults. */
     public void resetRaceSetup() {
         sp.edit().remove("startType").remove("multiDistance").remove("recordLaps")
+                .remove("leaderEndsRace")
                 .remove("reqName").remove("reqBib").remove("bibAlpha")
                 .remove("reqCategory").remove("reqGender").remove("liveResults")
                 .remove("resultsOrder").remove("timingDecimals").remove("categoryResults")

@@ -132,6 +132,7 @@
     <string name="fixed_relay">Fixed relay:</string>
     <string name="flexible_relay">Flexible relay:</string>
     <string name="record_lap_times">Record lap times:</string>
+    <string name="leader_ends_race">Leader ends race (MTB):</string>
     <string name="exclude_laps">Exclude laps:</string>
     <string name="skip_laps">Skip laps:</string>
     <string name="customize_lap_names">Customize lap names:</string>

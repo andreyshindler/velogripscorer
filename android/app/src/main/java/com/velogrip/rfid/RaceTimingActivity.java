@@ -304,7 +304,7 @@ public class RaceTimingActivity extends BaseActivity {
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
                 prefs.raceFinalized(), System.currentTimeMillis(),
-                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt());
+                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRace());
 
         java.util.Set<String> finishedBibs = new java.util.HashSet<>();
         // Racers auto-marked DNS by the start-line roll call (computed, not stored).
@@ -976,7 +976,7 @@ public class RaceTimingActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                true);
+                true, prefs.leaderEndsRace());
         final List<RaceEngine.Result> onCourse = new ArrayList<>();
         for (RaceEngine.Result r : results) {
             if ("on_course".equals(r.status) || "not_started".equals(r.status)) onCourse.add(r);
@@ -1090,7 +1090,7 @@ public class RaceTimingActivity extends BaseActivity {
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
                 prefs.raceFinalized(), System.currentTimeMillis(),
-                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt());
+                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRace());
         int finished = 0, onCourse = 0, notStarted = 0, dns = 0;
         long lastElapsed = 0;
         for (RaceEngine.Result r : results) {

@@ -73,7 +73,7 @@ public class ViewResultsActivity extends BaseActivity {
         return RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), prefs.raceFinalized());
+                store.lapTargets(), prefs.raceFinalized(), prefs.leaderEndsRace());
     }
 
     private void render() {

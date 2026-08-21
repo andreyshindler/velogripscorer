@@ -371,7 +371,7 @@ public class BridgeService extends Service {
                 // The finish device publishes its lap counts once, so checkpoints
                 // can cap taps. A manual checkpoint has none of its own to send.
                 if (!manualOnly && !lapTargetsSynced) {
-                    if (uploader.uploadLapTargets(store.lapTargets(), prefs.recordLaps())) lapTargetsSynced = true;
+                    if (uploader.uploadLapTargets(store.lapTargets(), prefs.recordLaps(), prefs.leaderEndsRace())) lapTargetsSynced = true;
                 }
                 // gun times first: results on the web are wrong without them
                 for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
