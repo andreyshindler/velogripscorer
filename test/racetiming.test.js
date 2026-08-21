@@ -666,6 +666,7 @@ test('a contest is only "started" once a wave has a gun time', async () => {
 test('leader-ends-race (MTB/XCO): trailers finish their current lap; extra reads ignored', async () => {
   const c = (await request(app).post('/api/contests').set(auth(org)).send({
     title: 'XCO 4 laps', kind: 'race', category: 'other', start_at: past, end_at: future,
+    sport: 'MTB — Cross-country (XCO)', // the leader rule is XCO-only
   })).body;
   const rdr = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(org))
     .send({ name: 'Finish', location: 'finish' })).body;
@@ -706,4 +707,32 @@ test('leader-ends-race (MTB/XCO): trailers finish their current lap; extra reads
   assert.equal(by['201'].elapsed, '4:10.0', 'finish is the +250s crossing; the +320s re-pass is ignored');
   assert.equal(by['200'].rank, 1);
   assert.equal(by['201'].rank, 2);
+});
+
+test('leader-ends-race is XCO-only: a running race ignores the flag', async () => {
+  const c = (await request(app).post('/api/contests').set(auth(org)).send({
+    title: 'Running laps', kind: 'race', category: 'other', start_at: past, end_at: future,
+    sport: 'Running',
+  })).body;
+  const rdr = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(org))
+    .send({ name: 'Finish', location: 'finish' })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(org)).send({ name: 'mass' })).body;
+  const gun = new Date(Date.now() - 600_000);
+  const at = (s) => new Date(gun.getTime() + s * 1000).toISOString();
+  await request(app).post(`/api/contests/${c.id}/waves/${w.id}/start`).set(auth(org)).send({ at: gun.toISOString() });
+  for (const [epc, bib] of [['CCCC0300', '300'], ['CCCC0301', '301']]) {
+    await request(app).post(`/api/contests/${c.id}/tags`).set(auth(org))
+      .send({ epc, bib, participant: bib, wave_id: w.id, category: 'Open' });
+  }
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', rdr.token).send({ reads: [
+    { epc: 'CCCC0300', read_at: at(60) }, { epc: 'CCCC0300', read_at: at(120) },
+    { epc: 'CCCC0300', read_at: at(180) }, { epc: 'CCCC0300', read_at: at(240) },
+    { epc: 'CCCC0301', read_at: at(70) }, { epc: 'CCCC0301', read_at: at(140) },
+    { epc: 'CCCC0301', read_at: at(250) }, { epc: 'CCCC0301', read_at: at(320) },
+  ]});
+  await request(app).patch(`/api/contests/${c.id}/lap-targets`).set(auth(org)).send({ race_laps: 4 });
+  await request(app).patch(`/api/contests/${c.id}/timing-settings`).set(auth(org)).send({ leader_ends_race: true });
+  const by = Object.fromEntries((await request(app).get(`/api/contests/${c.id}/race-results`)
+    .set(auth(org))).body.results.map((r) => [r.bib, r]));
+  assert.equal(by['301'].laps, 4, 'a non-XCO race ignores the leader rule even with the flag on');
 });

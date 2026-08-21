@@ -59,7 +59,7 @@ public class RaceProgressActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized(), prefs.leaderEndsRace());
+                prefs.raceFinalized(), prefs.leaderEndsRaceActive());
 
         // Tally per distance, keeping first-seen order then sorting by km.
         Map<String, Tally> byDist = new LinkedHashMap<>();

@@ -68,6 +68,10 @@ public final class Prefs {
     // and everyone still out finishes only their current lap. Off by default.
     public boolean leaderEndsRace() { return sp.getBoolean("leaderEndsRace", false); }
     public void setLeaderEndsRace(boolean on) { sp.edit().putBoolean("leaderEndsRace", on).apply(); }
+    // The leader rule is MTB-XCO only (not running / XCM).
+    public boolean isMtbXco() { return sport().toLowerCase(java.util.Locale.ROOT).contains("xco"); }
+    // Effective flag the results engine uses: on only for an XCO race.
+    public boolean leaderEndsRaceActive() { return leaderEndsRace() && isMtbXco(); }
 
     // Race-wide lap count (0 = none) — the default checkpoint tap cap when a
     // rider's distance has no specific override.

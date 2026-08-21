@@ -40,6 +40,8 @@ public class LapSetupActivity extends BaseActivity {
         laps.setChecked(prefs.recordLaps());
         laps.setOnCheckedChangeListener((b, on) -> prefs.setRecordLaps(on));
 
+        // The leader-ends-race rule is MTB-XCO only — hide it for running / XCM / other.
+        findViewById(R.id.rowLeaderEnds).setVisibility(prefs.isMtbXco() ? android.view.View.VISIBLE : android.view.View.GONE);
         Switch leader = findViewById(R.id.swLeaderEnds);
         leader.setChecked(prefs.leaderEndsRace());
         leader.setOnCheckedChangeListener((b, on) -> prefs.setLeaderEndsRace(on));

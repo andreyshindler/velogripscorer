@@ -1944,8 +1944,8 @@ async function renderManage(box, c) {
           <input name="lapgap" type="number" min="0" value="${wavesData.min_lap_gap_secs}" style="width:70px">
           <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px">
             <input name="recordlaps" type="checkbox" ${c.record_laps === 0 ? '' : 'checked'} style="width:auto">${t('record_laps_label')}</label>
-          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px" title="${t('leader_ends_hint')}">
-            <input name="leaderends" type="checkbox" ${c.leader_ends_race ? 'checked' : ''} style="width:auto">${t('leader_ends_label')}</label>
+          ${/xco/i.test(String(c.sport || '')) ? `<label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px" title="${t('leader_ends_hint')}">
+            <input name="leaderends" type="checkbox" ${c.leader_ends_race ? 'checked' : ''} style="width:auto">${t('leader_ends_label')}</label>` : ''}
           <button class="btn small secondary">${t('save_settings')}</button>
         </form>
       </div>
@@ -2234,7 +2234,8 @@ async function renderManage(box, c) {
       await api(`/contests/${c.id}/timing-settings`, { method: 'PATCH', body: {
         suppress_secs: Number(e.target.suppress.value), min_lap_gap_secs: Number(e.target.lapgap.value),
         record_laps: e.target.recordlaps.checked,
-        leader_ends_race: e.target.leaderends.checked,
+        // The leader toggle only renders for XCO races; omit it otherwise.
+        ...(e.target.leaderends ? { leader_ends_race: e.target.leaderends.checked } : {}),
       }});
       toast('✓');
     } catch (err) { toast(err.message, true); }

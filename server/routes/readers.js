@@ -215,6 +215,7 @@ router.get('/ingest/startlist', (req, res) => {
   try { lapTargets = JSON.parse(contest.lap_targets || '{}'); } catch { lapTargets = {}; }
   res.json({
     contest: { id: contest.id, title: contest.title },
+    sport: contest.sport || '',
     suppress_secs: contest.suppress_secs,
     min_lap_gap_secs: contest.min_lap_gap_secs,
     record_laps: contest.record_laps,

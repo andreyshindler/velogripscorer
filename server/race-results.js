@@ -78,7 +78,10 @@ function computeRaceResults(contest, { category } = {}) {
     const r = Number(contest.race_laps);
     return Number.isFinite(r) && r > 0 ? r : null;
   };
-  const leaderRule = contest.leader_ends_race === 1 && contest.record_laps === 1;
+  // The leader-ends-race rule is MTB-XCO only (mass-start, fixed laps) — never
+  // running or XCM — so it also requires the race's sport to be an XCO type.
+  const isXco = /xco/i.test(String(contest.sport || ''));
+  const leaderRule = contest.leader_ends_race === 1 && contest.record_laps === 1 && isXco;
 
   // Racers can carry two chips (Chip ID + Chip ID2): assignments sharing a
   // non-empty bib are merged, and a read from either chip counts.
