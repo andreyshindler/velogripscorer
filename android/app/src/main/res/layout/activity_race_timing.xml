@@ -113,19 +113,9 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Wave races only: each wave's own clock, the sequential gun button and a
-         wave filter for the grid. All three stay gone for a mass start. -->
-    <TextView
-        android:id="@+id/waveClocks"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:paddingHorizontal="12dp"
-        android:paddingBottom="4dp"
-        android:textColor="@color/text_muted"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
+    <!-- Wave races only: the sequential gun button, and a chip per wave that
+         carries that wave's own clock and filters the grid to it. Both stay
+         gone for a mass start. -->
     <LinearLayout
         android:id="@+id/startWaveButton"
         android:layout_width="match_parent"

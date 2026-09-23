@@ -48,9 +48,11 @@ public class RaceTimingActivity extends BaseActivity {
     private boolean fastTap = false; // hide results, grid fills the screen
     private boolean showNames = false; // show racer name/category on the tiles
     // ---- wave race state (all inert for a mass start) ----
-    private TextView waveClocks, startWaveLabel;
+    private TextView startWaveLabel;
     private View startWaveButton, waveFilterScroll;
     private LinearLayout waveFilterRow;
+    // wave name -> the clock TextView inside its chip, repainted every tick
+    private final java.util.Map<String, TextView> waveChipClocks = new java.util.LinkedHashMap<>();
     private boolean multiWave;                 // wave-start race with named waves
     private String waveFilter;                 // null = show every wave
     private long lastGunAtMs;                  // guards the START bar against a double tap
@@ -116,7 +118,6 @@ public class RaceTimingActivity extends BaseActivity {
         resultsBox = findViewById(R.id.resultsBox);
         hint = findViewById(R.id.timingHint);
         syncStatus = findViewById(R.id.syncStatus);
-        waveClocks = findViewById(R.id.waveClocks);
         startWaveLabel = findViewById(R.id.startWaveLabel);
         startWaveButton = findViewById(R.id.startWaveButton);
         startWaveButton.setBackground(roundedTile(0xFF4F9E27));
@@ -228,12 +229,33 @@ public class RaceTimingActivity extends BaseActivity {
         return earliest;
     }
 
+    /** The gun the BIG clock counts from. With a wave selected it is that
+     *  wave's own gun, so the headline number always matches the racers on
+     *  screen; otherwise it is the first wave to start. */
+    private Long displayGunTime() {
+        if (multiWave && waveFilter != null) return gunByWave.get(waveFilter);
+        return gunTime();
+    }
+
+    /** The gun a given racer is timed from — their own wave's. Used when an
+     *  entered elapsed has to be turned back into a wall-clock time. */
+    private Long gunForRacer(RaceStore.Racer r) {
+        if (!multiWave) return gunTime();
+        Long g = gunByWave.get(r.wave == null ? "" : r.wave);
+        return g != null ? g : gunTime();
+    }
+
     private void tickClock() {
-        Long gun = gunTime();
+        Long gun = displayGunTime();
         long elapsed = gun == null ? 0 : System.currentTimeMillis() - gun;
         clockText.setText(RaceEngine.formatElapsed(Math.max(0, elapsed), 1));
         if (multiWave) {
-            waveClocks.setText(waveClockLine());
+            long now = System.currentTimeMillis();
+            for (java.util.Map.Entry<String, TextView> e : waveChipClocks.entrySet()) {
+                Long g = gunByWave.get(e.getKey());
+                e.getValue().setText(g == null ? getString(R.string.not_started_wave)
+                        : RaceEngine.formatElapsed(Math.max(0, now - g), 1));
+            }
             // Dim the bar while it's locked out, so the operator can see it is
             // deliberately not armed rather than unresponsive.
             startWaveButton.setAlpha(
@@ -242,22 +264,6 @@ public class RaceTimingActivity extends BaseActivity {
     }
 
     // ---- wave races: own clock per wave, sequential gun, per-wave grid ----
-
-    /** Each wave's OWN elapsed, e.g. "wave1 12:04.3 · wave2 2:04.3". The big
-     *  clock only ever shows the first wave, so without this a wave-2 operator
-     *  would read the wrong time off the screen. */
-    private String waveClockLine() {
-        long now = System.currentTimeMillis();
-        StringBuilder sb = new StringBuilder();
-        for (RaceStore.Wave w : store.waves()) {
-            if (w.name.isEmpty()) continue;
-            if (sb.length() > 0) sb.append("   ·   ");
-            sb.append(w.name).append(' ').append(w.startedAtMs == null
-                    ? getString(R.string.not_started_wave)
-                    : RaceEngine.formatElapsed(Math.max(0, now - w.startedAtMs), 1));
-        }
-        return sb.toString();
-    }
 
     /** The next wave still waiting for its gun, in start-list order. */
     private RaceStore.Wave nextUnstartedWave() {
@@ -313,13 +319,11 @@ public class RaceTimingActivity extends BaseActivity {
         multiWave = named > 0 && RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
         if (!multiWave) {
             waveFilter = null;
-            waveClocks.setVisibility(View.GONE);
+            waveChipClocks.clear();
             startWaveButton.setVisibility(View.GONE);
             waveFilterScroll.setVisibility(View.GONE);
             return;
         }
-        waveClocks.setVisibility(View.VISIBLE);
-        waveClocks.setText(waveClockLine());
 
         RaceStore.Wave next = nextUnstartedWave();
         if (next == null) {
@@ -331,27 +335,49 @@ public class RaceTimingActivity extends BaseActivity {
 
         waveFilterScroll.setVisibility(View.VISIBLE);
         waveFilterRow.removeAllViews();
+        waveChipClocks.clear();
         waveFilterRow.addView(filterChip(getString(R.string.wave_filter_all), null));
         for (RaceStore.Wave w : store.waves()) {
             if (!w.name.isEmpty()) waveFilterRow.addView(filterChip(w.name, w.name));
         }
+        tickClock(); // paint the new chips' clocks now, not on the next tick
     }
 
+    /** A wave chip: its name, its OWN running clock, and tapping it points both
+     *  the grid and the big clock at that wave. The "All waves" chip carries no
+     *  clock — with several waves running there is no single race time. */
     private View filterChip(String label, final String value) {
-        TextView c = new TextView(this);
-        c.setText(label);
+        LinearLayout chip = new LinearLayout(this);
+        chip.setOrientation(LinearLayout.HORIZONTAL);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setPadding(dp(14), dp(6), dp(14), dp(6));
         boolean on = value == null ? waveFilter == null : value.equals(waveFilter);
-        c.setPadding(dp(15), dp(7), dp(15), dp(7));
-        c.setTextSize(13.5f);
-        c.setTypeface(null, android.graphics.Typeface.BOLD);
-        c.setTextColor(on ? 0xFFFFFFFF : getColor(R.color.text_muted));
-        c.setBackground(roundedTile(on ? (value == null ? 0xFF4F9E27 : waveColor(value)) : 0x33808080));
+        chip.setBackground(roundedTile(on ? (value == null ? 0xFF4F9E27 : waveColor(value)) : 0x33808080));
+        final int fg = on ? 0xFFFFFFFF : getColor(R.color.text_muted);
+
+        TextView name = new TextView(this);
+        name.setText(label);
+        name.setTextSize(13.5f);
+        name.setTypeface(null, android.graphics.Typeface.BOLD);
+        name.setTextColor(fg);
+        chip.addView(name);
+
+        if (value != null) {
+            TextView clock = new TextView(this);
+            clock.setTextSize(18);
+            clock.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+            clock.setTextColor(fg);
+            clock.setPadding(dp(9), 0, 0, 0);
+            chip.addView(clock);
+            waveChipClocks.put(value, clock);
+        }
+
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.setMarginEnd(dp(7));
-        c.setLayoutParams(lp);
-        c.setOnClickListener(v -> { waveFilter = value; page = 0; scheduleRender(); });
-        return c;
+        chip.setLayoutParams(lp);
+        chip.setOnClickListener(v -> { waveFilter = value; page = 0; scheduleRender(); });
+        return chip;
     }
 
     // ---- tap flow: pre-enter a bib, or bank a time for the next bib ----
@@ -499,9 +525,12 @@ public class RaceTimingActivity extends BaseActivity {
         boolean waitingBib = oldestRacerPending() != null;
         int banked = 0;
         for (RaceStore.Pending p : pendingEntries) if (p.hasTime() && !p.hasRacer()) banked++;
-        clockSub.setText(waitingBib ? getString(R.string.tap_timer_for_bib)
+        String sub = waitingBib ? getString(R.string.tap_timer_for_bib)
                 : banked > 0 ? getString(R.string.times_waiting, banked)
-                : getString(R.string.tap_to_record));
+                : getString(R.string.tap_to_record);
+        // Name the wave the big clock is counting, so the headline number can
+        // never be mistaken for another wave's.
+        clockSub.setText(multiWave && waveFilter != null ? waveFilter + " · " + sub : sub);
 
         updateHint();
 
@@ -997,7 +1026,10 @@ public class RaceTimingActivity extends BaseActivity {
                 .setPositiveButton(R.string.enter, (dlg, w) -> {
                     long ms = ((hh.getValue() * 3600L + mm.getValue() * 60L + ss.getValue()) * 1000L)
                             + tt.getValue() * 100L;
-                    Long gun = gunTime();
+                    // An entered elapsed is measured from THIS racer's own wave
+                    // gun; using the first wave's would misplace every racer in
+                    // a later wave by the stagger between them.
+                    Long gun = gunForRacer(r);
                     if (gun == null) { Toast.makeText(this, R.string.not_started_wave, Toast.LENGTH_LONG).show(); return; }
                     setRacerFinish(r.bib, gun + ms);
                     render();
