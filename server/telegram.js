@@ -15,6 +15,7 @@
 // is set, so tests and default deployments never spin it up.
 
 const { db, auditLog } = require('./db');
+const { logActivity } = require('./activity-log');
 const { signToken } = require('./auth');
 const { getContest, isOrganizer } = require('./routes/contests');
 const { computeRaceResults } = require('./race-results');
@@ -1354,6 +1355,9 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     // admin to approve). This also keeps a misconfigured bot silent.
     if (allowedIds().size === 0) return;
     const chatId = chat.id;
+    // Activity log: what the user sent (a command/text or a button tap).
+    logActivity('bot', from.id, cq ? `tap ${cq.data}` : (msg && msg.text ? msg.text : '(non-text)'),
+      role === 'runner' || !isAllowed(from.id) ? 'runner' : 'operator');
     try {
       // The runner bot serves ONLY the runner flow, to everyone — even an
       // allowlisted operator messaging it is treated as a runner. It never

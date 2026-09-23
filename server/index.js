@@ -5,6 +5,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db, DATA_DIR } = require('./db');
 const { optionalAuth } = require('./auth');
+const { logActivity } = require('./activity-log');
 const users = require('./routes/users');
 const contests = require('./routes/contests');
 const entries = require('./routes/entries');
@@ -25,6 +26,22 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(optionalAuth);
+
+// Activity log: record every state-changing web action (not passive reads, not
+// the high-volume device ingest feed) to the daily log file.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.path.startsWith('/api/') && !req.path.startsWith('/api/ingest/')) {
+    // Capture now: Express strips the mount prefix from req.path during routing,
+    // so reading it inside the finish handler would drop the "/api" part.
+    const method = req.method;
+    const apiPath = req.path;
+    res.on('finish', () => {
+      const actor = (req.user && (req.user.email || req.user.id)) || 'anon';
+      logActivity('web', actor, `${method} ${apiPath}`, res.statusCode);
+    });
+  }
+  next();
+});
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 

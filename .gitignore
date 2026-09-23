@@ -1,5 +1,6 @@
 node_modules/
 data/
+logs/
 actions-runner/
 *.db
 *.db-shm
