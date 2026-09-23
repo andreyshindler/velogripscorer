@@ -231,6 +231,11 @@
     <string name="category_none">— ללא —</string>
     <string name="cancel_no_bib_body">למחוק את זמן ״ללא מספר״ שלא שויך?</string>
     <string name="race_control_subtitle">בחר פעולה עבור המרוץ</string>
+    <string name="rc_startwave_title">זנק מקצה</string>
+    <string name="rc_startwave_sub">זנק מקצה — לכל מקצה זמן זינוק משלו</string>
+    <string name="rc_startwave_sheet_sub">הקש ״זנק״ בזינוק של כל מקצה. כל משתתף נמדד לפי המקצה שלו.</string>
+    <string name="wave_started_at">זונק %1$s</string>
+    <string name="wave_gun_recorded">%1$s זונק — זמן הזינוק נרשם.</string>
     <string name="rc_restart_title">התחל מחדש</string>
     <string name="rc_restart_sub">זינוק שגוי — איפוס השעון ומחיקת הזמנים</string>
     <string name="rc_finish_title">סיים מרוץ</string>
@@ -309,7 +314,7 @@
     <string name="mode_normal">רגיל</string>
     <string name="mode_only_normal">נתמך רק מצב תזמון רגיל.</string>
     <string name="race_started_mass">המרוץ החל — זמן הזינוק נרשם לכל הרוכבים.</string>
-    <string name="race_started_wave">מרוץ מקצים — הזנק כל מקצה ממסך המרוץ.</string>
+    <string name="race_started_wave">מרוץ מקצים — הזנק כל מקצה דרך ״בקרת מרוץ״ ← ״זנק מקצה״.</string>
     <string name="start_race_hint">הקש על הכפתור כדי להתחיל את המרוץ | %1$d רוכבים</string>
 
     <string name="category_setup_title">הגדרת קטגוריות</string>

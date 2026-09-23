@@ -877,6 +877,15 @@ public class RaceTimingActivity extends BaseActivity {
                 .setNegativeButton(R.string.close, null)
                 .create();
 
+        // Wave races arm the gun per wave: offer it here, where the operator
+        // already is at the gun. Hidden for a mass start (one gun, fired on the
+        // Race start screen) and when the race has no named waves.
+        if (hasNamedWaves()) {
+            content.addView(controlRow(R.drawable.ic_ctrl_gun, 0xFF4F9E27, 0xFF1C3320,
+                    R.string.rc_startwave_title, R.string.rc_startwave_sub,
+                    () -> { dlg.dismiss(); startWaveSheet(); }));
+            content.addView(controlDivider());
+        }
         content.addView(controlRow(R.drawable.ic_ctrl_restart, 0xFFE39A2B, 0xFF3A2F18,
                 R.string.rc_restart_title, R.string.rc_restart_sub,
                 () -> { dlg.dismiss(); restartRace(); }));
@@ -898,6 +907,94 @@ public class RaceTimingActivity extends BaseActivity {
                 () -> { dlg.dismiss(); closeRollCall(); }));
 
         dlg.show();
+    }
+
+    /** True when the race has at least one real (named) wave — the "" entry is
+     *  the mass-start marker, not a wave the operator can gun separately. */
+    private boolean hasNamedWaves() {
+        for (RaceStore.Wave w : store.waves()) if (!w.name.isEmpty()) return true;
+        return false;
+    }
+
+    /** Start (or restart) each wave's gun without leaving the timing console.
+     *  Mirrors the race console's per-wave rows: tap wave 1 at its gun, then
+     *  wave 2 at its own gun a few minutes later — each wave keeps its own
+     *  start, so every racer is timed from the gun they actually started on. */
+    private void startWaveSheet() {
+        LinearLayout content = controlSheetHeader(getString(R.string.rc_startwave_title),
+                getString(R.string.rc_startwave_sheet_sub));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
+                .setView(scroll)
+                .setNegativeButton(R.string.close, null)
+                .create();
+
+        boolean first = true;
+        for (final RaceStore.Wave wave : store.waves()) {
+            if (wave.name.isEmpty()) continue; // mass-start marker
+            if (!first) content.addView(controlDivider());
+            first = false;
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(22), dp(13), dp(22), dp(13));
+
+            LinearLayout text = new LinearLayout(this);
+            text.setOrientation(LinearLayout.VERTICAL);
+            text.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            TextView name = new TextView(this);
+            name.setText(wave.name);
+            name.setTextSize(16.5f);
+            name.setTextColor(getColor(R.color.text_primary));
+            name.setTypeface(null, android.graphics.Typeface.BOLD);
+            TextView sub = new TextView(this);
+            sub.setTextSize(12.5f);
+            sub.setTextColor(getColor(R.color.text_muted));
+            sub.setPadding(0, dp(2), 0, 0);
+            sub.setText(wave.startedAtMs == null
+                    ? getString(R.string.not_started_wave)
+                    : getString(R.string.wave_started_at, timeOfDay(wave.startedAtMs)));
+            text.addView(name);
+            text.addView(sub);
+
+            android.widget.Button start = new android.widget.Button(this);
+            start.setText(wave.startedAtMs == null
+                    ? getString(R.string.start_gun) : getString(R.string.restart_gun));
+            start.setOnClickListener(v -> {
+                if (wave.startedAtMs != null) {
+                    new android.app.AlertDialog.Builder(this)
+                            .setMessage(R.string.restart_gun_confirm)
+                            .setPositiveButton(android.R.string.ok, (d, w) -> {
+                                fireGun(wave.name, true);
+                                dlg.dismiss();
+                            })
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show();
+                } else {
+                    fireGun(wave.name, false);
+                    dlg.dismiss();
+                }
+            });
+
+            row.addView(text);
+            row.addView(start);
+            content.addView(row);
+        }
+        dlg.show();
+    }
+
+    /** Record a wave's gun on the phone. The bridge service syncs it up to the
+     *  server on its next pass; the race clock picks it up on the next tick. */
+    private void fireGun(String waveName, boolean force) {
+        store.startWave(waveName, System.currentTimeMillis(), force);
+        Toast.makeText(this, getString(R.string.wave_gun_recorded, waveName), Toast.LENGTH_LONG).show();
+        scheduleRender();
+    }
+
+    private String timeOfDay(long ms) {
+        return new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date(ms));
     }
 
     /** One styled Race-control row: a rounded, tinted icon badge, a title and a

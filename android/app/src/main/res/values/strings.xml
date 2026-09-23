@@ -231,6 +231,11 @@
     <string name="category_none">— None —</string>
     <string name="cancel_no_bib_body">Delete this unassigned No Bib time?</string>
     <string name="race_control_subtitle">Choose an action for this race</string>
+    <string name="rc_startwave_title">Start a wave</string>
+    <string name="rc_startwave_sub">Fire the gun for a wave — each wave keeps its own start time</string>
+    <string name="rc_startwave_sheet_sub">Tap Start at each wave\'s gun. Racers are timed from their own wave.</string>
+    <string name="wave_started_at">Started %1$s</string>
+    <string name="wave_gun_recorded">%1$s started — gun time recorded.</string>
     <string name="rc_restart_title">Restart race</string>
     <string name="rc_restart_sub">False start — reset the clock and clear times</string>
     <string name="rc_finish_title">Finish race</string>
@@ -309,7 +314,7 @@
     <string name="mode_normal">Normal</string>
     <string name="mode_only_normal">Only Normal timing mode is supported.</string>
     <string name="race_started_mass">Race started — gun time recorded for all racers.</string>
-    <string name="race_started_wave">Wave race — start each wave from the race console.</string>
+    <string name="race_started_wave">Wave race — start each wave from Race control → Start a wave.</string>
     <string name="start_race_hint">Tap button to start race | %1$d racers</string>
 
     <string name="category_setup_title">Category Setup</string>
