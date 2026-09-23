@@ -235,6 +235,9 @@
     <string name="rc_startwave_sub">Fire the gun for a wave — each wave keeps its own start time</string>
     <string name="rc_startwave_sheet_sub">Tap Start at each wave\'s gun. Racers are timed from their own wave.</string>
     <string name="wave_started_at">Started %1$s</string>
+    <string name="start_wave_now">▶ START %1$s</string>
+    <string name="wave_filter_all">All waves</string>
+    <string name="wave_not_started_yet">%1$s has not started yet — fire its gun first.</string>
     <string name="wave_gun_recorded">%1$s started — gun time recorded.</string>
     <string name="rc_restart_title">Restart race</string>
     <string name="rc_restart_sub">False start — reset the clock and clear times</string>

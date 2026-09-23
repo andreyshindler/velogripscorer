@@ -235,6 +235,9 @@
     <string name="rc_startwave_sub">זנק מקצה — לכל מקצה זמן זינוק משלו</string>
     <string name="rc_startwave_sheet_sub">הקש ״זנק״ בזינוק של כל מקצה. כל משתתף נמדד לפי המקצה שלו.</string>
     <string name="wave_started_at">זונק %1$s</string>
+    <string name="start_wave_now">▶ זנק %1$s</string>
+    <string name="wave_filter_all">כל המקצים</string>
+    <string name="wave_not_started_yet">%1$s עוד לא זונק — יש לזנק אותו תחילה.</string>
     <string name="wave_gun_recorded">%1$s זונק — זמן הזינוק נרשם.</string>
     <string name="rc_restart_title">התחל מחדש</string>
     <string name="rc_restart_sub">זינוק שגוי — איפוס השעון ומחיקת הזמנים</string>

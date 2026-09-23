@@ -47,6 +47,14 @@ public class RaceTimingActivity extends BaseActivity {
     private String lastPagerSig = "";
     private boolean fastTap = false; // hide results, grid fills the screen
     private boolean showNames = false; // show racer name/category on the tiles
+    // ---- wave race state (all inert for a mass start) ----
+    private TextView waveClocks, startWaveLabel;
+    private View startWaveButton, waveFilterScroll;
+    private LinearLayout waveFilterRow;
+    private boolean multiWave;                 // wave-start race with named waves
+    private String waveFilter;                 // null = show every wave
+    // wave name -> gun time (null until that wave starts); "" is the mass marker
+    private final java.util.Map<String, Long> gunByWave = new java.util.HashMap<>();
     private long lastSplitMs = -1;
     private String lastTapText;      // "13th 2:19:16.9 +…: name" for the hint strip
     private String scrollToBib;      // after a tap-finish, scroll the results to this racer
@@ -106,6 +114,13 @@ public class RaceTimingActivity extends BaseActivity {
         resultsBox = findViewById(R.id.resultsBox);
         hint = findViewById(R.id.timingHint);
         syncStatus = findViewById(R.id.syncStatus);
+        waveClocks = findViewById(R.id.waveClocks);
+        startWaveLabel = findViewById(R.id.startWaveLabel);
+        startWaveButton = findViewById(R.id.startWaveButton);
+        startWaveButton.setBackground(roundedTile(0xFF4F9E27));
+        startWaveButton.setOnClickListener(v -> startNextWave());
+        waveFilterScroll = findViewById(R.id.waveFilterScroll);
+        waveFilterRow = findViewById(R.id.waveFilterRow);
 
         findViewById(R.id.homeButton).setOnClickListener(v -> {
             Intent i = new Intent(this, MainActivity.class);
@@ -215,6 +230,115 @@ public class RaceTimingActivity extends BaseActivity {
         Long gun = gunTime();
         long elapsed = gun == null ? 0 : System.currentTimeMillis() - gun;
         clockText.setText(RaceEngine.formatElapsed(Math.max(0, elapsed), 1));
+        if (multiWave) waveClocks.setText(waveClockLine());
+    }
+
+    // ---- wave races: own clock per wave, sequential gun, per-wave grid ----
+
+    /** Each wave's OWN elapsed, e.g. "wave1 12:04.3 · wave2 2:04.3". The big
+     *  clock only ever shows the first wave, so without this a wave-2 operator
+     *  would read the wrong time off the screen. */
+    private String waveClockLine() {
+        long now = System.currentTimeMillis();
+        StringBuilder sb = new StringBuilder();
+        for (RaceStore.Wave w : store.waves()) {
+            if (w.name.isEmpty()) continue;
+            if (sb.length() > 0) sb.append("   ·   ");
+            sb.append(w.name).append(' ').append(w.startedAtMs == null
+                    ? getString(R.string.not_started_wave)
+                    : RaceEngine.formatElapsed(Math.max(0, now - w.startedAtMs), 1));
+        }
+        return sb.toString();
+    }
+
+    /** The next wave still waiting for its gun, in start-list order. */
+    private RaceStore.Wave nextUnstartedWave() {
+        for (RaceStore.Wave w : store.waves()) {
+            if (!w.name.isEmpty() && w.startedAtMs == null) return w;
+        }
+        return null;
+    }
+
+    /** The big green bar: fires the next wave's gun. Tap once for wave 1, then
+     *  again ten minutes later for wave 2 — no menu, no confirmation, because
+     *  at the gun every second counts. Restarting a gun (the destructive one)
+     *  stays behind a confirmation in Race control -> Start a wave. */
+    private void startNextWave() {
+        RaceStore.Wave next = nextUnstartedWave();
+        if (next == null) return;
+        fireGun(next.name, false);
+    }
+
+    /** A stable colour per wave, so the tile stripes and filter chips agree. */
+    private int waveColor(String name) {
+        final int[] palette = { 0xFF3F6FD1, 0xFFE39A2B, 0xFF159C93, 0xFFC0555A, 0xFF8E5BD0 };
+        int i = 0;
+        for (RaceStore.Wave w : store.waves()) {
+            if (w.name.isEmpty()) continue;
+            if (w.name.equals(name)) return palette[i % palette.length];
+            i++;
+        }
+        return palette[0];
+    }
+
+    /** True when this racer's wave has had its gun — a racer can't finish
+     *  before they have started. */
+    private boolean waveStartedFor(RaceStore.Racer r) {
+        if (!multiWave) return true;
+        return gunByWave.get(r.wave == null ? "" : r.wave) != null;
+    }
+
+    /** Refresh the wave strip: per-wave clocks, the gun button and the filter.
+     *  Everything stays hidden unless this is a wave race with named waves. */
+    private void updateWaveUi() {
+        gunByWave.clear();
+        int named = 0;
+        for (RaceStore.Wave w : store.waves()) {
+            gunByWave.put(w.name, w.startedAtMs);
+            if (!w.name.isEmpty()) named++;
+        }
+        multiWave = named > 0 && RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
+        if (!multiWave) {
+            waveFilter = null;
+            waveClocks.setVisibility(View.GONE);
+            startWaveButton.setVisibility(View.GONE);
+            waveFilterScroll.setVisibility(View.GONE);
+            return;
+        }
+        waveClocks.setVisibility(View.VISIBLE);
+        waveClocks.setText(waveClockLine());
+
+        RaceStore.Wave next = nextUnstartedWave();
+        if (next == null) {
+            startWaveButton.setVisibility(View.GONE); // all guns fired: give the grid its space back
+        } else {
+            startWaveButton.setVisibility(View.VISIBLE);
+            startWaveLabel.setText(getString(R.string.start_wave_now, next.name));
+        }
+
+        waveFilterScroll.setVisibility(View.VISIBLE);
+        waveFilterRow.removeAllViews();
+        waveFilterRow.addView(filterChip(getString(R.string.wave_filter_all), null));
+        for (RaceStore.Wave w : store.waves()) {
+            if (!w.name.isEmpty()) waveFilterRow.addView(filterChip(w.name, w.name));
+        }
+    }
+
+    private View filterChip(String label, final String value) {
+        TextView c = new TextView(this);
+        c.setText(label);
+        boolean on = value == null ? waveFilter == null : value.equals(waveFilter);
+        c.setPadding(dp(15), dp(7), dp(15), dp(7));
+        c.setTextSize(13.5f);
+        c.setTypeface(null, android.graphics.Typeface.BOLD);
+        c.setTextColor(on ? 0xFFFFFFFF : getColor(R.color.text_muted));
+        c.setBackground(roundedTile(on ? (value == null ? 0xFF4F9E27 : waveColor(value)) : 0x33808080));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMarginEnd(dp(7));
+        c.setLayoutParams(lp);
+        c.setOnClickListener(v -> { waveFilter = value; page = 0; scheduleRender(); });
+        return c;
     }
 
     // ---- tap flow: pre-enter a bib, or bank a time for the next bib ----
@@ -300,6 +424,7 @@ public class RaceTimingActivity extends BaseActivity {
 
     private void render() {
         updateSyncStatus();
+        updateWaveUi();
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
@@ -339,6 +464,13 @@ public class RaceTimingActivity extends BaseActivity {
             if (!r.status.isEmpty()) doneBibs.add(bibKey(r.bib, r.epc));
         }
         java.util.Collections.sort(allRacers, (a, b) -> Long.compare(bibNum(a.bib), bibNum(b.bib)));
+        // Wave filter: show only the wave being worked. Applied after the
+        // done/status scan above so the counters still cover the whole field.
+        if (multiWave && waveFilter != null) {
+            List<RaceStore.Racer> only = new ArrayList<>();
+            for (RaceStore.Racer r : allRacers) if (waveFilter.equals(r.wave)) only.add(r);
+            allRacers = only;
+        }
 
         List<Object> tiles = new ArrayList<>();
         tiles.add(NO_BIB);
@@ -538,11 +670,29 @@ public class RaceTimingActivity extends BaseActivity {
                 Integer done = lapsByBib.get(r.bib);
                 int currentLap = Math.min(target, (done == null ? 0 : done) + 1);
                 boolean multiLap = target > 1;
-                int bg = waiting ? 0xFFEDE023 : (multiLap ? lapColor(currentLap) : 0xFF8DC63F);
+                // A racer whose wave hasn't been gunned yet can't finish: grey
+                // the tile out and say so, rather than banking a time that sits
+                // before their start.
+                final boolean started = waveStartedFor(r);
+                int bg = !started ? 0xFF9AA0A6
+                        : waiting ? 0xFFEDE023 : (multiLap ? lapColor(currentLap) : 0xFF8DC63F);
                 tile.setBackground(roundedTile(bg));
-                String status = waiting ? getString(R.string.time_pending)
+                String status = !started ? getString(R.string.not_started_wave)
+                        : waiting ? getString(R.string.time_pending)
                         : multiLap ? getString(R.string.on_lap, currentLap, target)
                         : getString(R.string.tap_to_finish);
+                boolean tagWave = multiWave && r.wave != null && !r.wave.isEmpty();
+                if (tagWave) {
+                    // A thin colour bar so the wave reads at a glance; tile
+                    // colour itself still means state, not wave.
+                    View stripe = new View(this);
+                    stripe.setBackground(roundedTile(waveColor(r.wave)));
+                    LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(dp(30), dp(4));
+                    slp.bottomMargin = dp(3);
+                    stripe.setLayoutParams(slp);
+                    tile.addView(stripe);
+                    status = r.wave + " · " + status;
+                }
                 if (showNames) {
                     tile.addView(line(r.bib + " - " + r.name, 17, true, 0xFF1A1A1A));
                     String sub = r.distance
@@ -553,7 +703,14 @@ public class RaceTimingActivity extends BaseActivity {
                     tile.addView(line(r.bib, 20, true, 0xFF1A1A1A));
                     tile.addView(line(status, 13, false, 0xFF1A3A0A));
                 }
-                tile.setOnClickListener(v -> onRacerTap(r));
+                tile.setOnClickListener(v -> {
+                    if (!started) {
+                        Toast.makeText(this, getString(R.string.wave_not_started_yet, r.wave),
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    onRacerTap(r);
+                });
             }
 
             GridLayout.LayoutParams lp = new GridLayout.LayoutParams();

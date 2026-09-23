@@ -113,6 +113,53 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Wave races only: each wave's own clock, the sequential gun button and a
+         wave filter for the grid. All three stay gone for a mass start. -->
+    <TextView
+        android:id="@+id/waveClocks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="4dp"
+        android:textColor="@color/text_muted"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/startWaveButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginBottom="6dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingVertical="13dp"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/startWaveLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/waveFilterScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="4dp"
+        android:scrollbars="none"
+        android:visibility="gone">
+        <LinearLayout
+            android:id="@+id/waveFilterRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
     <!-- Bib grid: a snapping horizontal pager (drag follows the finger) -->
     <com.velogrip.rfid.SnapScrollView
         android:id="@+id/bibPager"
