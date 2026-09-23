@@ -32,14 +32,14 @@ async function waitFor(re, ms = 1500) {
 
 test('logActivity writes a today-dated line with source + actor', async () => {
   logActivity('web', 'alice@test.co', 'TEST action', 'detail');
-  assert.ok(await waitFor(/\[web\] actor=alice@test\.co TEST action — detail/));
+  assert.ok(await waitFor(/ \| web \| user=alice@test\.co \| TEST action \| detail/));
   assert.equal(path.basename(logFile), `${today}.log`, 'the file is named for today');
   assert.ok(readLog().split('\n').every((l) => !l || l.startsWith(today)), 'every line is dated today');
 });
 
 test('web: a mutating API request is logged as [web]', async () => {
   await request(app).post('/api/auth/register').send({ email: 'log-web@test.co', password: 'password123', name: 'W' });
-  assert.ok(await waitFor(/\[web\] actor=.* POST \/api\/auth\/register — 20\d/));
+  assert.ok(await waitFor(/ \| web \| user=.* \| POST \/api\/auth\/register \| 20\d/));
 });
 
 test('web: passive GET reads are not logged', async () => {
@@ -55,5 +55,5 @@ test('bot: each command is logged as [bot]', async () => {
   const api = async () => ({ status: 200, json: {} });
   const { handleUpdate } = createBotCore({ api, send });
   await handleUpdate({ update_id: 1, message: { from: { id: 42 }, chat: { id: 42 }, text: '/whoami' } });
-  assert.ok(await waitFor(/\[bot\] actor=42 \/whoami — operator/));
+  assert.ok(await waitFor(/ \| bot \| user=42 \| \/whoami \| operator/));
 });

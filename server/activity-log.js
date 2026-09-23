@@ -18,14 +18,16 @@ function fileForToday(now = new Date()) {
 }
 
 // source: 'web' | 'bot'. actor: user id/email or Telegram id. action: what was
-// done. details: optional extra context. One line, tab-free, newline-terminated.
+// done. details: optional extra context. One pipe-delimited line so every entry
+// is clearly keyed by timestamp and user:
+//   <ISO timestamp> | <source> | user=<actor> | <action> | <details>
 function logActivity(source, actor, action, details) {
   try {
     const now = new Date();
-    const clean = (s) => String(s == null ? '' : s).replace(/[\r\n]+/g, ' ').trim();
-    const line = `${now.toISOString()} [${source}] actor=${clean(actor) || '-'} ${clean(action)}`
-      + (details ? ` — ${clean(details)}` : '') + '\n';
-    fs.appendFile(fileForToday(now), line, () => { /* ignore write errors */ });
+    const clean = (s) => String(s == null ? '' : s).replace(/[\r\n|]+/g, ' ').trim();
+    const parts = [now.toISOString(), source, `user=${clean(actor) || '-'}`, clean(action)];
+    if (details != null && String(details) !== '') parts.push(clean(details));
+    fs.appendFile(fileForToday(now), parts.join(' | ') + '\n', () => { /* ignore write errors */ });
   } catch { /* logging must never crash the caller */ }
 }
 
