@@ -48,6 +48,12 @@ public final class Prefs {
     public int rollCallSecs() { return sp.getInt("rollCallSecs", 0); } // 0 = off by default
     public long rollCallClosedAt() { return sp.getLong("rollCallClosedAt", 0L); }
     public void setRollCallClosedAt(long ms) { sp.edit().putLong("rollCallClosedAt", ms).apply(); }
+    // When the operator last un-started every wave (race restart). The start-list
+    // sync must not pull a gun time older than this back down from the server, or
+    // a restarted race silently resurrects the previous run's guns and the wave
+    // clocks run without anyone pressing start.
+    public long gunsClearedAt() { return sp.getLong("gunsClearedAt", 0L); }
+    public void setGunsClearedAt(long ms) { sp.edit().putLong("gunsClearedAt", ms).apply(); }
     public String contestTitle() { return sp.getString("contestTitle", ""); }
 
     public String accountEmail() { return sp.getString("accountEmail", DEFAULT_EMAIL); }

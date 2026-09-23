@@ -51,8 +51,14 @@ public final class StartListSync {
             RaceStore.Wave local = store.wave(w.getString("name"));
             if (local == null || local.startedAtMs == null) {
                 String at = w.isNull("started_at") ? null : w.getString("started_at");
-                store.upsertWave(w.getString("name"),
-                        at == null ? null : parseIso(at), at != null);
+                Long gun = at == null ? null : parseIso(at);
+                // A gun from BEFORE the operator last un-started the race belongs
+                // to the previous run: adopting it would restart the wave clocks
+                // on a race nobody has gunned yet. Keep the wave un-started and
+                // let the operator fire it. (A newer gun is a real one from
+                // another device, so it still syncs down.)
+                if (gun != null && gun <= prefs.gunsClearedAt()) gun = null;
+                store.upsertWave(w.getString("name"), gun, gun != null);
             }
         }
         JSONArray racers = json.getJSONArray("racers");

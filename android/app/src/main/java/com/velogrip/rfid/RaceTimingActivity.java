@@ -53,6 +53,8 @@ public class RaceTimingActivity extends BaseActivity {
     private LinearLayout waveFilterRow;
     private boolean multiWave;                 // wave-start race with named waves
     private String waveFilter;                 // null = show every wave
+    private long lastGunAtMs;                  // guards the START bar against a double tap
+    private static final long GUN_LOCKOUT_MS = 3000;
     // wave name -> gun time (null until that wave starts); "" is the mass marker
     private final java.util.Map<String, Long> gunByWave = new java.util.HashMap<>();
     private long lastSplitMs = -1;
@@ -230,7 +232,13 @@ public class RaceTimingActivity extends BaseActivity {
         Long gun = gunTime();
         long elapsed = gun == null ? 0 : System.currentTimeMillis() - gun;
         clockText.setText(RaceEngine.formatElapsed(Math.max(0, elapsed), 1));
-        if (multiWave) waveClocks.setText(waveClockLine());
+        if (multiWave) {
+            waveClocks.setText(waveClockLine());
+            // Dim the bar while it's locked out, so the operator can see it is
+            // deliberately not armed rather than unresponsive.
+            startWaveButton.setAlpha(
+                    System.currentTimeMillis() - lastGunAtMs < GUN_LOCKOUT_MS ? 0.45f : 1f);
+        }
     }
 
     // ---- wave races: own clock per wave, sequential gun, per-wave grid ----
@@ -264,8 +272,13 @@ public class RaceTimingActivity extends BaseActivity {
      *  at the gun every second counts. Restarting a gun (the destructive one)
      *  stays behind a confirmation in Race control -> Start a wave. */
     private void startNextWave() {
+        // The bar relabels to the NEXT wave the instant a gun fires, so a bounced
+        // finger would otherwise gun wave 2 the moment wave 1 starts. Ignore a
+        // second press for a few seconds; a real stagger is minutes apart.
+        if (System.currentTimeMillis() - lastGunAtMs < GUN_LOCKOUT_MS) return;
         RaceStore.Wave next = nextUnstartedWave();
         if (next == null) return;
+        lastGunAtMs = System.currentTimeMillis();
         fireGun(next.name, false);
     }
 
@@ -1294,6 +1307,9 @@ public class RaceTimingActivity extends BaseActivity {
         Runnable restart = () -> {
             store.clearPending();
             store.clearGunTimes();                 // un-start every wave
+            // Remember WHEN we un-started, so the next start-list sync doesn't
+            // pull the old gun times back down and re-run the wave clocks.
+            prefs.setGunsClearedAt(System.currentTimeMillis());
             prefs.setRaceFinalized(false);
             prefs.setRollCallClosedAt(0);          // fresh race: roll call re-opens
             // keep the reader (and its WiFi) connected through the restart;
