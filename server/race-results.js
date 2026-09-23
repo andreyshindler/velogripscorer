@@ -131,7 +131,11 @@ function computeRaceResults(contest, { category } = {}) {
     const valid = a.epcs
       .flatMap((epc) => readsByEpc.get(epc) || [])
       .sort((x, y) => x.at - y.at)
-      .filter((r) => r.manual || r.at >= startMs + suppressMs);
+      // Nothing before the gun can be a crossing — a racer cannot cross the
+      // line before they start. (Stale taps from a previous run, or a mis-tap
+      // before the start, used to survive here and produce a NEGATIVE split.)
+      // Manual taps still bypass the start-suppression window, but not the gun.
+      .filter((r) => r.at >= startMs && (r.manual || r.at >= startMs + suppressMs));
     if (!valid.length) return { ...base, status: raceFinished ? 'DNF' : 'on_course', laps: 0 };
 
     const crossings = [];

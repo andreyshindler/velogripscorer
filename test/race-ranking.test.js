@@ -87,6 +87,29 @@ test('running race: a racer with fewer laps still gets a TIME gap, never "-1 lap
   }
 });
 
+test('a manual tap from before the gun is not a crossing', () => {
+  const contest = seedRace('Running');
+  // An operator tap 5 minutes BEFORE this wave's gun — a mis-tap, or a leftover
+  // from a previous run of the same race. It used to survive (manual taps skip
+  // the suppression window), landing as a negative split that read "0:00.0" and
+  // inflated the following lap past the finish time.
+  db.prepare(
+    'INSERT INTO tag_reads (reader_id, contest_id, epc, read_at, manual) VALUES (?,?,?,?,1)'
+  ).run(
+    db.prepare('SELECT id FROM readers WHERE contest_id = ?').get(contest.id).id,
+    contest.id, 'EPC_SPR', iso(-300)
+  );
+
+  const sprinter = computeRaceResults(contest).find((r) => r.bib === '2');
+  assert.equal(sprinter.laps, 1, 'the pre-gun tap must not add a lap');
+  assert.ok(sprinter.elapsed_ms > 0, 'elapsed stays positive');
+  for (const ms of sprinter.lap_ms) {
+    assert.ok(ms >= 0, `every split is at or after the gun, got ${ms}`);
+  }
+  // The last split IS the finish — the invariant the lap-times table relies on.
+  assert.equal(sprinter.lap_ms[sprinter.lap_ms.length - 1], sprinter.elapsed_ms);
+});
+
 test('a blank sport keeps the lap-first default', () => {
   const results = computeRaceResults(seedRace(''));
   const byBib = Object.fromEntries(results.map((r) => [r.bib, r]));

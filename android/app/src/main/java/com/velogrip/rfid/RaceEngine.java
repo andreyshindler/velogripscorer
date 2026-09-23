@@ -275,6 +275,11 @@ public final class RaceEngine {
             @Override public int compare(Read a, Read b) { return Long.compare(a.at, b.at); }
         });
         for (Read rd : raw) {
+            // Nothing before the gun is a crossing: a racer cannot cross the
+            // line before they start. This catches a mis-tap before the start
+            // and taps left over from a previous run, which would otherwise
+            // land as a negative split and inflate the next lap.
+            if (rd.at < gun) continue;
             // Manual operator taps are deliberate: they skip the RFID start-
             // suppression window and the lap-gap de-dup, so each tap is a crossing.
             if (!rd.manual && rd.at < gun + suppressMs) continue;
