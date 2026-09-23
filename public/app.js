@@ -1438,6 +1438,21 @@ function fmtElapsedMs(ms) {
   return `${head}:${String(s).padStart(2, '0')}.${tenths}`;
 }
 
+// Gap to the leading row of a results table. A racer who is laps down reads
+// "-N laps"; one who is FASTER than that row — possible when the leader leads
+// on laps rather than time — gets no gap at all. fmtElapsedMs clamps negatives
+// to zero, so without this a quicker racer showed a fabricated "+0:00.0".
+function gapToLeader(r, leader, isFirst) {
+  if (isFirst) return '–';
+  if (!leader || r.elapsed_ms === leader.elapsed_ms) return '';
+  if (Number.isFinite(r.laps) && Number.isFinite(leader.laps) && r.laps < leader.laps) {
+    const down = leader.laps - r.laps;
+    return `-${down} ${down > 1 ? t('laps') : t('lap')}`;
+  }
+  if (r.elapsed_ms < leader.elapsed_ms) return '';
+  return '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
+}
+
 // Live race / progress view: scope summary (finished / on course / not
 // started) plus the live finish order. Refreshes with the results via SSE.
 function liveRaceView(results, id, dist, cat, gender, raceDone, checkpoints) {
@@ -1465,8 +1480,7 @@ function liveRaceView(results, id, dist, cat, gender, raceDone, checkpoints) {
     <div class="stat-num">${n}</div>
     <div class="muted stat-label">${label}</div></div>`;
   const finishedHtml = finished.map((r, i) => {
-    const diff = !leader || r.elapsed_ms === leader.elapsed_ms
-      ? (i === 0 ? '–' : '') : '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
+    const diff = gapToLeader(r, leader, i === 0);
     return `<tr><td><strong>${r.rank}</strong></td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
       <td class="muted" style="font-variant-numeric:tabular-nums">${diff}</td>${cpCells(r)}</tr>`;
@@ -1586,8 +1600,7 @@ function filteredResultsTable(results, id, dist, cat, gender) {
   const finishedHtml = finished.map((r, i) => {
     const place = (prevMs !== null && r.elapsed_ms === prevMs) ? prevPlace : i + 1;
     prevMs = r.elapsed_ms; prevPlace = place;
-    const diff = !leader || r.elapsed_ms === leader.elapsed_ms
-      ? (i === 0 ? '–' : '') : '+' + fmtElapsedMs(r.elapsed_ms - leader.elapsed_ms);
+    const diff = gapToLeader(r, leader, i === 0);
     return `<tr>
       <td><strong>${place}</strong></td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
       <td>${esc(r.category || '')}</td><td>${genderShort(r.gender)}</td>

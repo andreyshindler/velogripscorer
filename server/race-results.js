@@ -192,12 +192,17 @@ function computeRaceResults(contest, { category } = {}) {
 
   // Fastest time first (Webscorer default); more laps beats fewer for lap
   // races; DNS/DNF/DSQ and non-finishers sink to the bottom.
+  // Running races are ranked on elapsed time ALONE: they are scored on one
+  // crossing, so an extra "lap" there is a stray double read, and letting it
+  // outrank a genuinely faster runner corrupts the result. Lap-based sports
+  // (MTB XCO and friends) keep laps-first, where a lap really is a place.
+  const timeOnly = /run|walk/i.test(String(contest.sport || ''));
   const statusOrder = { finished: 0, on_course: 1, not_started: 2, DNF: 3, DSQ: 4, DNS: 5 };
   results.sort((x, y) => {
     const sx = statusOrder[x.status] ?? 9, sy = statusOrder[y.status] ?? 9;
     if (sx !== sy) return sx - sy;
     if (x.status !== 'finished') return 0;
-    return y.laps - x.laps || x.elapsed_ms - y.elapsed_ms;
+    return (timeOnly ? 0 : y.laps - x.laps) || x.elapsed_ms - y.elapsed_ms;
   });
   // overall rank + gap behind the leader + place within category
   const categoryPlace = new Map();
@@ -206,7 +211,9 @@ function computeRaceResults(contest, { category } = {}) {
     if (r.status !== 'finished') return;
     r.rank = i + 1;
     if (!leader) leader = r;
-    r.behind = r.rank === 1 ? '' : (r.laps < leader.laps
+    // Ranked on time alone -> the gap is always a time gap; a lap count there
+    // carries no placing, so "-1 lap" would be misleading.
+    r.behind = r.rank === 1 ? '' : (!timeOnly && r.laps < leader.laps
       ? `-${leader.laps - r.laps} lap${leader.laps - r.laps > 1 ? 's' : ''}`
       : '+' + formatElapsed(r.elapsed_ms - leader.elapsed_ms));
     const place = (categoryPlace.get(r.category) || 0) + 1;
