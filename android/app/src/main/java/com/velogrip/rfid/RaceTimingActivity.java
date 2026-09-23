@@ -237,11 +237,12 @@ public class RaceTimingActivity extends BaseActivity {
         return gunTime();
     }
 
-    /** The gun a given racer is timed from — their own wave's. Used when an
-     *  entered elapsed has to be turned back into a wall-clock time. */
-    private Long gunForRacer(RaceStore.Racer r) {
+    /** The gun a racer in this wave is timed from. Used when an entered elapsed
+     *  has to be turned back into a wall-clock time. Takes the wave name so it
+     *  serves both RaceStore.Racer and RaceEngine.Result. */
+    private Long gunForWave(String wave) {
         if (!multiWave) return gunTime();
-        Long g = gunByWave.get(r.wave == null ? "" : r.wave);
+        Long g = gunByWave.get(wave == null ? "" : wave);
         return g != null ? g : gunTime();
     }
 
@@ -1029,7 +1030,7 @@ public class RaceTimingActivity extends BaseActivity {
                     // An entered elapsed is measured from THIS racer's own wave
                     // gun; using the first wave's would misplace every racer in
                     // a later wave by the stagger between them.
-                    Long gun = gunForRacer(r);
+                    Long gun = gunForWave(r.wave);
                     if (gun == null) { Toast.makeText(this, R.string.not_started_wave, Toast.LENGTH_LONG).show(); return; }
                     setRacerFinish(r.bib, gun + ms);
                     render();
