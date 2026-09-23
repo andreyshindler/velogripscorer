@@ -2506,22 +2506,26 @@ function leaguePointCells(row, races) {
 
 function leagueIndividualTables(individual, races) {
   if (!individual.length) return `<p class="muted">${t('league_no_scores')}</p>`;
-  let html = '';
-  for (const g of individual) {
+  // ONE shared table with a separator row per category, rather than a table
+  // each: a table only sizes its columns to its own rows, so a short category
+  // (a single bib "700") laid out nothing like the group above it. Sharing the
+  // table makes every column line up down the whole page.
+  const cols = 4 + races.length + 1;
+  const body = individual.map((g) => {
     const title = [g.distance, g.gender && t(g.gender === 'Female' ? 'female' : 'male'), g.category]
       .filter(Boolean).join(' — ') || t('overall');
-    html += `<div style="overflow-x:auto"><table class="board winners mt"><thead>
-      <tr><th colspan="${4 + races.length + 1}">${esc(title)}</th></tr>
-      <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('team')}</th>
-        ${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
-      <tbody>${g.rows.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
+    return `<tr class="dist-sep"><td colspan="${cols}">${esc(title)}</td></tr>
+      ${g.rows.map((row, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
         <td><strong>${i + 1}</strong></td><td><strong>${esc(row.bib)}</strong></td>
         <td>${racerLink(row.bib, row.name || row.bib)}</td><td>${teamLink(row.team)}</td>
         ${leaguePointCells(row, races)}
-        <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}</tbody></table></div>`;
-  }
-  html += `<p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
-  return html;
+        <td><strong style="font-variant-numeric:tabular-nums">${row.total}</strong></td></tr>`).join('')}`;
+  }).join('');
+  return `<div style="overflow-x:auto"><table class="board winners mt"><thead>
+      <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('team')}</th>
+        ${leagueRoundHeads(races)}<th>${t('league_total')}</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+    <p class="muted" style="font-size:12.5px">${t('league_dropped_note')}</p>`;
 }
 
 function leagueTeamsTable(teams, races) {
