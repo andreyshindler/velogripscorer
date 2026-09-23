@@ -618,6 +618,13 @@ public class RaceTimingActivity extends BaseActivity {
         sb.append('|').append(new java.util.TreeSet<>(doneBibs));
         sb.append('|').append(new java.util.TreeSet<>(pendingBibs));
         sb.append('|').append(new java.util.TreeMap<>(lapsByBib)); // lap progress -> rebuild on each new lap
+        // Which waves have been gunned, and the active wave filter. Without this
+        // the tiles keep their pre-gun look (grey, "not started") and their stale
+        // tap handler after a wave starts, because the bib list alone is unchanged.
+        sb.append('|').append(waveFilter).append('|');
+        for (java.util.Map.Entry<String, Long> e : new java.util.TreeMap<>(gunByWave).entrySet()) {
+            sb.append(e.getKey()).append(e.getValue() == null ? '0' : '1').append(',');
+        }
         String sig = sb.toString();
         if (sig.equals(lastPagerSig) && pagerInner.getChildCount() > 0) return;
         lastPagerSig = sig;
