@@ -72,6 +72,15 @@ async function api(path, { method = 'GET', body, form } = {}) {
   if (body) headers['Content-Type'] = 'application/json';
   const res = await fetch(`${BASE}/api${path}`, { method, headers, body: form || (body ? JSON.stringify(body) : undefined) });
   const data = await res.json().catch(() => ({}));
+  // A 401 while we believed we were signed in means the token expired or was
+  // revoked. Clear the stale session (the cached user still drives the admin
+  // nav from localStorage) and send the user to log in, instead of leaving
+  // authenticated pages stuck on an error.
+  if (res.status === 401 && state.token) {
+    setSession(null, null);
+    if (location.hash !== '#/login') location.hash = '#/login';
+    throw new Error(data.error || t('session_expired'));
+  }
   if (!res.ok) throw new Error(data.error || t('error_generic'));
   return data;
 }
@@ -271,22 +280,23 @@ async function route() {
   const hash = location.hash.slice(1) || '/';
   const [, page, arg, sub] = hash.match(/^\/([^/]*)\/?([^/]*)\/?([^/]*)/) || [];
   setActiveNav(page);
+  // Await the view so a rejected data fetch renders a visible error card
+  // instead of an unhandled rejection that leaves the page blank.
   try {
-    if (!page) return viewHome();
-    if (page === 'login') return viewLogin();
-    if (page === 'live') return viewLiveRaces();
-    if (page === 'finished') return viewFinishedRaces();
-    if (page === 'startlists') return viewStartLists();
-    if (page === 'checkpoints') return viewMyCheckpoints();
-    if (page === 'results') return viewPublicResults(Number(arg), sub || 'winners');
-    if (page === 'leagues') return viewLeagues();
-    if (page === 'myleagues') return viewMyLeagues();
-    if (page === 'contact') return viewContact();
-    if (page === 'league') return viewLeague(Number(arg), sub || 'teams');
-    if (page === 'contest') return viewContest(Number(arg), sub || '');
-    if (page === 'profile') return viewProfile(Number(arg));
-    if (page === 'admin') return viewAdmin(arg || 'leagues');
-    viewHome();
+    if (page === 'login') await viewLogin();
+    else if (page === 'live') await viewLiveRaces();
+    else if (page === 'finished') await viewFinishedRaces();
+    else if (page === 'startlists') await viewStartLists();
+    else if (page === 'checkpoints') await viewMyCheckpoints();
+    else if (page === 'results') await viewPublicResults(Number(arg), sub || 'winners');
+    else if (page === 'leagues') await viewLeagues();
+    else if (page === 'myleagues') await viewMyLeagues();
+    else if (page === 'contact') await viewContact();
+    else if (page === 'league') await viewLeague(Number(arg), sub || 'teams');
+    else if (page === 'contest') await viewContest(Number(arg), sub || '');
+    else if (page === 'profile') await viewProfile(Number(arg));
+    else if (page === 'admin') await viewAdmin(arg || 'leagues');
+    else await viewHome();
   } catch (err) {
     main.innerHTML = `<div class="card">${esc(err.message)}</div>`;
   }
@@ -2781,13 +2791,10 @@ async function viewAdmin(section) {
 // refresh() re-renders after a mutation.
 async function renderLeagueManager(box, scope, refresh) {
   const mine = scope === 'mine';
-  const [{ leagues: allLeagues }, racesResp] = await Promise.all([
-    api('/leagues?status=all'), // admin sees archived leagues too
-    mine ? api('/my/races') : api('/contests'),
-  ]);
-  const leagues = mine ? allLeagues.filter((l) => l.created_by === state.user.id) : allLeagues;
-  const allRaces = mine ? (racesResp.races || []) : (racesResp.contests || []).filter((c) => c.kind === 'race');
 
+  // Render the create form up front, before any network call. If a data fetch
+  // below fails (e.g. an expired session 401s /my/races), the organizer still
+  // gets a usable page with a clear error instead of a blank screen.
   box.innerHTML = `
     <div class="card mt form-narrow">
       <h3>${t('league_create')}</h3>
@@ -2802,6 +2809,23 @@ async function renderLeagueManager(box, scope, refresh) {
       </form>
     </div>
     <div id="lg-list"></div>`;
+
+  let allLeagues; let racesResp;
+  try {
+    [{ leagues: allLeagues }, racesResp] = await Promise.all([
+      api('/leagues?status=all'), // admin sees archived leagues too
+      mine ? api('/my/races') : api('/contests'),
+    ]);
+  } catch (err) {
+    document.getElementById('lg-list').innerHTML =
+      `<div class="card mt"><p class="muted">${t('league_load_failed')} ${esc(err.message)}</p>
+        <button class="btn small secondary" id="lg-retry">${t('league_retry')}</button></div>`;
+    const retry = document.getElementById('lg-retry');
+    if (retry) retry.onclick = () => renderLeagueManager(box, scope, refresh);
+    return;
+  }
+  const leagues = mine ? allLeagues.filter((l) => l.created_by === state.user.id) : allLeagues;
+  const allRaces = mine ? (racesResp.races || []) : (racesResp.contests || []).filter((c) => c.kind === 'race');
 
   document.getElementById('lg-new').onsubmit = async (e) => {
     e.preventDefault();
@@ -2821,7 +2845,16 @@ async function renderLeagueManager(box, scope, refresh) {
 
   // Fetch every league's races once, and collect the contest ids attached to
   // ANY league so the attach dropdown only offers races not yet in a league.
-  const details = await Promise.all(leagues.map((row) => api(`/leagues/${row.id}`)));
+  let details;
+  try {
+    details = await Promise.all(leagues.map((row) => api(`/leagues/${row.id}`)));
+  } catch (err) {
+    list.innerHTML = `<div class="card mt"><p class="muted">${t('league_load_failed')} ${esc(err.message)}</p>
+      <button class="btn small secondary" id="lg-retry2">${t('league_retry')}</button></div>`;
+    const retry = document.getElementById('lg-retry2');
+    if (retry) retry.onclick = () => renderLeagueManager(box, scope, refresh);
+    return;
+  }
   const attachedAnywhere = new Set(details.flatMap((d) => d.races.map((r) => r.contest_id)));
   // contest_id -> which league it's in (for the grouped attach picker).
   const membership = new Map();
