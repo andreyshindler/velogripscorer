@@ -78,6 +78,15 @@ test('MTB XCO: more laps still beats a faster time', () => {
   assert.equal(byBib['2'].behind, '-1 lap', 'the lapped racer reads as laps down');
 });
 
+test('running race: a racer with fewer laps still gets a TIME gap, never "-1 lap"', () => {
+  const results = computeRaceResults(seedRace('Running'));
+  for (const r of results) {
+    if (r.status !== 'finished' || r.rank === 1) continue;
+    assert.doesNotMatch(r.behind, /lap/i,
+      `running gaps must be times, got "${r.behind}" for bib ${r.bib}`);
+  }
+});
+
 test('a blank sport keeps the lap-first default', () => {
   const results = computeRaceResults(seedRace(''));
   const byBib = Object.fromEntries(results.map((r) => [r.bib, r]));

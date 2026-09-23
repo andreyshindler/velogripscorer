@@ -1274,6 +1274,7 @@ async function viewPublicResults(id, tab) {
   let checkpoints = data.checkpoints || [];
   const render = (results) => {
     currentResults = results;
+    raceRanksOnTime = isTimeOnlySport(c.sport); // running -> gaps are always times
     const body = document.getElementById('pubbody');
     if (!body) return;
     const qi = location.hash.indexOf('?');
@@ -1438,6 +1439,15 @@ function fmtElapsedMs(ms) {
   return `${head}:${String(s).padStart(2, '0')}.${tenths}`;
 }
 
+// Sports scored on a single crossing, ranked on elapsed time alone — a lap
+// count there carries no placing. Mirrors the server's rule in race-results.js.
+function isTimeOnlySport(sport) {
+  return /run|walk/i.test(String(sport || ''));
+}
+// Set from the open race's sport, so the results tables below agree with the
+// server about whether laps decide a place.
+let raceRanksOnTime = false;
+
 // Gap to the leading row of a results table. A racer who is laps down reads
 // "-N laps"; one who is FASTER than that row — possible when the leader leads
 // on laps rather than time — gets no gap at all. fmtElapsedMs clamps negatives
@@ -1445,7 +1455,9 @@ function fmtElapsedMs(ms) {
 function gapToLeader(r, leader, isFirst) {
   if (isFirst) return '–';
   if (!leader || r.elapsed_ms === leader.elapsed_ms) return '';
-  if (Number.isFinite(r.laps) && Number.isFinite(leader.laps) && r.laps < leader.laps) {
+  // Only a lap race places by laps; in a running race the gap is always a time.
+  if (!raceRanksOnTime
+      && Number.isFinite(r.laps) && Number.isFinite(leader.laps) && r.laps < leader.laps) {
     const down = leader.laps - r.laps;
     return `-${down} ${down > 1 ? t('laps') : t('lap')}`;
   }
@@ -1713,11 +1725,8 @@ function fullResultsTable(results, editable, checkpoints) {
     const others = all.filter((r) => r.status !== 'finished');
     if (!finished.length && !others.length) return '';
     const lead = finished[0];
-    const behindOf = (r, i) => {
-      if (i === 0 || !lead) return '';
-      if (r.laps < lead.laps) { const g = lead.laps - r.laps; return `-${g} ${g > 1 ? t('laps') : t('lap')}`; }
-      return '+' + fmtElapsedMs(r.elapsed_ms - lead.elapsed_ms);
-    };
+    // Blank for the leader here (this table marks it with a medal instead).
+    const behindOf = (r, i) => (i === 0 || !lead ? '' : gapToLeader(r, lead, false));
     const finRows = finished.map((r, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
       <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
       <td>${nameWithTeam(r)}</td>
