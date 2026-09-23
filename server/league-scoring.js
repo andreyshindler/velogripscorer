@@ -154,6 +154,40 @@ function bestN(perRace, n) {
   };
 }
 
+// ---- tie-breaks (applied only when two rows have the same total) ----
+
+/** The scores that made up the total, best first. */
+function countbackScores(row) {
+  return (row.counted_ids || [])
+    .map((id) => row.per_race[id] || 0)
+    .sort((x, y) => y - x);
+}
+
+/** Countback: the better single result wins, then the next, and so on. A rider
+ *  who won a round outranks one who never did, on the same points. */
+function compareCountback(a, b) {
+  const xa = countbackScores(a), xb = countbackScores(b);
+  for (let i = 0; i < Math.max(xa.length, xb.length); i++) {
+    const d = (xb[i] || 0) - (xa[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** Still level: the most recent round decides. Walking back from the latest
+ *  race, the first one that separates them wins it; having raced at all beats
+ *  having sat it out. */
+function compareRecency(a, b, orderedRaceIds) {
+  for (let i = orderedRaceIds.length - 1; i >= 0; i--) {
+    const id = orderedRaceIds[i];
+    const pa = a.per_race[id], pb = b.per_race[id];
+    const ranA = pa !== undefined, ranB = pb !== undefined;
+    if (ranA && ranB) { if (pb !== pa) return pb - pa; }
+    else if (ranA !== ranB) return ranA ? -1 : 1;
+  }
+  return 0;
+}
+
 /**
  * Season standings. `races` = [{contest: {id,...}, round, results}] ordered by
  * round. Rider identity across races = trimmed bib (fixed for the season per
@@ -194,8 +228,18 @@ function computeLeagueStandings(races, settings) {
     }
     groups.get(key).rows.push(out);
   }
+  // Equal totals are common in a points league, so they need a rule — sorting
+  // on total alone left ties in map-insertion order, i.e. whoever happened to
+  // appear first in the earliest race's results. Same rule for riders and teams.
+  const orderedRaceIds = races.map((r) => r.contest.id);
+  const byStandings = (idKey) => (a, b) =>
+    b.total - a.total
+    || compareCountback(a, b)
+    || compareRecency(a, b, orderedRaceIds)
+    || String(a[idKey] ?? '').localeCompare(String(b[idKey] ?? ''), undefined, { numeric: true });
+
   const individual = [...groups.values()];
-  for (const g of individual) g.rows.sort((a, b) => b.total - a.total);
+  for (const g of individual) g.rows.sort(byStandings('bib'));
   individual.sort((a, b) =>
     a.distance.localeCompare(b.distance) || a.gender.localeCompare(b.gender) || a.category.localeCompare(b.category));
 
@@ -203,7 +247,7 @@ function computeLeagueStandings(races, settings) {
     const { total, counted_ids } = bestN(row.per_race, settings.team_best_n);
     return { team: row.team, per_race: row.per_race, counted_ids, total };
   });
-  teams.sort((a, b) => b.total - a.total);
+  teams.sort(byStandings('team'));
 
   return { individual, teams };
 }

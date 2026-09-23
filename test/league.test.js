@@ -504,3 +504,44 @@ test('round renumber + detach + delete league', async () => {
   const c = await request(app).get(`/api/contests/${races[0].contest.id}`).set(auth(admin));
   assert.equal(c.status, 200);
 });
+
+// A points league produces ties constantly, so the order among equal totals is
+// a real result, not a detail. Reproduces a 3-way tie on 32 seen in production.
+test('computeLeagueStandings: ties break on countback, then the latest round', () => {
+  // One race = one group of finishers; points come from finishing order.
+  const race = (cid, order) => ({
+    contest: { id: cid }, round: cid,
+    results: order.map((bib, i) => ({
+      bib, participant: 'R' + bib, status: 'finished', laps: 1, elapsed_ms: 1000 * (i + 1),
+      distance: '5k', gender: 'F', category: '45-49', team: 'T' + bib,
+    })),
+  });
+  // R1 order: 551,550,554,561,553   R2 order: 553,561,554,556
+  // Totals -> 554: 16+16=32, 561: 14+18=32, 553: 12+20=32
+  const races = [race(1, ['551', '550', '554', '561', '553']), race(2, ['553', '561', '554', '556'])];
+  const settings = normalizeSettings({ individual_best_n: 2, team_best_n: 2 });
+  const { individual } = computeLeagueStandings(races, settings);
+  const rows = individual[0].rows;
+
+  const tied = rows.filter((r) => r.total === 32).map((r) => r.bib);
+  assert.deepEqual(tied, ['553', '561', '554'],
+    'on equal totals the better single result ranks higher (20 > 18 > 16)');
+  // Sanity: the ranking is still points-first overall.
+  assert.deepEqual(rows.map((r) => r.total), [32, 32, 32, 20, 18, 14]);
+});
+
+test('computeLeagueStandings: a fully level tie still has a stable order', () => {
+  const race = (cid, order) => ({
+    contest: { id: cid }, round: cid,
+    results: order.map((bib, i) => ({
+      bib, participant: 'R' + bib, status: 'finished', laps: 1, elapsed_ms: 1000 * (i + 1),
+      distance: '5k', gender: 'M', category: 'A', team: 'T' + bib,
+    })),
+  });
+  // Identical scorelines both rounds -> countback and recency cannot separate.
+  const races = [race(1, ['20', '3']), race(2, ['20', '3'])];
+  const settings = normalizeSettings({ individual_best_n: 2, team_best_n: 2 });
+  const a = computeLeagueStandings(races, settings).individual[0].rows.map((r) => r.bib);
+  const b = computeLeagueStandings(races, settings).individual[0].rows.map((r) => r.bib);
+  assert.deepEqual(a, b, 'the same input must always produce the same order');
+});
