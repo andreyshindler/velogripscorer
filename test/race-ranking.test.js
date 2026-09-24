@@ -199,3 +199,55 @@ test('a race location and sport can be edited after creation', async () => {
   assert.equal(fresh.body.location, 'Lachish Regional Council');
   assert.equal(made.body.location, 'Kiryat Gat'); // original untouched
 });
+
+// Re-importing a corrected roster used to MERGE, leaving anyone dropped from
+// the new file still on the start list. Replace makes the race match the file.
+test('start list: import merges, replace makes the list match the file', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `csv-${Date.now()}@test.co`, password: 'password123', name: 'CSV' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  const c = (await request(app).post('/api/contests').set(auth).send({
+    title: 'Roster race', kind: 'race', sport: 'Running', start_at: iso(-60), end_at: iso(3600),
+  })).body;
+  const bulk = (racers, replace) => request(app)
+    .post(`/api/contests/${c.id}/tags/bulk`).set(auth).send({ racers, ...(replace ? { replace: true } : {}) });
+  const bibs = async () => (await request(app).get(`/api/contests/${c.id}/startlist`).set(auth))
+    .body.racers.map((r) => r.bib).sort();
+
+  // bib + name with no chip is the common CSV: the server synthesises the EPC.
+  await bulk([{ bib: '1', participant: 'A' }, { bib: '2', participant: 'B' }]);
+  assert.deepEqual(await bibs(), ['1', '2']);
+
+  // merge: C is added, A and B stay even though the file lists only C
+  await bulk([{ bib: '3', participant: 'C' }]);
+  assert.deepEqual(await bibs(), ['1', '2', '3'], 'a plain import merges');
+
+  // replace: the list becomes exactly the file
+  const res = await bulk([{ bib: '9', participant: 'Z' }], true);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.replaced, true);
+  assert.equal(res.body.removed, 3, 'the three previous racers were cleared');
+  assert.deepEqual(await bibs(), ['9'], 'replace leaves only the file');
+});
+
+test('replace keeps recorded chip times, which are keyed by chip not by roster', () => {
+  const contestId = db.prepare(
+    `INSERT INTO contests (organizer_id, title, description, category, tags, visibility,
+       start_at, end_at, kind, sport, status, suppress_secs, min_lap_gap_secs, record_laps)
+     VALUES (?,?,'','other','[]','public',?,?, 'race', 'Running', 'finished', 10, 30, 0)`
+  ).run(organizerId, 'Keep times', iso(-60), iso(3600)).lastInsertRowid;
+  const readerId = db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+    .run(contestId, 'Timing app', `tok_keep_${contestId}`, '').lastInsertRowid;
+  db.prepare('INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)')
+    .run(contestId, 'wave1', new Date(gun).toISOString());
+  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, read_at) VALUES (?,?,?,?)')
+    .run(readerId, contestId, 'EPC_KEEP', iso(120));
+
+  const before = db.prepare('SELECT COUNT(*) n FROM tag_reads WHERE contest_id = ?').get(contestId).n;
+  db.prepare('DELETE FROM tag_assignments WHERE contest_id = ?').run(contestId); // what replace does
+  const after = db.prepare('SELECT COUNT(*) n FROM tag_reads WHERE contest_id = ?').get(contestId).n;
+  assert.equal(after, before, 'clearing the roster must not delete recorded reads');
+});

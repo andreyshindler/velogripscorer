@@ -1991,6 +1991,7 @@ async function renderManage(box, c) {
         <div>
           <input type="file" id="csv-file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
           <button class="btn small" id="import-csv" title="${t('csv_help')}">⬆ ${t('import_csv')}</button>
+          <button class="btn small secondary" id="replace-csv" title="${t('replace_csv_hint')}">⇄ ${t('replace_csv')}</button>
         </div>
       </div>
       <p class="muted" style="font-size:0.78rem;margin:2px 0 8px">${t('csv_help')}</p>
@@ -2218,19 +2219,30 @@ async function renderManage(box, c) {
 
   // ---- CSV start-list import ----
   const csvFile = $('#csv-file');
-  $('#import-csv').onclick = () => csvFile.click();
+  // Merge (the default) keeps whoever is already on the list; replace makes the
+  // race match the file exactly, which is what you want after fixing a roster.
+  let csvReplace = false;
+  $('#import-csv').onclick = () => { csvReplace = false; csvFile.click(); };
+  $('#replace-csv').onclick = () => {
+    if (tags.length && !confirm(t('replace_csv_confirm', { n: tags.length }))) return;
+    csvReplace = true;
+    csvFile.click();
+  };
   csvFile.onchange = async () => {
     const file = csvFile.files[0];
     if (!file) return;
     try {
       const form = new FormData();
       form.set('file', file);
+      if (csvReplace) form.set('replace', 'true');
       const result = await api(`/contests/${c.id}/startlist-file`, { method: 'POST', form });
-      toast(t('import_done', { n: result.imported, s: result.skipped })
+      toast((result.replaced ? t('replace_done', { n: result.imported, r: result.removed })
+        : t('import_done', { n: result.imported, s: result.skipped }))
         + (result.errors.length ? ' — ' + result.errors[0] : ''), result.errors.length > 0);
       viewContest(c.id, 'manage');
     } catch (err) { toast(err.message, true); }
     csvFile.value = '';
+    csvReplace = false;
   };
 
   $('#tag-form').onsubmit = async (e) => {

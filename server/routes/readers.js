@@ -495,7 +495,10 @@ router.delete('/contests/:id/tags/:epc', requireAuth, (req, res) => {
 // matched by name and created on the fly; racers without a chip get a
 // synthetic bib-based EPC; a second chip (Chip ID2) becomes an extra
 // assignment on the same bib so either chip read counts for the racer.
-function importRacers(contest, racers, userId) {
+// replace: wipe the existing start list first, so re-importing a corrected file
+// yields exactly that file. Without it the import upserts by (contest_id, epc)
+// and racers dropped from the new file linger from the old one.
+function importRacers(contest, racers, userId, { replace = false } = {}) {
   const waveIdByName = new Map(
     db.prepare('SELECT id, name FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.name, w.id])
   );
@@ -509,8 +512,15 @@ function importRacers(contest, racers, userId) {
   const newWave = db.prepare('INSERT INTO waves (contest_id, name) VALUES (?, ?)');
 
   let imported = 0;
+  let removed = 0;
   const errors = [];
   const tx = db.transaction(() => {
+    if (replace) {
+      // Same transaction as the insert: a bad file can't leave the race with an
+      // emptied start list. Recorded chip reads are keyed by EPC and are left
+      // alone, so re-importing the same people keeps their times.
+      removed = db.prepare('DELETE FROM tag_assignments WHERE contest_id = ?').run(contest.id).changes;
+    }
     racers.forEach((row, i) => {
       const bib = String(row?.bib ?? '').trim();
       const participant = String(row?.participant ?? row?.name ?? '').trim();
@@ -542,8 +552,9 @@ function importRacers(contest, racers, userId) {
     });
   });
   tx();
-  auditLog(userId, 'tag.bulk_import', 'contest', contest.id, `${imported} racers`);
-  return { imported, skipped: racers.length - imported, errors: errors.slice(0, 20) };
+  auditLog(userId, 'tag.bulk_import', 'contest', contest.id,
+    `${imported} racers${replace ? ` (replaced ${removed})` : ''}`);
+  return { imported, removed, replaced: replace, skipped: racers.length - imported, errors: errors.slice(0, 20) };
 }
 
 // Header names recognized in uploaded files (Webscorer exports, our CSV
@@ -620,7 +631,7 @@ router.post('/contests/:id/tags/bulk', requireAuth, (req, res) => {
   if (!contest) return;
   const racers = Array.isArray(req.body?.racers) ? req.body.racers.slice(0, 2000) : null;
   if (!racers || !racers.length) return res.status(400).json({ error: 'racers array required' });
-  res.json(importRacers(contest, racers, req.user.id));
+  res.json(importRacers(contest, racers, req.user.id, { replace: req.body?.replace === true }));
 });
 
 // File upload: .xlsx (Excel / Webscorer export) or .csv, parsed server-side.
@@ -638,7 +649,9 @@ router.post('/contests/:id/startlist-file', requireAuth, uploadMemory.single('fi
   }
   const racers = rowsToRacers(rows).slice(0, 2000);
   if (!racers.length) return res.status(400).json({ error: 'no racers found in the file' });
-  res.json(importRacers(contest, racers, req.user.id));
+  // multipart: the flag arrives as a form field, so it is a string.
+  const replace = String(req.body?.replace ?? '') === 'true';
+  res.json(importRacers(contest, racers, req.user.id, { replace }));
 });
 
 // Merge an offline checkpoint's reads (CSV/XLSX of bib-or-epc + time) into a
