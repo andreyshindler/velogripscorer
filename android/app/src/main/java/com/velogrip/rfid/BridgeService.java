@@ -82,6 +82,7 @@ public class BridgeService extends Service {
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
+    private volatile java.util.Map<String, String> epcWave = java.util.Collections.emptyMap();
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
@@ -290,6 +291,11 @@ public class BridgeService extends Service {
         // restart) the per-racer beeps are re-armed.
         boolean started = raceHasGun();
         if (!started) beepedRacers.clear();
+        // Gun time per wave, read fresh for each batch: a cached copy would keep
+        // rejecting a wave's racers for seconds after its gun, losing the very
+        // first crossings. Cheap — one query per batch, not per read.
+        final java.util.Map<String, Long> gunByWave = new java.util.HashMap<>();
+        for (RaceStore.Wave w : store.waves()) gunByWave.put(w.name, w.startedAtMs);
         for (TagRead read : reads) {
             if (!registered(read.epc)) continue;               // ignore tags not on the start list
             Long prev = lastSeen.get(read.epc);
@@ -303,7 +309,14 @@ public class BridgeService extends Service {
             // so antenna placement can be checked before the start.
             // A checkpoint keeps recording: it may not have synced the gun time
             // yet, and its passes are real mid-race splits.
-            if (started || checkpoint) {
+            // Per WAVE, not per race: with a stagger, wave 2 is still standing
+            // around the start/finish while wave 1 races, and their chips read
+            // constantly. Those reads can never be crossings — their wave has no
+            // gun to measure from — so recording them only inflates the queue.
+            String wave = epcWave.get(read.epc);
+            Long waveGun = gunByWave.get(wave == null ? "" : wave);
+            boolean racerStarted = waveGun != null;
+            if (racerStarted || checkpoint) {
                 // A checkpoint stamps reads in server time now, so splits survive a later
                 // clock jump; the finish device keeps device time (reconciled server-side).
                 if (checkpoint) {
@@ -315,7 +328,9 @@ public class BridgeService extends Service {
             // Beep once the first time each racer is detected in a started race.
             String racerKey = epcRacer.get(read.epc);
             if (racerKey == null) racerKey = "e:" + read.epc; // no roster: key by chip
-            if (started && beepedRacers.add(racerKey)) beep();
+            // Beep only for a racer whose own wave is running: a wave still
+            // waiting to start should not sound like it is being timed.
+            if (racerStarted && beepedRacers.add(racerKey)) beep();
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
@@ -356,14 +371,17 @@ public class BridgeService extends Service {
         if (now - registeredAt > 5000) {
             java.util.HashSet<String> set = new java.util.HashSet<>();
             java.util.HashMap<String, String> map = new java.util.HashMap<>();
+            java.util.HashMap<String, String> waves = new java.util.HashMap<>();
             for (RaceStore.Racer r : store.racers()) {
                 if (r.epc == null || r.epc.isEmpty()) continue;
                 set.add(r.epc);
                 // two chips share a racer: key by bib so both beep as one racer
                 map.put(r.epc, (r.bib == null || r.bib.isEmpty()) ? "e:" + r.epc : "b:" + r.bib);
+                waves.put(r.epc, r.wave == null ? "" : r.wave);
             }
             registeredEpcs = set;
             epcRacer = map;
+            epcWave = waves;
             registeredAt = now;
         }
         java.util.Set<String> set = registeredEpcs;
