@@ -665,16 +665,23 @@ async function pickLocationOnMap(onPick) {
     </div></div>`;
   document.body.appendChild(overlay);
   const map = L.map(overlay.querySelector('#pickmap')).setView([31.61, 34.76], 12); // Kiryat Gat
-  // OpenStreetMap's own tile servers are volunteer-run and their usage policy
-  // does not cover an app like this one: they answer with 403 "Access blocked"
-  // tiles (osm.wiki/Blocked). Carto's basemaps render the same OSM data and are
-  // served for exactly this use. Match the app's theme so the picker doesn't
-  // flash a white slab in dark mode.
+  // Basemap providers keep changing what they give away: OpenStreetMap's own
+  // servers block apps outright (403, osm.wiki/Blocked) and Carto's keyless
+  // tiles are now stamped "API KEY REQUIRED". Esri's canvas basemaps still
+  // serve without a key, and a light/dark pair keeps the picker in step with
+  // the app's theme. MAP_TILES below is the one place to change this, or to
+  // drop in a keyed provider's URL.
   const darkUi = document.documentElement.getAttribute('data-theme') === 'dark';
-  const tiles = L.tileLayer(
-    `https://{s}.basemaps.cartocdn.com/${darkUi ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png`,
-    { attribution: '© OpenStreetMap contributors, © CARTO', subdomains: 'abcd', maxZoom: 20 }
-  ).addTo(map);
+  const MAP_TILES = {
+    // ArcGIS tiles are addressed {z}/{y}/{x} — row before column, unlike OSM.
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/'
+      + `World_${darkUi ? 'Dark' : 'Light'}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    attribution: 'Tiles © Esri — © OpenStreetMap contributors',
+    maxZoom: 16, // the canvas basemaps stop here; ample for picking a venue
+  };
+  const tiles = L.tileLayer(MAP_TILES.url, {
+    attribution: MAP_TILES.attribution, maxZoom: MAP_TILES.maxZoom,
+  }).addTo(map);
   // If the tiles can't load, say so once rather than leaving a broken grid —
   // clicking the map still picks a location, so the dialog is still usable.
   let tileWarned = false;
