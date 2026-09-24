@@ -321,19 +321,29 @@ public class BridgeService extends Service {
             String wave = epcWave.get(read.epc);
             Long waveGun = gunByWave.get(wave == null ? "" : wave);
             boolean racerStarted = waveGun != null;
-            // A racer standing by the gate after finishing is read every dedupe
+            // A racer standing by the gate after crossing is read every dedupe
             // window, and each stored pass re-renders the screen — which is what
-            // makes the finish list jump. The engine already discards these when
-            // scoring; stop writing them at all. In a single-crossing race one
-            // stored pass since the gun IS the finish, so there is nothing more
-            // to record; in a lap race, space them by the lap gap, the same rule
-            // the engine uses to decide what counts as a new lap.
+            // makes the finish list jump. Thin those out below.
             boolean record = racerStarted;
             if (record && !checkpoint) {
-                long lastRec = lastRecordedMs(read.epc);
-                if (lastRec > 0) {
-                    record = prefs.recordLaps()
-                            && read.readAtMs - lastRec >= prefs.lapGapSecs() * 1000L;
+                // Reads inside the start-suppression window are the racer
+                // crossing the START mat at the gun. They must still be stored —
+                // the roll call marks anyone never read since the gun as DNS —
+                // but they are NOT a crossing, so they must not count as this
+                // racer's finish. Treating one as a finish would block every
+                // later read and lose the real finish altogether.
+                long crossingFrom = waveGun + prefs.suppressSecs() * 1000L;
+                if (read.readAtMs >= crossingFrom) {
+                    // Past the window: space crossings by the minimum lap gap,
+                    // the same rule the engine uses. Enough to stop a racer
+                    // parked by the gate spamming a row every dedupe window,
+                    // while never refusing a genuine later read — in a
+                    // single-crossing race the engine keeps the first one
+                    // anyway, so an extra stored pass cannot change a result.
+                    long lastRec = lastCrossingMs(read.epc, crossingFrom);
+                    if (lastRec > 0 && read.readAtMs - lastRec < prefs.lapGapSecs() * 1000L) {
+                        record = false;
+                    }
                 }
             }
             if (record || checkpoint) {
@@ -343,7 +353,11 @@ public class BridgeService extends Service {
                     store.addPassing(new TagRead(read.epc, read.rssi, prefs.toServerTime(read.readAtMs), read.antenna));
                 } else {
                     store.addPassing(read);
-                    lastRecorded.put(read.epc, read.readAtMs);
+                    // Only a crossing advances the marker; a start-mat read must
+                    // leave it alone or the racer's real finish gets blocked.
+                    if (read.readAtMs >= waveGun + prefs.suppressSecs() * 1000L) {
+                        lastRecorded.put(read.epc, read.readAtMs);
+                    }
                 }
             }
             // Beep once the first time each racer is detected in a started race.
@@ -360,14 +374,19 @@ public class BridgeService extends Service {
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events
     }
 
-    /** When we last stored a pass for this chip, 0 if never. Seeded from the
-     *  store on first sight so a mid-race app restart does not hand every
-     *  finished racer one more pass. */
-    private long lastRecordedMs(String epc) {
+    /** When this chip last produced a CROSSING — a read at or after minAt, the
+     *  end of the start-suppression window. 0 if it has none. Start-mat reads
+     *  are deliberately not counted here: they are stored for the roll call but
+     *  are not crossings, and mistaking one for a finish would silence the chip
+     *  for the rest of the race. Seeded from the store on first sight so a
+     *  mid-race app restart does not hand every racer an extra pass. */
+    private long lastCrossingMs(String epc, long minAt) {
         Long cached = lastRecorded.get(epc);
         if (cached != null) return cached;
         long last = 0;
-        for (RaceStore.Passing p : store.passingsForEpc(epc)) last = Math.max(last, p.readAtMs);
+        for (RaceStore.Passing p : store.passingsForEpc(epc)) {
+            if (p.readAtMs >= minAt) last = Math.max(last, p.readAtMs);
+        }
         lastRecorded.put(epc, last);
         return last;
     }
