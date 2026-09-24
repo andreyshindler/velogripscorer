@@ -373,6 +373,8 @@
     <string name="use_partial_chip">שימוש במזהה שבב חלקי:</string>
     <string name="no_detect_after_start">אל תזהה שבבים אחרי הזינוק למשך:</string>
     <string name="no_redetect_after_lap">אל תזהה שוב רוכב אחרי הקפה למשך:</string>
+    <string name="timing_from_web">שני הטיימרים שלמעלה מוגדרים באתר עבור המרוץ הזה ומסתנכרנים לכאן אוטומטית. תוצאות המרוץ מחושבות לפי הערכים שבאתר.</string>
+    <string name="timing_set_on_web">ההגדרה נמצאת באתר, תחת ״מקצים וזינוק״ של המרוץ. היא מסתנכרנת לכאן יחד עם רשימת הזינוק.</string>
     <string name="chip_start_time">זמן זינוק לפי שבב:</string>
     <string name="chip_checkin">צ׳ק-אין לפי שבב:</string>
     <string name="beep_unknown_chip">צפצוף לשבבים שלא ברשימת הזינוק:</string>

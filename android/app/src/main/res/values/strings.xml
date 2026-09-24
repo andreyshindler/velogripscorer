@@ -373,6 +373,8 @@
     <string name="use_partial_chip">Use partial chip ID:</string>
     <string name="no_detect_after_start">Do not detect any chips after start for:</string>
     <string name="no_redetect_after_lap">Do not redetect same racer after lap for:</string>
+    <string name="timing_from_web">Both timers above are set on the website for this race and sync here automatically. Race results are scored with the website\'s values.</string>
+    <string name="timing_set_on_web">Set on the website, under the race\'s \"Waves &amp; race start\". It syncs here with the start list.</string>
     <string name="chip_start_time">Chip start time:</string>
     <string name="chip_checkin">Chip check-in:</string>
     <string name="beep_unknown_chip">Audible beep for chips not on start list:</string>
