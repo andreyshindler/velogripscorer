@@ -138,3 +138,31 @@ test('a new running race is created with lap recording off', async () => {
   const xco = await mk('MTB — Cross-country (XCO)');
   assert.equal(xco.body.record_laps, 1, 'a lap sport keeps lap recording on');
 });
+
+// A rider who finishes and then lingers near the mat gets read again. Past the
+// target lap that is not a lap, and their finish must not move to it — the
+// on-device RaceEngine has always capped at the target, so the server has to
+// agree or the tablet and the website score the same race differently.
+test('a read after the target lap is not a lap, and does not move the finish', () => {
+  const contestId = db.prepare(
+    `INSERT INTO contests (organizer_id, title, description, category, tags, visibility,
+       start_at, end_at, kind, sport, status, suppress_secs, min_lap_gap_secs, record_laps, race_laps)
+     VALUES (?,?,'','other','[]','public',?,?, 'race', 'MTB — Cross-country (XCO)', 'finished', 10, 30, 1, 3)`
+  ).run(organizerId, 'Lap cap', iso(-60), iso(3600)).lastInsertRowid;
+  const readerId = db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+    .run(contestId, 'Timing app', `tok_cap_${contestId}`, '').lastInsertRowid;
+  const waveId = db.prepare('INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)')
+    .run(contestId, 'wave1', new Date(gun).toISOString()).lastInsertRowid;
+  db.prepare('INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id) VALUES (?,?,?,?,?)')
+    .run(contestId, 'EPC_CAP', '9', 'Loiterer', waveId);
+  const read = (secs) => db.prepare(
+    'INSERT INTO tag_reads (reader_id, contest_id, epc, read_at) VALUES (?,?,?,?)'
+  ).run(readerId, contestId, 'EPC_CAP', iso(secs));
+  read(60); read(120); read(180);   // 3 laps = the target, finish at 3:00
+  read(400);                        // loiters past the mat well after the lap gap
+
+  const r = computeRaceResults(db.prepare('SELECT * FROM contests WHERE id = ?').get(contestId))
+    .find((x) => x.bib === '9');
+  assert.equal(r.laps, 3, 'the race ends at the target lap');
+  assert.equal(r.elapsed, '3:00.0', 'the finish stays on the target lap, not the loiter read');
+});

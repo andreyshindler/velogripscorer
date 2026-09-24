@@ -147,8 +147,14 @@ function computeRaceResults(contest, { category } = {}) {
       .filter((r) => r.at >= startMs && (r.manual || r.at >= startMs + suppressMs));
     if (!valid.length) return { ...base, status: raceFinished ? 'DNF' : 'on_course', laps: 0 };
 
+    const target = targetFor(a.distance || '');
     const crossings = [];
     for (const r of valid) {
+      // Their race ends at the target lap: once it is reached, later reads are
+      // not laps. Without this a rider loitering near the mat picked up an
+      // extra "lap" and their finish moved out to that crossing — and the
+      // tablet disagreed, since RaceEngine has always capped at the target.
+      if (target && crossings.length >= target) break;
       if (r.manual || !crossings.length || r.at - crossings[crossings.length - 1] >= lapGapMs) crossings.push(r.at);
       // Single-crossing race: the first valid crossing IS the finish.
       if (contest.record_laps === 0 && crossings.length) break;
@@ -166,7 +172,7 @@ function computeRaceResults(contest, { category } = {}) {
       lap_splits: crossings.map((t) => formatElapsed(t - startMs)),
       lap_ms: crossings.map((t) => t - startMs),
       // kept only when the leader rule is on, stripped before returning.
-      ...(leaderRule ? { _crossings: crossings.slice(), _startMs: startMs, _target: targetFor(a.distance || '') } : {}),
+      ...(leaderRule ? { _crossings: crossings.slice(), _startMs: startMs, _target: target } : {}),
     };
   });
 
