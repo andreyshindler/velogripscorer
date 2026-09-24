@@ -217,6 +217,7 @@
     <string name="timing_hint">הקש על הטיימר או הזן מספר חזה מראש | %1$d - %2$d/%3$d</string>
     <string name="page_counts">%1$d - %2$d/%3$d</string>
     <string name="last_tap">%1$s  %2$s  +%3$s:  %4$s</string>
+    <string name="last_read">נקרא: %1$s</string>
     <string name="show_names">הצג שמות</string>
     <string name="hide_name">הסתר שם</string>
     <string name="unknown_racer">משתתף לא ידוע</string>

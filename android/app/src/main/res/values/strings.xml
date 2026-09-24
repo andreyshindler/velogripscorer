@@ -217,6 +217,7 @@
     <string name="timing_hint">Tap timer button or pre-enter bib | %1$d - %2$d/%3$d</string>
     <string name="page_counts">%1$d - %2$d/%3$d</string>
     <string name="last_tap">%1$s  %2$s  +%3$s:  %4$s</string>
+    <string name="last_read">Read: %1$s</string>
     <string name="show_names">Show names</string>
     <string name="hide_name">Hide name</string>
     <string name="unknown_racer">Unknown Racer</string>

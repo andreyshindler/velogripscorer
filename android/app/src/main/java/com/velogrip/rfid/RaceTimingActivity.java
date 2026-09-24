@@ -632,6 +632,26 @@ public class RaceTimingActivity extends BaseActivity {
                 .show();
     }
 
+    /** The bib wearing this chip, or null if the chip is not on the start list. */
+    private String bibForEpc(String epc) {
+        if (epc == null) return null;
+        for (RaceStore.Racer r : store.racers()) {
+            if (epc.equalsIgnoreCase(r.epc)) return r.bib == null || r.bib.isEmpty() ? null : r.bib;
+        }
+        return null;
+    }
+
+    /** Display name for a chip: their name, else their bib, else nothing. */
+    private String nameForEpc(String epc) {
+        if (epc == null) return null;
+        for (RaceStore.Racer r : store.racers()) {
+            if (!epc.equalsIgnoreCase(r.epc)) continue;
+            if (r.name != null && !r.name.isEmpty()) return r.name;
+            return r.bib == null || r.bib.isEmpty() ? null : r.bib;
+        }
+        return null;
+    }
+
     /** Latest recorded crossing time (ms) for a bib, across both chips. */
     private long lastPassingMs(String bib) {
         long last = 0;
@@ -811,6 +831,9 @@ public class RaceTimingActivity extends BaseActivity {
         long prevElapsed = -1;
         long leaderElapsed = -1;
         lastTapText = null;
+        // bib -> that racer's line, so the strip can show whoever was read LAST
+        // rather than whoever happens to sort last (the slowest finisher).
+        final java.util.Map<String, String> lineByBib = new java.util.HashMap<>();
         View scrollTarget = null;
         for (ResRow row : rows) {
             final int seq = place++;
@@ -846,6 +869,23 @@ public class RaceTimingActivity extends BaseActivity {
                 if (scrollToBib != null && scrollToBib.equals(r.bib)) scrollTarget = rv;
                 lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
                         r.name == null || r.name.isEmpty() ? r.bib : r.name);
+                if (r.bib != null && !r.bib.isEmpty()) lineByBib.put(r.bib, lastTapText);
+            }
+        }
+        // Prefer the racer whose chip was read most recently. At the finish line
+        // the question is "who just crossed", and the sorted list cannot answer
+        // it — especially with waves, where elapsed times are not comparable.
+        RaceStore.Passing newest = store.latestPassing();
+        if (newest != null) {
+            String bib = bibForEpc(newest.epc);
+            String line = bib == null ? null : lineByBib.get(bib);
+            if (line != null) {
+                lastTapText = line;
+            } else {
+                // Read, but not (yet) a counted finish — a suppressed start-line
+                // read, or a wave still waiting for its gun. Name them anyway.
+                String who = nameForEpc(newest.epc);
+                if (who != null) lastTapText = getString(R.string.last_read, who);
             }
         }
         // bib pre-entered, still waiting for a time

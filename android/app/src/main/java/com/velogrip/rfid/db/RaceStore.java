@@ -452,6 +452,21 @@ public final class RaceStore extends SQLiteOpenHelper {
         return out;
     }
 
+    /** The most recently recorded crossing, by wall clock — "who just crossed".
+     *  The results list is ordered by elapsed time, so its last row is the
+     *  slowest finisher, which is not the same thing. */
+    public Passing latestPassing() {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT id, epc, rssi, read_at, manual FROM passings ORDER BY read_at DESC, id DESC LIMIT 1", null);
+        try {
+            if (!c.moveToNext()) return null;
+            return new Passing(c.getLong(0), c.getString(1),
+                    c.isNull(2) ? null : c.getDouble(2), null, c.getLong(3), c.getInt(4) == 1);
+        } finally {
+            c.close();
+        }
+    }
+
     // ---- racers (start list) ----
 
     public void upsertRacer(Racer racer) {
