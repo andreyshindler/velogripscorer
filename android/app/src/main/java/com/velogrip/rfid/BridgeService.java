@@ -373,6 +373,11 @@ public class BridgeService extends Service {
                 if (!manualOnly && !lapTargetsSynced) {
                     if (uploader.uploadLapTargets(store.lapTargets(), prefs.recordLaps(), prefs.leaderEndsRace())) lapTargetsSynced = true;
                 }
+                // "Live results: off" means the race is not published while it
+                // runs: hold the gun times and the passes on the phone until the
+                // operator posts the results, which re-sends both anyway. Read
+                // fresh each pass, so flipping it mid-race takes effect at once.
+                if (!prefs.liveResults()) continue;
                 // gun times first: results on the web are wrong without them
                 for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
                     if (wave.name.isEmpty()) continue; // local mass-start marker

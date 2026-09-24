@@ -460,7 +460,12 @@ public class RaceTimingActivity extends BaseActivity {
             return;
         }
         syncStatus.setVisibility(android.view.View.VISIBLE);
-        if (!online) {
+        // Holding passes deliberately is not a fault and not progress: say so,
+        // rather than showing an "Uploading" count that will never move.
+        if (!prefs.liveResults()) {
+            syncStatus.setBackgroundColor(0xFF4A5568); // grey: parked on purpose
+            syncStatus.setText(getString(R.string.sync_held, pending));
+        } else if (!online) {
             syncStatus.setBackgroundColor(0xFFC0392B); // red: not getting through
             syncStatus.setText(lastSyncError != null
                     ? getString(R.string.sync_rejected, pending, lastSyncError)
