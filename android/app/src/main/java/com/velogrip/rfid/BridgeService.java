@@ -295,12 +295,22 @@ public class BridgeService extends Service {
             Long prev = lastSeen.get(read.epc);
             if (prev != null && now - prev < window) continue; // same tag within window
             lastSeen.put(read.epc, now);
-            // A checkpoint stamps reads in server time now, so splits survive a later
-            // clock jump; the finish device keeps device time (reconciled server-side).
-            if (checkpoint) {
-                store.addPassing(new TagRead(read.epc, read.rssi, prefs.toServerTime(read.readAtMs), read.antenna));
-            } else {
-                store.addPassing(read);
+            // Before the gun there is nothing to time against: the engine drops
+            // reads earlier than the start, and the start-line roll call only
+            // counts reads since the gun. Storing them just fills the device and
+            // the upload queue with setup noise — chips lying near the antenna
+            // add a row every dedupe window. The read is still reported below,
+            // so antenna placement can be checked before the start.
+            // A checkpoint keeps recording: it may not have synced the gun time
+            // yet, and its passes are real mid-race splits.
+            if (started || checkpoint) {
+                // A checkpoint stamps reads in server time now, so splits survive a later
+                // clock jump; the finish device keeps device time (reconciled server-side).
+                if (checkpoint) {
+                    store.addPassing(new TagRead(read.epc, read.rssi, prefs.toServerTime(read.readAtMs), read.antenna));
+                } else {
+                    store.addPassing(read);
+                }
             }
             // Beep once the first time each racer is detected in a started race.
             String racerKey = epcRacer.get(read.epc);
