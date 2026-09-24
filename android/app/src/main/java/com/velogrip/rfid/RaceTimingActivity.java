@@ -463,7 +463,7 @@ public class RaceTimingActivity extends BaseActivity {
         if (!online) {
             syncStatus.setBackgroundColor(0xFFC0392B); // red: not getting through
             syncStatus.setText(lastSyncError != null
-                    ? getString(R.string.sync_failed, pending, lastSyncError)
+                    ? getString(R.string.sync_rejected, pending, lastSyncError)
                     : getString(R.string.sync_offline, pending));
         } else {
             syncStatus.setBackgroundColor(0xFFB9770E); // amber: catching up
