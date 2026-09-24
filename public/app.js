@@ -752,8 +752,12 @@ async function viewStartLists() {
     <div class="card" style="overflow-x:auto;padding:0">
       <table class="board" style="margin:0">
         <thead><tr>
-          <th>${t('contest_title')}</th><th>${t('racers_count')}</th><th>${t('start_date')}</th>
-          <th>${t('status')}</th><th>${t('location')}</th><th>${t('sport')}</th><th>${t('nav_leagues')}</th><th></th>
+          <!-- Title, date and sport are short and read badly broken in half;
+               the location is the long one, so let it keep the wrapping. -->
+          <th style="white-space:nowrap">${t('contest_title')}</th><th>${t('racers_count')}</th>
+          <th style="white-space:nowrap">${t('start_date')}</th>
+          <th>${t('status')}</th><th>${t('location')}</th>
+          <th style="white-space:nowrap">${t('sport')}</th><th>${t('nav_leagues')}</th><th></th>
         </tr></thead>
         <tbody id="lists-body"></tbody>
       </table>
@@ -841,13 +845,13 @@ async function loadStartLists(highlightId) {
 
   const rowHtml = (r) => `
     <tr data-row-id="${r.id}">
-      <td><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
+      <td style="white-space:nowrap"><a href="#/contest/${r.id}/startlist" style="color:var(--ok);font-weight:600">${esc(r.title)}</a></td>
       <td>${r.racer_count}</td>
-      <td>${new Date(r.start_at).toLocaleDateString(LANG === 'he' ? 'he-IL' : 'en-US',
+      <td style="white-space:nowrap">${new Date(r.start_at).toLocaleDateString(LANG === 'he' ? 'he-IL' : 'en-US',
         { year: 'numeric', month: 'short', day: 'numeric' })}</td>
       <td>${statusCell(r)}</td>
       <td>${esc(r.location || '')}</td>
-      <td>${r.sport ? esc(sportLabel(r.sport)) : ''}</td>
+      <td style="white-space:nowrap">${r.sport ? esc(sportLabel(r.sport)) : ''}</td>
       <td>${leagueCell(r)}</td>
       <td style="white-space:nowrap">
         <button class="ghost list-dup" data-id="${r.id}" data-title="${esc(r.title)}" title="${t('duplicate_race')}" aria-label="${t('duplicate_race')}">⧉</button>
@@ -1954,6 +1958,16 @@ async function renderManage(box, c) {
           <input name="start" type="datetime-local" value="${toLocalInput(c.start_at)}" required style="display:block;margin-top:4px"></label>
         <label style="margin:0">${t('end_date')}
           <input name="end" type="datetime-local" value="${toLocalInput(c.end_at)}" required style="display:block;margin-top:4px"></label>
+        <label style="margin:0;flex:1 1 220px">${t('location')}
+          <span style="display:flex;gap:6px;margin-top:4px">
+            <input name="location" value="${esc(c.location || '')}" placeholder="${t('location_hint')}" style="flex:1">
+            <button type="button" class="btn small secondary" id="sched-map" style="white-space:nowrap">📍 ${t('pick_on_map')}</button>
+          </span></label>
+        <label style="margin:0">${t('sport')}
+          <select name="sport" style="display:block;margin-top:4px">
+            ${SPORT_OPTIONS.map((s) => `<option value="${esc(s)}" ${String(c.sport || '') === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+            ${SPORT_OPTIONS.includes(String(c.sport || '')) ? '' : `<option value="${esc(c.sport || '')}" selected>${esc(c.sport || '—')}</option>`}
+          </select></label>
         <button class="btn small secondary">${t('save_settings')}</button>
       </form>
     </div>
@@ -2161,6 +2175,10 @@ async function renderManage(box, c) {
   };
 
   const schedForm = $('#schedule-form');
+  // Same map picker the create form uses, so a race's location can be corrected
+  // (or a duplicate pointed at a different venue) without recreating it.
+  const schedMap = $('#sched-map');
+  if (schedMap) schedMap.onclick = () => pickLocationOnMap((name) => { schedForm.location.value = name; });
   // Picking a start time defaults the end to start + 1.5h; the user can still
   // adjust the end afterwards.
   schedForm.start.addEventListener('change', () => {
@@ -2176,8 +2194,10 @@ async function renderManage(box, c) {
     if (isNaN(start) || isNaN(end)) { toast(t('invalid_dates'), true); return; }
     if (end <= start) { toast(t('end_after_start'), true); return; }
     try {
-      await api(`/contests/${c.id}`, { method: 'PATCH',
-        body: { start_at: start.toISOString(), end_at: end.toISOString() } });
+      await api(`/contests/${c.id}`, { method: 'PATCH', body: {
+        start_at: start.toISOString(), end_at: end.toISOString(),
+        location: f.location.value, sport: f.sport.value,
+      } });
       toast(t('saved'));
       viewContest(c.id, 'manage'); // re-render with the new times
     } catch (err) { toast(err.message, true); }

@@ -166,3 +166,36 @@ test('a read after the target lap is not a lap, and does not move the finish', (
   assert.equal(r.laps, 3, 'the race ends at the target lap');
   assert.equal(r.elapsed, '3:00.0', 'the finish stays on the target lap, not the loiter read');
 });
+
+// A duplicated race inherits the original's venue, and location/sport used to
+// be write-once — so the copy was stuck there and a typo was permanent.
+test('a race location and sport can be edited after creation', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `loc-${Date.now()}@test.co`, password: 'password123', name: 'Loc' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Venue A race', kind: 'race', sport: 'Running',
+    location: 'Kiryat Gat', start_at: iso(-60), end_at: iso(3600),
+  });
+  assert.equal(made.status, 201);
+  assert.equal(made.body.location, 'Kiryat Gat');
+
+  const dup = await request(app).post(`/api/contests/${made.body.id}/duplicate`).set(auth).send({});
+  assert.equal(dup.status, 201, 'the race duplicates');
+  assert.equal(dup.body.location, 'Kiryat Gat', 'the copy inherits the venue');
+
+  const moved = await request(app).patch(`/api/contests/${dup.body.id}`).set(auth)
+    .send({ location: 'Lachish Regional Council', sport: 'Gravel' });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.location, 'Lachish Regional Council', 'the copy can be moved');
+  assert.equal(moved.body.sport, 'Gravel');
+
+  // and it persisted, rather than only echoing back
+  const fresh = await request(app).get(`/api/contests/${dup.body.id}`).set(auth);
+  assert.equal(fresh.body.location, 'Lachish Regional Council');
+  assert.equal(made.body.location, 'Kiryat Gat'); // original untouched
+});

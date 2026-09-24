@@ -612,6 +612,11 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
     tags: b.tags !== undefined ? JSON.stringify(b.tags.map(String)) : contest.tags,
     start_at: b.start_at || contest.start_at,
     end_at: b.end_at || contest.end_at,
+    // Location and sport were write-once: set at creation and then unreachable,
+    // so a duplicated race was stuck with wherever the original was held (and a
+    // typo was permanent). Both are editable now.
+    location: b.location !== undefined ? String(b.location).trim() : contest.location,
+    sport: b.sport !== undefined ? String(b.sport).trim() : contest.sport,
     voting_start_at: b.voting_start_at !== undefined ? b.voting_start_at : contest.voting_start_at,
     voting_end_at: b.voting_end_at !== undefined ? b.voting_end_at : contest.voting_end_at,
     blind_voting: b.blind_voting !== undefined ? (b.blind_voting ? 1 : 0) : contest.blind_voting,
@@ -625,10 +630,11 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
   }
   db.prepare(
     `UPDATE contests SET title=?, description=?, tags=?, start_at=?, end_at=?, voting_start_at=?, voting_end_at=?,
-     blind_voting=?, participant_cap=?, photo_url=? WHERE id = ?`
+     blind_voting=?, participant_cap=?, photo_url=?, location=?, sport=? WHERE id = ?`
   ).run(
     fields.title, fields.description, fields.tags, fields.start_at, fields.end_at, fields.voting_start_at,
-    fields.voting_end_at, fields.blind_voting, fields.participant_cap, fields.photo_url, contest.id
+    fields.voting_end_at, fields.blind_voting, fields.participant_cap, fields.photo_url,
+    fields.location, fields.sport, contest.id
   );
   auditLog(req.user.id, 'contest.update', 'contest', contest.id);
   res.json(serializeContest(getContest(contest.id), req.user));
