@@ -83,6 +83,9 @@ public class BridgeService extends Service {
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
     private volatile java.util.Map<String, String> epcWave = java.util.Collections.emptyMap();
+    // epc -> when we last STORED a pass for it (0 = none). Distinct from
+    // lastSeen, which is the hardware dedupe and ticks even when we skip.
+    private final java.util.Map<String, Long> lastRecorded = new java.util.HashMap<>();
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
@@ -290,7 +293,9 @@ public class BridgeService extends Service {
         // as soon as the race starts; while there's no gun (setup / after a
         // restart) the per-racer beeps are re-armed.
         boolean started = raceHasGun();
-        if (!started) beepedRacers.clear();
+        // No gun anywhere means setup or a restart: forget what we have stored,
+        // so a re-gunned race records its crossings from scratch.
+        if (!started) { beepedRacers.clear(); lastRecorded.clear(); }
         // Gun time per wave, read fresh for each batch: a cached copy would keep
         // rejecting a wave's racers for seconds after its gun, losing the very
         // first crossings. Cheap — one query per batch, not per read.
@@ -316,13 +321,29 @@ public class BridgeService extends Service {
             String wave = epcWave.get(read.epc);
             Long waveGun = gunByWave.get(wave == null ? "" : wave);
             boolean racerStarted = waveGun != null;
-            if (racerStarted || checkpoint) {
+            // A racer standing by the gate after finishing is read every dedupe
+            // window, and each stored pass re-renders the screen — which is what
+            // makes the finish list jump. The engine already discards these when
+            // scoring; stop writing them at all. In a single-crossing race one
+            // stored pass since the gun IS the finish, so there is nothing more
+            // to record; in a lap race, space them by the lap gap, the same rule
+            // the engine uses to decide what counts as a new lap.
+            boolean record = racerStarted;
+            if (record && !checkpoint) {
+                long lastRec = lastRecordedMs(read.epc);
+                if (lastRec > 0) {
+                    record = prefs.recordLaps()
+                            && read.readAtMs - lastRec >= prefs.lapGapSecs() * 1000L;
+                }
+            }
+            if (record || checkpoint) {
                 // A checkpoint stamps reads in server time now, so splits survive a later
                 // clock jump; the finish device keeps device time (reconciled server-side).
                 if (checkpoint) {
                     store.addPassing(new TagRead(read.epc, read.rssi, prefs.toServerTime(read.readAtMs), read.antenna));
                 } else {
                     store.addPassing(read);
+                    lastRecorded.put(read.epc, read.readAtMs);
                 }
             }
             // Beep once the first time each racer is detected in a started race.
@@ -337,6 +358,18 @@ public class BridgeService extends Service {
             sendBroadcast(status);
         }
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events
+    }
+
+    /** When we last stored a pass for this chip, 0 if never. Seeded from the
+     *  store on first sight so a mid-race app restart does not hand every
+     *  finished racer one more pass. */
+    private long lastRecordedMs(String epc) {
+        Long cached = lastRecorded.get(epc);
+        if (cached != null) return cached;
+        long last = 0;
+        for (RaceStore.Passing p : store.passingsForEpc(epc)) last = Math.max(last, p.readAtMs);
+        lastRecorded.put(epc, last);
+        return last;
     }
 
     /** True once any wave has a gun time (the race is running). */
