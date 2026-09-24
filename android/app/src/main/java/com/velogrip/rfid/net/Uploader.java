@@ -90,6 +90,16 @@ public final class Uploader {
         return true;
     }
 
+    /** Tells the server the race was restarted: un-start every wave so the web
+     *  stops showing it live, and (on Discard) drop the reads already uploaded.
+     *  Without this a restart only ever cleared the phone. */
+    public boolean resetRace(boolean clearReads) throws IOException {
+        int code = post("/api/ingest/race-reset", "{\"clear_reads\":" + clearReads + "}");
+        if (code == 401) throw new IOException("server rejected reader token (401)");
+        if (code < 200 || code >= 300) throw new IOException("server rejected the reset (HTTP " + code + ")");
+        return true;
+    }
+
     /** Uploads a race photo (a data:image/...;base64 URL) for the public page. */
     public boolean uploadPhoto(String dataUrl) throws IOException {
         int code = post("/api/ingest/photo", "{\"photo_url\":" + jsonString(dataUrl) + "}");

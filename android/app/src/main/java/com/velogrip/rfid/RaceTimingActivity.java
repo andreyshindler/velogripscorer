@@ -1344,7 +1344,11 @@ public class RaceTimingActivity extends BaseActivity {
                 .setNegativeButton(R.string.cancel_popup, null)
                 .create();
 
-        Runnable restart = () -> {
+        // clearReads mirrors Discard: the uploaded reads go too, not just the
+        // local ones. Either way the server has to be told the race was
+        // un-started, or the web keeps showing it live off the old gun times.
+        final java.util.function.Consumer<Boolean> restart = (clearReads) -> {
+            pushRaceReset(clearReads);
             store.clearPending();
             store.clearGunTimes();                 // un-start every wave
             // Remember WHEN we un-started, so the next start-list sync doesn't
@@ -1361,13 +1365,33 @@ public class RaceTimingActivity extends BaseActivity {
 
         content.addView(controlRow(R.drawable.ic_ctrl_save, 0xFF4F9E27, 0xFF1C3320,
                 R.string.restart_save, R.string.restart_save_sub,
-                () -> { dlg.dismiss(); restart.run(); }));                 // keep times
+                () -> { dlg.dismiss(); restart.accept(false); }));         // keep times
         content.addView(controlDivider());
         content.addView(controlRow(R.drawable.ic_ctrl_trash, 0xFFC0392B, 0xFFF7DDD9,
                 R.string.restart_discard, R.string.restart_discard_sub,
-                () -> { dlg.dismiss(); store.clearPassings(); restart.run(); })); // discard times
+                () -> { dlg.dismiss(); store.clearPassings(); restart.accept(true); })); // discard times
 
         dlg.show();
+    }
+
+    /** Tell the server the race was restarted. Off the UI thread, and a failure
+     *  is reported rather than swallowed: if this does not land, the web keeps
+     *  showing the race live off gun times the phone has already forgotten. */
+    private void pushRaceReset(boolean clearReads) {
+        final Prefs p = prefs;
+        new Thread(() -> {
+            String error = null;
+            try {
+                new com.velogrip.rfid.net.Uploader(p.serverUrl(), p.readerToken()).resetRace(clearReads);
+            } catch (Exception e) {
+                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            }
+            final String failed = error;
+            if (failed != null) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        getString(R.string.reset_not_synced, failed), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     /** Header block (bold title + one-line subtitle) shared by the styled

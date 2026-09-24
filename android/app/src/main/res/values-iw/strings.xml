@@ -255,6 +255,7 @@
     <string name="rollcall_suppress_note">מבוסס על קריאות בזינוק — שים לב לחלון ״אל תזהה…״ שמעל.</string>
     <string name="restart_save_sub">שמירת הזמנים שנרשמו</string>
     <string name="restart_discard_sub">מחיקת כל הזמנים והתחלה מחדש</string>
+    <string name="reset_not_synced">המרוץ אותחל במכשיר, אך האתר לא עודכן: %1$s. ייתכן שהאתר עדיין מציג את המרוץ כפעיל.</string>
     <string name="rc_settings_short">הגדרות</string>
     <string name="no_finishers_yet">אף אחד עוד לא סיים.</string>
     <string name="no_on_course">אין משתתפים במסלול.</string>

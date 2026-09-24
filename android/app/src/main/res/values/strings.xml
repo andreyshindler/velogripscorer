@@ -255,6 +255,7 @@
     <string name="rollcall_suppress_note">Uses start-line reads — mind the “Do not detect…” window above.</string>
     <string name="restart_save_sub">Keep the recorded times</string>
     <string name="restart_discard_sub">Clear all recorded times and start over</string>
+    <string name="reset_not_synced">Race restarted on this device, but the website was not told: %1$s. It may still show the race as live.</string>
     <string name="rc_settings_short">Settings</string>
     <string name="no_finishers_yet">No finishers yet.</string>
     <string name="no_on_course">No racers on course.</string>

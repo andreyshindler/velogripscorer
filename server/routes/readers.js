@@ -197,6 +197,33 @@ router.post('/ingest/clear-reads', (req, res) => {
   res.json({ ok: true, cleared: info.changes });
 });
 
+// Race reset from the timing app (reader-token auth). Restarting a race on the
+// phone was purely local: the server kept the gun times, so the web went on
+// showing the race live with the old results and there was no way to tell it
+// otherwise. The phone is the authoritative timer, so let it say "un-start".
+// clear_reads mirrors the app's Discard, which throws the recorded times away.
+router.post('/ingest/race-reset', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  // Only the race's own timing device may do this; a checkpoint cannot.
+  if (reader.role === 'checkpoint') return res.status(403).json({ error: 'checkpoint readers cannot reset a race' });
+  const clearReads = req.body?.clear_reads === true;
+  let cleared = 0;
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE waves SET started_at = NULL WHERE contest_id = ?').run(reader.contest_id);
+    if (clearReads) {
+      cleared = db.prepare('DELETE FROM tag_reads WHERE contest_id = ?').run(reader.contest_id).changes;
+    }
+    // A reset race is being run again: don't leave it listed as finished.
+    db.prepare(`UPDATE contests SET status = 'active' WHERE id = ? AND status = 'finished'`).run(reader.contest_id);
+  });
+  tx();
+  auditLog(null, 'race.reset', 'contest', reader.contest_id,
+    `via reader ${reader.id}${clearReads ? ` — ${cleared} reads cleared` : ' — times kept'}`);
+  sseBroadcast(reader.contest_id, 'wave_start', { reset: true });
+  res.json({ ok: true, cleared });
+});
+
 // Start-list download for the offline timing app (reader-token auth):
 // everything the phone needs to run the race with no connectivity.
 router.get('/ingest/startlist', (req, res) => {

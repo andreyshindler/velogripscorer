@@ -251,3 +251,42 @@ test('replace keeps recorded chip times, which are keyed by chip not by roster',
   const after = db.prepare('SELECT COUNT(*) n FROM tag_reads WHERE contest_id = ?').get(contestId).n;
   assert.equal(after, before, 'clearing the roster must not delete recorded reads');
 });
+
+// Restarting on the tablet only ever cleared the tablet, so the web kept
+// showing the race live off gun times the phone had already forgotten.
+test('race-reset un-starts the waves so the web stops calling the race live', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `rst-${Date.now()}@test.co`, password: 'password123', name: 'RST' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  const c = (await request(app).post('/api/contests').set(auth).send({
+    title: 'Reset race', kind: 'race', sport: 'Running', start_at: iso(-60), end_at: iso(3600),
+  })).body;
+  const rdr = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth)
+    .send({ name: 'Finish', location: 'finish' })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth).send({ name: 'w1' })).body;
+  await request(app).post(`/api/contests/${c.id}/waves/${w.id}/start`).set(auth)
+    .send({ at: new Date(gun).toISOString() });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', rdr.token)
+    .send({ reads: [{ epc: 'AA0001', read_at: iso(120) }] });
+
+  const live = async () => (await request(app).get(`/api/contests/${c.id}`).set(auth)).body.started;
+  const reads = () => db.prepare('SELECT COUNT(*) n FROM tag_reads WHERE contest_id = ?').get(c.id).n;
+  assert.equal(await live(), true, 'gunned race reads as live');
+  assert.equal(reads(), 1);
+
+  // Restart keeping times: un-started, reads retained.
+  let r = await request(app).post('/api/ingest/race-reset').set('X-Reader-Token', rdr.token)
+    .send({ clear_reads: false });
+  assert.equal(r.status, 200);
+  assert.equal(await live(), false, 'no longer live after a reset');
+  assert.equal(reads(), 1, 'keeping times leaves the reads alone');
+
+  // Restart discarding times: reads go too.
+  r = await request(app).post('/api/ingest/race-reset').set('X-Reader-Token', rdr.token)
+    .send({ clear_reads: true });
+  assert.equal(r.body.cleared, 1);
+  assert.equal(reads(), 0, 'discard clears the uploaded reads');
+});
