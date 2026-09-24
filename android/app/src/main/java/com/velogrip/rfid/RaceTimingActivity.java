@@ -39,6 +39,7 @@ public class RaceTimingActivity extends BaseActivity {
     private TextView clockText, clockSub, hint;
     private TextView syncStatus;
     private boolean online = true; // last sync state reported by BridgeService
+    private String lastSyncError;  // why the last upload failed, shown on the strip
     private SnapScrollView pager;
     private LinearLayout pagerInner;
     private LinearLayout resultsBox;
@@ -99,6 +100,12 @@ public class RaceTimingActivity extends BaseActivity {
     private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent i) {
             online = i.getBooleanExtra(BridgeService.EXTRA_ONLINE, online);
+            // Keep WHY the last upload failed. "Offline" is the wrong words for a
+            // server that is reachable and refusing, and the operator cannot act
+            // on a reason they never see.
+            String log = i.getStringExtra(BridgeService.EXTRA_LOG);
+            if (online) lastSyncError = null;
+            else if (log != null && !log.isEmpty()) lastSyncError = log;
             scheduleRender(); // a new crossing (or status change) landed in the store
         }
     };
@@ -454,8 +461,10 @@ public class RaceTimingActivity extends BaseActivity {
         }
         syncStatus.setVisibility(android.view.View.VISIBLE);
         if (!online) {
-            syncStatus.setBackgroundColor(0xFFC0392B); // red: offline
-            syncStatus.setText(getString(R.string.sync_offline, pending));
+            syncStatus.setBackgroundColor(0xFFC0392B); // red: not getting through
+            syncStatus.setText(lastSyncError != null
+                    ? getString(R.string.sync_failed, pending, lastSyncError)
+                    : getString(R.string.sync_offline, pending));
         } else {
             syncStatus.setBackgroundColor(0xFFB9770E); // amber: catching up
             syncStatus.setText(getString(R.string.sync_uploading, pending));

@@ -86,6 +86,7 @@
     <string name="sign_in_to_join">התחבר קודם כדי שנקודת הביקורת תישמר בחשבון שלך</string>
     <string name="sync_offline">● לא מקוון — %1$d חציות נשמרו, יועלו כשהחיבור יחזור</string>
     <string name="sync_uploading">↑ מעלה — נותרו %1$d חציות</string>
+    <string name="sync_failed">● %1$d חציות לא הועלו — %2$s</string>
     <string name="join_checkpoint_note">טיפ: סרוק את קוד ה-QR בלשונית הניהול באתר כדי למלא את הקוד אוטומטית. לאחר מכן הגדר את חיבור הקורא והתחל לתזמן — החציות נשלחות בזמן אמת, או נצברות וממוזגות כשמתחברים מחדש.</string>
 
     <string name="no_startlist_yet">אין עדיין רשימת זינוק בטלפון — הורד קודם את המרוץ שלך.</string>
