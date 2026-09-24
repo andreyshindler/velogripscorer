@@ -665,9 +665,28 @@ async function pickLocationOnMap(onPick) {
     </div></div>`;
   document.body.appendChild(overlay);
   const map = L.map(overlay.querySelector('#pickmap')).setView([31.61, 34.76], 12); // Kiryat Gat
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap', maxZoom: 19,
-  }).addTo(map);
+  // OpenStreetMap's own tile servers are volunteer-run and their usage policy
+  // does not cover an app like this one: they answer with 403 "Access blocked"
+  // tiles (osm.wiki/Blocked). Carto's basemaps render the same OSM data and are
+  // served for exactly this use. Match the app's theme so the picker doesn't
+  // flash a white slab in dark mode.
+  const darkUi = document.documentElement.getAttribute('data-theme') === 'dark';
+  const tiles = L.tileLayer(
+    `https://{s}.basemaps.cartocdn.com/${darkUi ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png`,
+    { attribution: '© OpenStreetMap contributors, © CARTO', subdomains: 'abcd', maxZoom: 20 }
+  ).addTo(map);
+  // If the tiles can't load, say so once rather than leaving a broken grid —
+  // clicking the map still picks a location, so the dialog is still usable.
+  let tileWarned = false;
+  tiles.on('tileerror', () => {
+    if (tileWarned) return;
+    tileWarned = true;
+    const note = document.createElement('div');
+    note.textContent = t('map_tiles_failed');
+    note.style.cssText = 'position:absolute;inset-inline:8px;top:8px;z-index:500;padding:6px 10px;'
+      + 'border-radius:8px;background:var(--surface);color:var(--text);font-size:12.5px;opacity:.95';
+    overlay.querySelector('#pickmap').appendChild(note);
+  });
   let marker = null, coords = null;
   map.on('click', (e) => {
     coords = e.latlng;
