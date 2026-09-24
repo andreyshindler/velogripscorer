@@ -478,10 +478,22 @@ function setLang(lang) {
   if (toggle) toggle.textContent = LANG === 'en' ? 'עברית' : 'English';
 }
 
+// SQLite's datetime('now') stores UTC as "YYYY-MM-DD HH:MM:SS" — a space
+// instead of the ISO "T", and no zone. JavaScript parses that shape as LOCAL
+// time, so every stamp with a DB default (audit log, sign-ups, readers last
+// seen…) rendered hours out — 3 in Israel. Give a zone-less stamp the "T" and
+// an explicit Z so it is read as the UTC it actually is. Values that already
+// carry a zone (the app's own ISO timestamps) are left untouched.
+const NAIVE_TS = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/;
+function toInstant(value) {
+  const s = String(value);
+  return NAIVE_TS.test(s) ? new Date(s.replace(' ', 'T') + 'Z') : new Date(s);
+}
+
 function fmtDate(iso) {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString(LANG === 'he' ? 'he-IL' : 'en-US', {
+    return toInstant(iso).toLocaleString(LANG === 'he' ? 'he-IL' : 'en-US', {
       dateStyle: 'medium', timeStyle: 'short', hour12: false, // 24-hour clock
     });
   } catch { return iso; }
