@@ -188,6 +188,18 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 :root[data-theme="dark"] .pill.view-results { background: var(--primary); color: #0d1120; }
 /* Blue outer line around every card (matches the mockup). */
 .contest-card { outline: 2px solid var(--primary); outline-offset: 4px; }
+/* Running race clock on a live card: counts up from the first wave's gun.
+   LTR digits and tabular figures so the time reads the same way in Hebrew and
+   never jitters as the seconds turn over. */
+.live-clock-box {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 12px; border-radius: var(--r-md); background: var(--surface-2);
+}
+.live-clock {
+  direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums;
+  font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: .5px; color: var(--ok);
+}
+.live-clock-note { font-size: var(--fs-xs); color: var(--muted); text-align: center; }
 
 /* ---------- pills / badges (status = green; brand = blue; warm = tag) ---------- */
 .pill {

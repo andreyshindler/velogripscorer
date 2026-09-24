@@ -258,8 +258,10 @@ function closeSse() {
 
 // The Live-results tab polls for newly-started races; stop it on navigation.
 let livePollTimer = null;
+let liveClockTimer = null;
 function stopLivePoll() {
   if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+  if (liveClockTimer) { clearInterval(liveClockTimer); liveClockTimer = null; }
 }
 
 // Highlight the top-nav link for the current page (Home / Finished races /
@@ -429,6 +431,68 @@ async function viewLiveRaces() {
   await loadLiveRaces();
   // Poll so a race that goes live (or finishes) shows up without a reload.
   livePollTimer = setInterval(loadLiveRaces, 15000);
+  // The race clocks tick on their own, between polls.
+  startRaceClocks();
+}
+
+// Offset between this device's clock and the server's, from the live feed. A
+// viewer whose phone is minutes off would otherwise see a race clock minutes
+// wrong, and the gun time is stamped in server time.
+let serverSkewMs = 0;
+
+// Server-time gun of the FIRST wave to start: with a stagger, that is when the
+// race itself got under way, which is what the card's clock counts from.
+function liveGunMs(c) {
+  if (!c.first_wave_start) return null;
+  const ms = Date.parse(c.first_wave_start);
+  return Number.isNaN(ms) ? null : ms + (c.first_gun_offset_ms || 0);
+}
+
+// h:mm:ss / mm:ss — a race clock, so whole seconds (tenths would only flicker).
+function fmtRaceClock(ms) {
+  const totalS = Math.max(0, Math.floor(ms / 1000));
+  const s = totalS % 60, m = Math.floor(totalS / 60) % 60, h = Math.floor(totalS / 3600);
+  const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function tickLiveClocks() {
+  const now = Date.now() + serverSkewMs;
+  for (const el of document.querySelectorAll('.live-clock[data-gun]')) {
+    el.textContent = fmtRaceClock(now - Number(el.dataset.gun));
+  }
+}
+
+// Keep every race clock on the page ticking. route() stops the timer on the way
+// out of a view, so each view that renders a clock asks for it again.
+function startRaceClocks() {
+  if (!liveClockTimer) liveClockTimer = setInterval(tickLiveClocks, 1000);
+}
+
+// Earliest wave gun across a result set — when the race itself got under way,
+// which is what a race clock on the results page counts from. Null before any
+// wave has started.
+function firstGunOfResults(results) {
+  let best = null;
+  for (const r of results || []) {
+    if (!r.wave_started_at) continue;
+    const ms = Date.parse(r.wave_started_at);
+    if (Number.isNaN(ms)) continue;
+    const gun = ms + (r.wave_gun_offset_ms || 0);
+    if (!best || gun < best.ms) best = { ms: gun, iso: r.wave_started_at };
+  }
+  return best;
+}
+
+// Markup for a running race clock counting up from `gunMs` (server time).
+function raceClockBox(gunMs, startedAtIso) {
+  // Rendered with a value already in place, so the clock never shows blank in
+  // the second before the first tick.
+  return `
+      <div class="live-clock-box">
+        <span class="live-clock" data-gun="${gunMs}">${fmtRaceClock(Date.now() + serverSkewMs - gunMs)}</span>
+        <span class="live-clock-note">${t('live_clock_label')} · ${t('live_gun_at', { t: fmtTimeOfDay(startedAtIso) })}</span>
+      </div>`;
 }
 
 async function loadLiveRaces() {
@@ -437,8 +501,10 @@ async function loadLiveRaces() {
   try {
     // The server decides what "live" means (started + recently active, not
     // finished) — see GET /contests/live.
-    const { contests } = await api('/contests/live');
+    const { contests, now } = await api('/contests/live');
     const races = contests || [];
+    const serverNow = now ? Date.parse(now) : NaN;
+    if (!Number.isNaN(serverNow)) serverSkewMs = serverNow - Date.now();
     setLiveDot(races.length > 0);
     box.innerHTML = races.length
       ? `<div class="grid">${races
@@ -452,6 +518,8 @@ async function loadLiveRaces() {
 
 function liveCard(c) {
   const league = String(c.league_names || '').trim();
+  const gun = liveGunMs(c);
+  const clock = gun === null ? '' : raceClockBox(gun, c.first_wave_start);
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div class="card-head">
@@ -462,7 +530,7 @@ function liveCard(c) {
         </div>
         <span class="pill view-results">${t('view_results_link')} ❯</span>
       </div>
-      <h3>${esc(c.title)}</h3>
+      <h3>${esc(c.title)}</h3>${clock}
       <div class="meta">
         ${c.location ? `<span>📍 ${esc(c.location)}</span>` : ''}
         <span>🗓 ${fmtDate(c.start_at)}</span>
@@ -477,7 +545,9 @@ function setLiveDot(on) {
 }
 async function refreshLiveDot() {
   try {
-    const { contests } = await api('/contests/live');
+    const { contests, now } = await api('/contests/live');
+    const serverNow = now ? Date.parse(now) : NaN;
+    if (!Number.isNaN(serverNow)) serverSkewMs = serverNow - Date.now();
     setLiveDot((contests || []).length > 0);
   } catch { /* ignore */ }
 }
@@ -1281,6 +1351,7 @@ async function viewPublicResults(id, tab) {
   const data = await api(`/contests/${id}/race-results`);
 
   const hasLaps = data.results.some((r) => (r.laps || 0) > 1);
+  const liveGun = firstGunOfResults(data.results);
   const tabs = [['winners', 'race_winners'], ['top3', 'top3_finishers'], ['full', 'full_results']];
   if (hasLaps) tabs.push(['laps', 'lap_times']);
   main.innerHTML = `
@@ -1288,7 +1359,8 @@ async function viewPublicResults(id, tab) {
       <h1 style="text-align:center;margin-bottom:2px">${esc(c.title)}</h1>
       <p style="text-align:center;margin:0 0 ${c.started && c.status !== 'finished' ? '8px' : '12px'};color:var(--muted)">${esc(fmtDate(c.start_at))} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
       ${c.started && c.status !== 'finished'
-        ? `<p style="text-align:center;margin:0 0 14px"><span class="pill live"><span class="live-dot"></span>${t('hero_live')}</span></p>`
+        ? `<p style="text-align:center;margin:0 0 10px"><span class="pill live"><span class="live-dot"></span>${t('hero_live')}</span></p>
+           ${liveGun ? `<div style="display:flex;justify-content:center;margin:0 0 14px">${raceClockBox(liveGun.ms, liveGun.iso)}</div>` : ''}`
         : ''}
       ${raceInfoPanel(c, data.results)}
       <div class="pubtabs">
@@ -1300,6 +1372,8 @@ async function viewPublicResults(id, tab) {
       </div>` : ''}
       <div id="pubbody"></div>
     </div>`;
+
+  if (liveGun && c.started && c.status !== 'finished') startRaceClocks();
 
   const csvBtn = document.getElementById('dl-csv');
   if (csvBtn) csvBtn.onclick = () => downloadAuthed(`/contests/${id}/race-results?format=csv`, `race-results-${id}.csv`);

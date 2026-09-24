@@ -111,6 +111,9 @@ function computeRaceResults(contest, { category } = {}) {
       epc: a.epc, epcs: a.epcs.slice(), bib: a.bib, participant: a.participant, category: a.category,
       distance: a.distance || '', team: a.team || '', gender: a.gender || '',
       wave: wave ? wave.name : null, wave_started_at: wave ? wave.started_at : null,
+      // The device-clock correction that goes with that gun, so a page showing
+      // a running race clock counts from the same instant the scoring does.
+      wave_gun_offset_ms: wave ? wave.gun_offset_ms || 0 : 0,
       // raw organizer override ('' when auto) so the web editor shows the true
       // stored value, not the computed DNS/DNF; ignored by the public views.
       racer_status: a.racer_status || '',

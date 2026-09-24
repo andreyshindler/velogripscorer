@@ -645,6 +645,21 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   assert.ok(!ids.includes(notStarted.id), 'never-started race is not live');
   assert.ok(!ids.includes(idle.id), 'idle race (no activity for hours) is not live');
 
+  // A staggered second wave must not move the race clock: it counts from the
+  // moment the race got under way, which is the FIRST gun.
+  const w2 = (await request(app).post(`/api/contests/${live.id}/waves`).set(auth(o)).send({ name: 'B' })).body;
+  await request(app).post(`/api/contests/${live.id}/waves/${w2.id}/start`).set(auth(o))
+    .send({ at: new Date(Date.now() - 120_000).toISOString() });
+  res = await request(app).get('/api/contests/live');
+
+  // The page runs a race clock off these: the first wave's gun, and the
+  // server's own "now" so a viewer's wrong device clock can't skew it.
+  const card = res.body.contests.find((c) => c.id === live.id);
+  assert.ok(card.first_wave_start, 'live card carries the first gun time');
+  assert.ok(Math.abs(Date.now() - Date.parse(res.body.now)) < 60_000, 'response carries server time');
+  const elapsed = Date.parse(res.body.now) - Date.parse(card.first_wave_start);
+  assert.ok(elapsed > 290_000 && elapsed < 320_000, `race clock reads ~5 min, got ${elapsed}ms`);
+
   // Finishing the race drops it from live.
   assert.equal((await request(app).post(`/api/contests/${live.id}/finish`).set(auth(o)).send({})).status, 200);
   res = await request(app).get('/api/contests/live');

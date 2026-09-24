@@ -222,6 +222,10 @@ router.get('/contests/live', (req, res) => {
            JOIN leagues l ON l.id = lr.league_id WHERE lr.contest_id = c.id) AS league_names,
         (SELECT lr.league_id FROM league_races lr WHERE lr.contest_id = c.id LIMIT 1) AS league_id,
         (SELECT MAX(w.started_at) FROM waves w WHERE w.contest_id = c.id AND w.started_at IS NOT NULL) AS last_wave_start,
+        (SELECT w.started_at FROM waves w WHERE w.contest_id = c.id AND w.started_at IS NOT NULL
+           ORDER BY w.started_at ASC LIMIT 1) AS first_wave_start,
+        (SELECT w.gun_offset_ms FROM waves w WHERE w.contest_id = c.id AND w.started_at IS NOT NULL
+           ORDER BY w.started_at ASC LIMIT 1) AS first_gun_offset_ms,
         (SELECT MAX(r.received_at) FROM tag_reads r WHERE r.contest_id = c.id) AS last_read_at
        FROM contests c JOIN users u ON u.id = c.organizer_id
        WHERE c.kind = 'race' AND c.status = 'active'`
@@ -241,7 +245,9 @@ router.get('/contests/live', (req, res) => {
       return now - lastActivity <= LIVE_IDLE_MS;
     })
     .map((c) => ({ ...c, tags: JSON.parse(c.tags || '[]') }));
-  res.json({ contests: live });
+  // `now` lets the page run its race clocks off the server's clock: a viewer
+  // whose device is minutes out would otherwise see a wrong elapsed time.
+  res.json({ contests: live, now: new Date(now).toISOString() });
 });
 
 // Recommended contests based on tags of contests the user follows/entered (req 3.7)

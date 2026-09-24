@@ -9,6 +9,7 @@ const I18N = {
     nav_finished: 'Finished races', no_finished_races: 'No finished races yet.', view_results_link: 'View results',
     nav_live: 'Live results', no_live_races: 'No live races right now.',
     live_updates_note: 'Updates automatically while a race is running.',
+    live_gun_at: 'Started {t}', live_clock_label: 'Race clock',
     open_league: 'Open league standings',
     nav_startlists: 'Start lists', my_startlists: 'My start lists',
     add_new_list: 'Add new start list', races_found: '{n} races found',
@@ -240,6 +241,7 @@ const I18N = {
     nav_finished: 'מרוצים שהסתיימו', no_finished_races: 'עדיין אין מרוצים שהסתיימו.', view_results_link: 'צפה בתוצאות',
     nav_live: 'תוצאות בזמן אמת', no_live_races: 'אין מרוצים בשידור חי כרגע.',
     live_updates_note: 'מתעדכן אוטומטית בזמן שהמרוץ מתקיים',
+    live_gun_at: 'הזנקה {t}', live_clock_label: 'שעון המרוץ',
     open_league: 'פתח את טבלת הליגה',
     nav_startlists: 'רשימות זינוק', my_startlists: 'רשימות הזינוק שלי',
     add_new_list: 'הוספת רשימת זינוק', races_found: 'נמצאו {n} מרוצים',
@@ -496,6 +498,17 @@ const NAIVE_TS = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/;
 function toInstant(value) {
   const s = String(value);
   return NAIVE_TS.test(s) ? new Date(s.replace(' ', 'T') + 'Z') : new Date(s);
+}
+
+// Clock time of day only (24h) — for a gun time, where the date is already on
+// the card and only the hour matters.
+function fmtTimeOfDay(iso) {
+  if (!iso) return '—';
+  try {
+    return toInstant(iso).toLocaleTimeString(LANG === 'he' ? 'he-IL' : 'en-US', {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+  } catch { return iso; }
 }
 
 function fmtDate(iso) {
