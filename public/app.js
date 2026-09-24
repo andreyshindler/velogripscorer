@@ -672,16 +672,22 @@ async function pickLocationOnMap(onPick) {
   // the app's theme. MAP_TILES below is the one place to change this, or to
   // drop in a keyed provider's URL.
   const darkUi = document.documentElement.getAttribute('data-theme') === 'dark';
+  const canvas = `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${darkUi ? 'Dark' : 'Light'}_Gray`;
   const MAP_TILES = {
     // ArcGIS tiles are addressed {z}/{y}/{x} — row before column, unlike OSM.
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/'
-      + `World_${darkUi ? 'Dark' : 'Light'}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    url: `${canvas}_Base/MapServer/tile/{z}/{y}/{x}`,
+    // The canvas basemaps ship the place names as a SEPARATE reference layer;
+    // without it you are picking a venue off unlabelled roads.
+    labels: `${canvas}_Reference/MapServer/tile/{z}/{y}/{x}`,
     attribution: 'Tiles © Esri — © OpenStreetMap contributors',
     maxZoom: 16, // the canvas basemaps stop here; ample for picking a venue
   };
   const tiles = L.tileLayer(MAP_TILES.url, {
     attribution: MAP_TILES.attribution, maxZoom: MAP_TILES.maxZoom,
   }).addTo(map);
+  if (MAP_TILES.labels) {
+    L.tileLayer(MAP_TILES.labels, { maxZoom: MAP_TILES.maxZoom, pane: 'overlayPane' }).addTo(map);
+  }
   // If the tiles can't load, say so once rather than leaving a broken grid —
   // clicking the map still picks a location, so the dialog is still usable.
   let tileWarned = false;
