@@ -66,7 +66,12 @@ public final class Uploader {
         }
         int code = post("/api/ingest/reads", json.toString());
         if (code == 401) throw new IOException("server rejected reader token (401)");
-        return code >= 200 && code < 300;
+        // Any other non-2xx used to return false without throwing, so the caller
+        // kept the batch, kept believing it was online, and retried the same
+        // rejected passes forever behind an amber "Uploading" strip that could
+        // never clear. Say what actually happened instead.
+        if (code < 200 || code >= 300) throw new IOException("server rejected the passes (HTTP " + code + ")");
+        return true;
     }
 
     /** Uploads a locally recorded gun time. The phone is the authoritative timer,
@@ -79,7 +84,10 @@ public final class Uploader {
                 + ",\"force\":true}";
         int code = post("/api/ingest/wave-start", json);
         if (code == 401) throw new IOException("server rejected reader token (401)");
-        return code >= 200 && code < 300;
+        // A gun time that fails to upload is the worst thing to lose quietly:
+        // the website scores the whole wave from the wrong start, or not at all.
+        if (code < 200 || code >= 300) throw new IOException("server rejected the gun time (HTTP " + code + ")");
+        return true;
     }
 
     /** Uploads a race photo (a data:image/...;base64 URL) for the public page. */
