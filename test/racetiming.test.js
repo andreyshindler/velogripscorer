@@ -660,6 +660,21 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   const elapsed = Date.parse(res.body.now) - Date.parse(card.first_wave_start);
   assert.ok(elapsed > 290_000 && elapsed < 320_000, `race clock reads ~5 min, got ${elapsed}ms`);
 
+  // Every wave comes with its own gun, in gun order, so a staggered race can
+  // show a clock per wave and not just the leading one's.
+  assert.deepEqual(card.waves.map((w) => w.name), ['A', 'B'], 'waves in gun order');
+  assert.equal(card.waves[0].started_at, card.first_wave_start);
+  const stagger = Date.parse(card.waves[1].started_at) - Date.parse(card.waves[0].started_at);
+  assert.ok(stagger > 170_000 && stagger < 190_000, `wave B is ~3 min behind, got ${stagger}ms`);
+
+  // A wave still waiting for its gun is listed too — the card says "not
+  // started" for it rather than leaving it out.
+  await request(app).post(`/api/contests/${live.id}/waves`).set(auth(o)).send({ name: 'C' });
+  res = await request(app).get('/api/contests/live');
+  const later = res.body.contests.find((c) => c.id === live.id).waves;
+  assert.deepEqual(later.map((w) => w.name), ['A', 'B', 'C'], 'un-started waves come last');
+  assert.equal(later[2].started_at, null);
+
   // Finishing the race drops it from live.
   assert.equal((await request(app).post(`/api/contests/${live.id}/finish`).set(auth(o)).send({})).status, 200);
   res = await request(app).get('/api/contests/live');

@@ -200,6 +200,15 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
   font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: .5px; color: var(--ok);
 }
 .live-clock-note { font-size: var(--fs-xs); color: var(--muted); text-align: center; }
+/* One chip per wave, under the race clock: name, gun time, own clock. */
+.wave-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 6px; }
+.wave-chip {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 9px; border-radius: var(--r-pill);
+  background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted);
+}
+.wave-chip b { color: var(--text); font-weight: 700; }
+.wave-chip .wave-clock { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0; }
+.wave-chip.pending { opacity: .7; }
 
 /* ---------- pills / badges (status = green; brand = blue; warm = tag) ---------- */
 .pill {

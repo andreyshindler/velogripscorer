@@ -484,14 +484,51 @@ function firstGunOfResults(results) {
   return best;
 }
 
-// Markup for a running race clock counting up from `gunMs` (server time).
-function raceClockBox(gunMs, startedAtIso) {
+// One chip per wave: its name, its own gun time, and its own clock. With a
+// stagger the race clock is only right for the first wave, so every wave that
+// has started gets the elapsed time its own racers are being scored on; a wave
+// still waiting says so rather than showing a clock it has no right to.
+function waveChips(waves) {
+  const named = (waves || []).filter((w) => String(w.name || '').trim());
+  if (!named.length) return ''; // a single unnamed mass start: the note says it all
+  return `
+        <div class="wave-chips">${named.map((w) => {
+    const ms = w.started_at ? Date.parse(w.started_at) : NaN;
+    if (Number.isNaN(ms)) {
+      return `<span class="wave-chip pending"><b>${esc(w.name)}</b> ${t('not_started')}</span>`;
+    }
+    const gun = ms + (w.gun_offset_ms || 0);
+    return `<span class="wave-chip"><b>${esc(w.name)}</b> ${fmtTimeOfDay(w.started_at)} ·
+              <span class="live-clock wave-clock" data-gun="${gun}">${fmtRaceClock(Date.now() + serverSkewMs - gun)}</span></span>`;
+  }).join('')}</div>`;
+}
+
+// The race's waves, as the result rows see them: one entry per wave name, in
+// gun order with the un-started ones last.
+function wavesOfResults(results) {
+  const byName = new Map();
+  for (const r of results || []) {
+    const name = String(r.wave || '').trim();
+    if (!name || byName.has(name)) continue;
+    byName.set(name, { name, started_at: r.wave_started_at, gun_offset_ms: r.wave_gun_offset_ms || 0 });
+  }
+  return [...byName.values()].sort((a, b) => {
+    if (!a.started_at || !b.started_at) return (a.started_at ? 0 : 1) - (b.started_at ? 0 : 1);
+    return Date.parse(a.started_at) - Date.parse(b.started_at);
+  });
+}
+
+// Markup for a running race clock counting up from `gunMs` (server time), with
+// a chip per wave under it.
+function raceClockBox(gunMs, startedAtIso, waves) {
+  const chips = waveChips(waves);
   // Rendered with a value already in place, so the clock never shows blank in
   // the second before the first tick.
   return `
       <div class="live-clock-box">
         <span class="live-clock" data-gun="${gunMs}">${fmtRaceClock(Date.now() + serverSkewMs - gunMs)}</span>
-        <span class="live-clock-note">${t('live_clock_label')} · ${t('live_gun_at', { t: fmtTimeOfDay(startedAtIso) })}</span>
+        <span class="live-clock-note">${t('live_clock_label')}${chips ? '' : ` · ${t('live_gun_at', { t: fmtTimeOfDay(startedAtIso) })}`}</span>
+        ${chips}
       </div>`;
 }
 
@@ -519,7 +556,7 @@ async function loadLiveRaces() {
 function liveCard(c) {
   const league = String(c.league_names || '').trim();
   const gun = liveGunMs(c);
-  const clock = gun === null ? '' : raceClockBox(gun, c.first_wave_start);
+  const clock = gun === null ? '' : raceClockBox(gun, c.first_wave_start, c.waves);
   return `
     <a class="card contest-card" href="#/results/${c.id}" style="color:inherit;text-decoration:none">
       <div class="card-head">
@@ -1360,7 +1397,7 @@ async function viewPublicResults(id, tab) {
       <p style="text-align:center;margin:0 0 ${c.started && c.status !== 'finished' ? '8px' : '12px'};color:var(--muted)">${esc(fmtDate(c.start_at))} — ${c.status === 'finished' ? t('final_results_label') : t('results_word')}</p>
       ${c.started && c.status !== 'finished'
         ? `<p style="text-align:center;margin:0 0 10px"><span class="pill live"><span class="live-dot"></span>${t('hero_live')}</span></p>
-           ${liveGun ? `<div style="display:flex;justify-content:center;margin:0 0 14px">${raceClockBox(liveGun.ms, liveGun.iso)}</div>` : ''}`
+           ${liveGun ? `<div style="display:flex;justify-content:center;margin:0 0 14px">${raceClockBox(liveGun.ms, liveGun.iso, wavesOfResults(data.results))}</div>` : ''}`
         : ''}
       ${raceInfoPanel(c, data.results)}
       <div class="pubtabs">

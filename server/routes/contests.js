@@ -245,6 +245,24 @@ router.get('/contests/live', (req, res) => {
       return now - lastActivity <= LIVE_IDLE_MS;
     })
     .map((c) => ({ ...c, tags: JSON.parse(c.tags || '[]') }));
+
+  // Each wave's own gun, so a staggered race can show a clock per wave rather
+  // than one race clock that is right for the first wave alone. Waves still
+  // waiting for their gun come too — "not started yet" is worth showing.
+  if (live.length) {
+    const waveRows = db
+      .prepare(
+        `SELECT contest_id, name, started_at, gun_offset_ms FROM waves
+          WHERE contest_id IN (${live.map(() => '?').join(',')})
+          ORDER BY (started_at IS NULL), started_at ASC, id ASC`
+      )
+      .all(...live.map((c) => c.id));
+    for (const c of live) {
+      c.waves = waveRows
+        .filter((w) => w.contest_id === c.id)
+        .map(({ name, started_at, gun_offset_ms }) => ({ name, started_at, gun_offset_ms }));
+    }
+  }
   // `now` lets the page run its race clocks off the server's clock: a viewer
   // whose device is minutes out would otherwise see a wrong elapsed time.
   res.json({ contests: live, now: new Date(now).toISOString() });
