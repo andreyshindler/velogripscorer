@@ -13,6 +13,15 @@
 const { db } = require('./db');
 
 /**
+ * Sports scored on a single crossing of the line: ranked on elapsed time alone,
+ * and created with lap recording off, because there an extra "lap" is a stray
+ * double read rather than a place. Mirrored in public/app.js.
+ */
+function isTimeOnlySport(sport) {
+  return /run|walk/i.test(String(sport || ''));
+}
+
+/**
  * Compute the ranked results for one contest row (needs suppress_secs and
  * min_lap_gap_secs on it). Returns the results array with rank / behind /
  * category_rank filled in for finishers.
@@ -200,7 +209,7 @@ function computeRaceResults(contest, { category } = {}) {
   // crossing, so an extra "lap" there is a stray double read, and letting it
   // outrank a genuinely faster runner corrupts the result. Lap-based sports
   // (MTB XCO and friends) keep laps-first, where a lap really is a place.
-  const timeOnly = /run|walk/i.test(String(contest.sport || ''));
+  const timeOnly = isTimeOnlySport(contest.sport);
   const statusOrder = { finished: 0, on_course: 1, not_started: 2, DNF: 3, DSQ: 4, DNS: 5 };
   results.sort((x, y) => {
     const sx = statusOrder[x.status] ?? 9, sy = statusOrder[y.status] ?? 9;
@@ -241,4 +250,6 @@ const isFemaleG = (g) => ['f', 'female', 'נקבה', 'אישה'].includes(String
 const isMaleG = (g) => ['m', 'male', 'זכר', 'גבר'].includes(String(g || '').trim().toLowerCase());
 const genderLabelG = (g) => (isMaleG(g) ? 'Male' : isFemaleG(g) ? 'Female' : '');
 
-module.exports = { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG };
+module.exports = {
+  computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG, isTimeOnlySport,
+};

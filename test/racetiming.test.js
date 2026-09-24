@@ -731,7 +731,11 @@ test('leader-ends-race is XCO-only: a running race ignores the flag', async () =
     { epc: 'CCCC0301', read_at: at(250) }, { epc: 'CCCC0301', read_at: at(320) },
   ]});
   await request(app).patch(`/api/contests/${c.id}/lap-targets`).set(auth(org)).send({ race_laps: 4 });
-  await request(app).patch(`/api/contests/${c.id}/timing-settings`).set(auth(org)).send({ leader_ends_race: true });
+  // A running race is created with lap recording OFF, so a lapped running race
+  // has to ask for it. Enabled here so the leader rule has laps to act on —
+  // which is the whole point: it must still be ignored outside XCO.
+  await request(app).patch(`/api/contests/${c.id}/timing-settings`).set(auth(org))
+    .send({ leader_ends_race: true, record_laps: true });
   const by = Object.fromEntries((await request(app).get(`/api/contests/${c.id}/race-results`)
     .set(auth(org))).body.results.map((r) => [r.bib, r]));
   assert.equal(by['301'].laps, 4, 'a non-XCO race ignores the leader rule even with the flag on');

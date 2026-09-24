@@ -115,3 +115,26 @@ test('a blank sport keeps the lap-first default', () => {
   const byBib = Object.fromEntries(results.map((r) => [r.bib, r]));
   assert.equal(byBib['1'].rank, 1);
 });
+
+// A running race is scored on one crossing, so lap recording must start OFF:
+// left on, a stray re-read past the lap gap becomes "lap 2" and drags the
+// finish time out to that later crossing.
+test('a new running race is created with lap recording off', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `rl-${Date.now()}@test.co`, password: 'password123', name: 'RL' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  const mk = (sport) => request(app).post('/api/contests').set(auth).send({
+    title: 'RL ' + sport, kind: 'race', sport,
+    start_at: iso(-60), end_at: iso(3600),
+  });
+
+  const running = await mk('Running');
+  assert.equal(running.status, 201);
+  assert.equal(running.body.record_laps, 0, 'running starts with laps off');
+
+  const xco = await mk('MTB — Cross-country (XCO)');
+  assert.equal(xco.body.record_laps, 1, 'a lap sport keeps lap recording on');
+});

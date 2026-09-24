@@ -1995,6 +1995,8 @@ async function renderManage(box, c) {
         </form>
       </div>
       <p class="muted" style="font-size:0.78rem">${t('waves_help')}</p>
+      ${isTimeOnlySport(c.sport) ? `<p id="rl-warn" style="font-size:0.8rem;color:var(--danger);font-weight:600;margin:0 0 8px;
+        ${c.record_laps === 0 ? 'display:none' : ''}">⚠️ ${t('record_laps_warn')}</p>` : ''}
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
           <th>${t('wave')}</th><th>${t('racers_count')}</th><th>${t('started_at')}</th><th></th>
@@ -2273,6 +2275,15 @@ async function renderManage(box, c) {
     } catch (err) { toast(err.message, true); }
   };
 
+  // Show the running-race lap warning the moment the box is ticked, not only
+  // after a save — the organizer is deciding right now.
+  const rlBox = $('#timing-settings') && $('#timing-settings').recordlaps;
+  const rlWarn = $('#rl-warn');
+  if (rlBox && rlWarn) {
+    rlBox.addEventListener('change', () => {
+      rlWarn.style.display = rlBox.checked ? '' : 'none';
+    });
+  }
   $('#timing-settings').onsubmit = async (e) => {
     e.preventDefault();
     try {

@@ -6,6 +6,7 @@ const { db, auditLog } = require('../db');
 const { requireAuth } = require('../auth');
 const { computeLeaderboard } = require('../scoring');
 const { sseSubscribe, notify, dispatchWebhooks } = require('../events');
+const { isTimeOnlySport } = require('../race-results');
 
 const router = express.Router();
 
@@ -542,6 +543,13 @@ router.post('/contests', requireAuth, (req, res) => {
         String(b.organizer_name || '').trim().slice(0, 80)
       );
     const contestId = info.lastInsertRowid;
+    // A running race is scored on one crossing of the line, so lap recording
+    // starts OFF: left on, a second chip read a lap-gap after the finish counts
+    // as another lap and drags the finish time out to that later crossing.
+    // Lap sports keep the column default (on). Either way it stays editable.
+    if (kind === 'race' && isTimeOnlySport(b.sport)) {
+      db.prepare('UPDATE contests SET record_laps = 0 WHERE id = ?').run(contestId);
+    }
     if (kind === 'race') {
       // one device token per race, created up front: the organizer pastes it
       // into the Android timing app; no manual "reader" setup needed.
