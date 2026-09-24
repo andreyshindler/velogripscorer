@@ -63,7 +63,6 @@ public class RaceTimingActivity extends BaseActivity {
     private long lastSplitMs = -1;
     private String lastTapText;      // "13th 2:19:16.9 +…: name" for the hint strip
     private String scrollToBib;      // after a tap-finish, scroll the results to this racer
-    private long lastAutoScrollId;   // passing already auto-scrolled to, so it happens once per read
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
     // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
@@ -833,17 +832,13 @@ public class RaceTimingActivity extends BaseActivity {
         }
         java.util.Collections.sort(rows, (a, b) -> Long.compare(a.elapsed, b.elapsed));
 
-        // Who just crossed, by wall clock. Resolved before the rows are built so
-        // it can drive both the status strip and the scroll: a chip read should
-        // bring that racer into view exactly as a tap-finish does, instead of
-        // leaving the operator looking at the top of the list.
+        // Who just crossed, by wall clock — for the status strip below.
+        // Deliberately does NOT scroll the list: rows are ordered by elapsed
+        // time, so a new finisher lands mid-list and scrolling to them yanks the
+        // view out from under the operator on every read. The strip names them
+        // without moving anything; scrolling stays a response to a tap.
         final RaceStore.Passing newest = store.latestPassing();
         final String newestBib = newest == null ? null : bibForEpc(newest.epc);
-        if (newest != null && newest.id != lastAutoScrollId) {
-            lastAutoScrollId = newest.id;
-            // An explicit tap already chose a row; don't override it.
-            if (scrollToBib == null && newestBib != null) scrollToBib = newestBib;
-        }
 
         int place = 1;
         long prevElapsed = -1;
