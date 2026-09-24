@@ -63,6 +63,10 @@ public class RaceTimingActivity extends BaseActivity {
     private long lastSplitMs = -1;
     private String lastTapText;      // "13th 2:19:16.9 +…: name" for the hint strip
     private String scrollToBib;      // after a tap-finish, scroll the results to this racer
+    // "bib:lap" of the chip crossing the list was last brought to. Scrolling is
+    // driven off this rather than off each read, so a chip read that changes
+    // nothing — a finisher still standing by the gate — moves nothing.
+    private String shownCrossing;
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
     // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
@@ -832,11 +836,10 @@ public class RaceTimingActivity extends BaseActivity {
         }
         java.util.Collections.sort(rows, (a, b) -> Long.compare(a.elapsed, b.elapsed));
 
-        // Who just crossed, by wall clock — for the status strip below.
-        // Deliberately does NOT scroll the list: rows are ordered by elapsed
-        // time, so a new finisher lands mid-list and scrolling to them yanks the
-        // view out from under the operator on every read. The strip names them
-        // without moving anything; scrolling stays a response to a tap.
+        // Who just crossed, by wall clock — the finish list is ordered by
+        // elapsed time, so a new finisher lands mid-list and the sorted order
+        // cannot answer "who just came through". Names them in the strip below,
+        // and brings their row into view (see shownCrossing).
         final RaceStore.Passing newest = store.latestPassing();
         final String newestBib = newest == null ? null : bibForEpc(newest.epc);
 
@@ -848,6 +851,8 @@ public class RaceTimingActivity extends BaseActivity {
         // rather than whoever happens to sort last (the slowest finisher).
         final java.util.Map<String, String> lineByBib = new java.util.HashMap<>();
         View scrollTarget = null;
+        View newestRow = null;     // the row of the racer whose chip was read last
+        String newestKey = null;   // "bib:lap" of that row
         for (ResRow row : rows) {
             final int seq = place++;
             long elapsed = row.elapsed;
@@ -880,6 +885,12 @@ public class RaceTimingActivity extends BaseActivity {
                 }
                 resultsBox.addView(rv);
                 if (scrollToBib != null && scrollToBib.equals(r.bib)) scrollTarget = rv;
+                // Rows are sorted by elapsed time, so the last one matching this
+                // racer is their latest lap — the crossing just made.
+                if (r.bib != null && r.bib.equals(newestBib)) {
+                    newestRow = rv;
+                    newestKey = r.bib + ":" + row.lap;
+                }
                 lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap,
                         r.name == null || r.name.isEmpty() ? r.bib : r.name);
                 if (r.bib != null && !r.bib.isEmpty()) lineByBib.put(r.bib, lastTapText);
@@ -909,8 +920,19 @@ public class RaceTimingActivity extends BaseActivity {
             }
         }
 
-        // After a tap-finish, bring that racer's row into view instead of making
-        // the operator scroll the finish list down to find it.
+        // A chip crossing brings its racer's row into view, so the operator sees
+        // who just came through without hunting down a list sorted by time.
+        // Only a crossing the list has not been moved to yet counts: a finisher
+        // standing by the gate is read over and over and produces the same
+        // "bib:lap" every time, and re-scrolling to it is what yanked the list
+        // around under the operator's hands. An explicit tap-finish wins.
+        if (scrollTarget == null && newestKey != null && !newestKey.equals(shownCrossing)) {
+            scrollTarget = newestRow;
+        }
+        if (newestKey != null) shownCrossing = newestKey;
+
+        // Bring the chosen row into view instead of making the operator scroll
+        // the finish list down to find it.
         if (scrollTarget != null && !fastTap) {
             final View target = scrollTarget;
             final ScrollView sv = findViewById(R.id.resultsScroll);
@@ -1119,6 +1141,9 @@ public class RaceTimingActivity extends BaseActivity {
         for (String epc : epcsForBib(bib)) {
             for (RaceStore.Passing p : store.passingsForEpc(epc)) store.deletePassing(p.id);
         }
+        // Their crossing is gone, so if they come through again it is new and
+        // the list should move to it.
+        shownCrossing = null;
     }
 
     /** Parse h:mm:ss.t / mm:ss.t / ss.t into milliseconds. */
@@ -1416,6 +1441,7 @@ public class RaceTimingActivity extends BaseActivity {
             prefs.setGunsClearedAt(System.currentTimeMillis());
             prefs.setRaceFinalized(false);
             prefs.setRollCallClosedAt(0);          // fresh race: roll call re-opens
+            shownCrossing = null;                  // the next crossing is new again
             // keep the reader (and its WiFi) connected through the restart;
             // clearing the gun re-arms the per-racer beeps
             Intent i = new Intent(this, RaceStartActivity.class);
