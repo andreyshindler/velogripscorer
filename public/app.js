@@ -500,11 +500,13 @@ function waveChips(waves) {
     const gun = ms + (w.gun_offset_ms || 0);
     // Who has won this wave so far, and in what time. The race clock says how
     // long the wave has been running; this says what the wave has produced.
-    const who = w.leader
-      ? `${w.leader.bib ? `#${esc(w.leader.bib)} ` : ''}${esc(w.leader.participant || '')}`.trim()
-      : '';
+    // The NAME is what gets truncated when the chip runs out of room — the bib
+    // and the time never do. A long name was pushing the finish time under the
+    // ellipsis, which hid the one number the chip exists to show.
     const leader = w.leader
-      ? `<span class="wave-chip-leader">🥇 ${who} · <b>${esc(w.leader.elapsed)}</b></span>`
+      ? `<span class="wave-chip-leader">🥇 ${w.leader.bib ? `#${esc(w.leader.bib)}` : ''}
+           <span class="wave-chip-name">${esc(w.leader.participant || '')}</span>
+           · <b>${esc(w.leader.elapsed)}</b></span>`
       : '';
     return `<span class="wave-chip"><span class="wave-chip-top"><b>${esc(w.name)}</b> ${fmtTimeOfDay(w.started_at)} ·
               <span class="live-clock wave-clock" data-gun="${gun}">${fmtRaceClock(Date.now() + serverSkewMs - gun)}</span></span>${leader}</span>`;

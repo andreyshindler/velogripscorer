@@ -208,9 +208,11 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
   background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted);
 }
 .wave-chip-top { display: inline-flex; align-items: baseline; gap: 6px; }
-/* Who leads this wave, and in what time. */
-.wave-chip-leader { display: block; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wave-chip-leader b { font-variant-numeric: tabular-nums; color: var(--ok); }
+/* Who leads this wave, and in what time. Only the NAME may be clipped: the bib
+   and the finish time keep their space whatever the name's length. */
+.wave-chip-leader { display: flex; align-items: baseline; gap: 4px; max-width: 26ch; white-space: nowrap; }
+.wave-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wave-chip-leader b { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--ok); }
 .wave-chip b { color: var(--text); font-weight: 700; }
 .wave-chip .wave-clock { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0; }
 .wave-chip.pending { opacity: .7; }

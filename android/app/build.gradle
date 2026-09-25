@@ -2,6 +2,23 @@ plugins {
     id 'com.android.application'
 }
 
+// versionCode tracks the commit count, so every build gets a new, increasing
+// number without anyone remembering to bump it — 27 Android commits shipped as
+// "build 59" because it was a hand-edited literal. CI must check out full
+// history (fetch-depth: 0) or this comes back as 1; the floor below keeps a
+// shallow or git-less build from ever handing out a LOWER code than the last
+// hand-set one, which Android would refuse to install over.
+def BASE_VERSION_CODE = 59
+def gitCommitCount = {
+    try {
+        def proc = ['git', 'rev-list', '--count', 'HEAD'].execute(null, rootDir)
+        proc.waitForOrKill(10000)
+        return proc.exitValue() == 0 ? proc.text.trim().toInteger() : 0
+    } catch (Exception ignored) {
+        return 0
+    }
+}()
+
 android {
     namespace 'com.velogrip.rfid'
     compileSdk 34
@@ -10,8 +27,8 @@ android {
         applicationId 'com.velogrip.rfid'
         minSdk 26
         targetSdk 33
-        versionCode 59
-        versionName '0.6.35'
+        versionCode Math.max(gitCommitCount, BASE_VERSION_CODE + 1)
+        versionName '0.7.0'
     }
 
     // A fixed debug keystore committed at android/debug.keystore so every build
@@ -51,4 +68,10 @@ dependencies {
     // The app's first dependency; enables the "Scan QR" button on the checkpoint
     // join screen. (useAndroidX is on in gradle.properties for this.)
     implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+}
+
+// Single source of truth for the CI notification: the workflow used to grep the
+// literals out of this file, which stops working once versionCode is computed.
+tasks.register('printVersion') {
+    doLast { println "${android.defaultConfig.versionName} ${android.defaultConfig.versionCode}" }
 }
