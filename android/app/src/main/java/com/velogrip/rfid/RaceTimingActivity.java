@@ -348,17 +348,43 @@ public class RaceTimingActivity extends BaseActivity {
         waveFilterScroll.setVisibility(View.VISIBLE);
         waveFilterRow.removeAllViews();
         waveChipClocks.clear();
-        waveFilterRow.addView(filterChip(getString(R.string.wave_filter_all), null));
+        // One pass over the roster for every chip, rather than a query each.
+        java.util.Map<String, String> distByWave = distancesByWave();
+        waveFilterRow.addView(filterChip(getString(R.string.wave_filter_all), null, null));
         for (RaceStore.Wave w : store.waves()) {
-            if (!w.name.isEmpty()) waveFilterRow.addView(filterChip(w.name, w.name));
+            if (!w.name.isEmpty()) waveFilterRow.addView(filterChip(w.name, w.name, distByWave.get(w.name)));
         }
         tickClock(); // paint the new chips' clocks now, not on the next tick
     }
 
-    /** A wave chip: its name, its OWN running clock, and tapping it points both
-     *  the grid and the big clock at that wave. The "All waves" chip carries no
-     *  clock — with several waves running there is no single race time. */
-    private View filterChip(String label, final String value) {
+    /** What each wave runs, for its chip — "wave1" alone does not say whether
+     *  it is the 10k or the 5k, and at the gun that is the thing the operator
+     *  is checking. A wave with more than two distances is summarised rather
+     *  than allowed to push the clock off the chip. */
+    private java.util.Map<String, String> distancesByWave() {
+        java.util.Map<String, java.util.LinkedHashSet<String>> seen = new java.util.HashMap<>();
+        for (RaceStore.Racer r : store.racers()) {
+            String d = r.distance == null ? "" : r.distance.trim();
+            if (d.isEmpty()) continue;
+            String w = r.wave == null ? "" : r.wave;
+            java.util.LinkedHashSet<String> set = seen.get(w);
+            if (set == null) { set = new java.util.LinkedHashSet<>(); seen.put(w, set); }
+            set.add(d);
+        }
+        java.util.Map<String, String> out = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, java.util.LinkedHashSet<String>> e : seen.entrySet()) {
+            java.util.List<String> ds = new java.util.ArrayList<>(e.getValue());
+            if (ds.size() <= 2) out.put(e.getKey(), android.text.TextUtils.join(" · ", ds));
+            else out.put(e.getKey(), ds.get(0) + " · " + ds.get(1) + " …");
+        }
+        return out;
+    }
+
+    /** A wave chip: its name and distance, its OWN running clock, and tapping it
+     *  points both the grid and the big clock at that wave. The "All waves" chip
+     *  carries neither — with several waves running there is no single race time
+     *  and no single distance. */
+    private View filterChip(String label, final String value, String distance) {
         LinearLayout chip = new LinearLayout(this);
         chip.setOrientation(LinearLayout.HORIZONTAL);
         chip.setGravity(Gravity.CENTER_VERTICAL);
@@ -367,12 +393,25 @@ public class RaceTimingActivity extends BaseActivity {
         chip.setBackground(roundedTile(on ? (value == null ? 0xFF4F9E27 : waveColor(value)) : 0x33808080));
         final int fg = on ? 0xFFFFFFFF : getColor(R.color.text_muted);
 
+        // Name over distance, so the distance rides along without stealing width
+        // from the clock — the chips sit in a horizontal scroller.
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
         TextView name = new TextView(this);
         name.setText(label);
         name.setTextSize(13.5f);
         name.setTypeface(null, android.graphics.Typeface.BOLD);
         name.setTextColor(fg);
-        chip.addView(name);
+        labels.addView(name);
+        if (distance != null && !distance.isEmpty()) {
+            TextView dist = new TextView(this);
+            dist.setText(distance);
+            dist.setTextSize(11f);
+            dist.setTextColor(fg);
+            dist.setAlpha(0.8f);
+            labels.addView(dist);
+        }
+        chip.addView(labels);
 
         if (value != null) {
             TextView clock = new TextView(this);
