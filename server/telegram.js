@@ -398,14 +398,19 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         GROUP BY l.id ORDER BY l.created_at DESC`).all();
     const ungrouped = db.prepare(
       "SELECT COUNT(*) AS n FROM contests WHERE kind = 'race' AND id NOT IN (SELECT contest_id FROM league_races)").get().n;
-    if (!leagues.length) return listRacesFlat(chatId, null); // no leagues yet -> flat list
+    if (!leagues.length) return listRacesFlat(chatId, 'all'); // no leagues yet -> flat list
     const rows = leagues.map((l) => [btn(`🏆 ${l.name}${l.season ? ` (${l.season})` : ''} — ${l.n}`.slice(0, 60), `rl:${l.id}`)]);
     if (ungrouped) rows.push([btn(`🏁 Races without a league (${ungrouped})`, 'rl:none')]);
-    await send.message(chatId, 'Pick a league:', { reply_markup: kb(rows) });
+    // Every race in one list, newest first. Without it the races are only ever
+    // reachable a league at a time, which reads as "the bot has one race".
+    const total = db.prepare("SELECT COUNT(*) AS n FROM contests WHERE kind = 'race'").get().n;
+    if (total) rows.push([btn(`🏁 All races (${total})`, 'rl:all')]);
+    await send.message(chatId, 'Pick a league, or browse them all:', { reply_markup: kb(rows) });
   }
 
   // The races for one league (rl:<id>), the ungrouped ones (rl:none), or all of
-  // them (leagueId null) — each row a `use:<id>` button.
+  // them (rl:all) — each row a `use:<id>` button.
+  const RACE_PAGE = 25;
   async function listRacesFlat(chatId, leagueId) {
     let rows;
     if (leagueId === 'none') {
@@ -413,19 +418,23 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         `SELECT id, title, status FROM contests
           WHERE kind = 'race' AND id NOT IN (SELECT contest_id FROM league_races)
           ORDER BY datetime(start_at) DESC LIMIT 40`).all().map((r) => ({ ...r, label: `${r.title} (${r.status})` }));
-    } else if (leagueId) {
+    } else if (leagueId && leagueId !== 'all') {
       rows = db.prepare(
         `SELECT c.id, c.title, c.status, lr.round FROM league_races lr JOIN contests c ON c.id = lr.contest_id
           WHERE lr.league_id = ? ORDER BY lr.round, datetime(c.start_at)`).all(leagueId)
         .map((r) => ({ ...r, label: `R${r.round} · ${r.title} (${r.status})` }));
     } else {
-      rows = db.prepare("SELECT id, title, status FROM contests WHERE kind = 'race' ORDER BY datetime(start_at) DESC LIMIT 40").all()
+      rows = db.prepare("SELECT id, title, status FROM contests WHERE kind = 'race' ORDER BY datetime(start_at) DESC LIMIT 60").all()
         .map((r) => ({ ...r, label: `${r.title} (${r.status})` }));
     }
     if (!rows.length) { await send.message(chatId, 'No races here yet.'); return; }
-    const buttons = rows.slice(0, 25).map((r) => [btn(r.label.slice(0, 60), `use:${r.id}`)]);
+    const buttons = rows.slice(0, RACE_PAGE).map((r) => [btn(r.label.slice(0, 60), `use:${r.id}`)]);
     if (leagueId) buttons.push([btn('🔙 Leagues', 'racesback')]); // back to the league picker
-    await send.message(chatId, 'Pick a race:', { reply_markup: kb(buttons) });
+    // Say so when the list is cut off, rather than letting it look complete.
+    const more = rows.length > RACE_PAGE
+      ? ` — showing the first ${RACE_PAGE} of ${rows.length}, use <code>/races &lt;text&gt;</code> to search`
+      : '';
+    await send.message(chatId, `Pick a race (${rows.length})${more}:`, { reply_markup: kb(buttons) });
   }
 
   async function useRace(chatId, id) {
@@ -963,8 +972,11 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   async function openMenu(chatId, category) {
     const header = await raceHeader(chatId);
     if (category === 'race') {
-      return send.message(chatId, `${header}\n\nPick or switch the race you're managing.`,
-        { reply_markup: kb([[btn('🔀 Switch race', 'go:races')]]) });
+      // Draw the picker here instead of hiding every other race behind a
+      // "Switch race" tap — that made a bot managing one race look like a bot
+      // that only HAS one race.
+      await send.message(chatId, `${header}\n\nPick or switch the race you're managing.`);
+      return cmdRaces(chatId, '');
     }
     if (category === 'startlist') {
       // Render the roster right here (this path already drew the menu reliably),

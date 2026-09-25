@@ -281,6 +281,30 @@ test('/races browses by league first, then lists that league’s races', async (
   assert.ok(btns.includes(`use:${contestId}`), 'the attached race appears');
   assert.ok(btns.includes('racesback'), 'a back-to-leagues button is present');
 
+  // "All races" reaches every race in one list, whatever league it is in — the
+  // league-at-a-time view made a bot with many races look like it had one.
+  send.reset();
+  await text(ALLOWED, '/races');
+  btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.includes('rl:all'), 'an all-races button is offered');
+  send.reset();
+  await tap(ALLOWED, 'rl:all');
+  const all = send.last('message');
+  btns = all.extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  const races = (await request(app).get('/api/contests?kind=race')).body.contests || [];
+  assert.ok(btns.includes(`use:${contestId}`), 'the league race is in the flat list');
+  assert.ok(btns.filter((d) => d && d.startsWith('use:')).length >= Math.min(races.length, 2),
+    'every race is reachable, not just the current one');
+  assert.match(all.text, /Pick a race \(\d+\)/, 'the list says how many races there are');
+
+  // The 🏁 Race menu button draws the picker itself, so the other races are
+  // one tap away rather than hidden behind "Switch race".
+  send.reset();
+  await text(ALLOWED, '🏁 Race');
+  btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(btns.some((d) => d && (d.startsWith('rl:') || d.startsWith('use:'))),
+    'the Race menu lists races without another tap');
+
   // "/races <text>" still searches every race directly
   send.reset();
   await text(ALLOWED, '/races Telegram');
