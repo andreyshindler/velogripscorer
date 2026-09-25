@@ -198,26 +198,30 @@ function esc(s) {
 function kb(rows) { return { inline_keyboard: rows }; }
 function btn(text, data) { return { text, callback_data: data }; }
 
-// A persistent reply keyboard so the argument-less commands are one tap away.
-// The labels map back to their slash commands in handleText.
-// The persistent keyboard is now 4 concern groups + Help. Tapping a group opens
-// an inline sub-menu (see openMenu), so each button maps cleanly to what it does.
+// Group labels. These are no longer ON the keyboard, but a phone that still
+// shows the grouped keyboard keeps working: tapping one opens its inline
+// sub-menu (see openMenu), and the keyboard refreshes the next time the bot
+// sends one (/start, /help, picking a race).
 const CATEGORY = {
   '🏁 Race': 'race', '👤 Start list': 'startlist', '⚙️ Setup': 'setup', '📊 Results': 'results',
 };
-// Direct labels (Help) and the OLD flat-keyboard labels, kept so a phone still
-// showing the previous keyboard keeps working until it refreshes.
+// A persistent reply keyboard so the argument-less commands are one tap away.
+// The labels map back to their slash commands in handleText.
 const COMMAND_LABELS = {
   '❓ Help': '/help',
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '🔁 Laps': '/laps',
   '👥 Marshals': '/operators', '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league',
 };
+// One button per action. Grouping them behind 🏁 Race / 👤 Start list /
+// ⚙️ Setup / 📊 Results tidied the keyboard but put the things reached most
+// often at a race — the roster, the CSV, the PDF — two taps deep, which is
+// slower exactly when there is least time to spare.
 function mainKeyboard() {
   return {
     keyboard: [
-      [{ text: '🏁 Race' }, { text: '👤 Start list' }],
-      [{ text: '⚙️ Setup' }, { text: '📊 Results' }],
-      [{ text: '❓ Help' }],
+      [{ text: '🏁 Races' }, { text: '📋 List' }],
+      [{ text: '➕ Add' }, { text: '📄 CSV' }, { text: '📑 PDF' }],
+      [{ text: '🏆 League' }, { text: '❓ Help' }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -305,7 +309,7 @@ function rosterSummary(racers) {
 const HELP = [
   '<b>VeloGrip start-list bot</b>',
   '',
-  'Use the menu buttons below — <b>🏁 Race · 👤 Start list · ⚙️ Setup · 📊 Results</b> — or type a command:',
+  'Use the buttons below — <b>🏁 Races · 📋 List · ➕ Add · 📄 CSV · 📑 PDF · 🏆 League</b> — or type a command:',
   '',
   '/races — browse races by league (or /races &lt;text&gt; to search all)',
   '/list [text] — show racers (optionally filtered)',

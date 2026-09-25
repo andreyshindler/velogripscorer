@@ -102,15 +102,22 @@ test('/races then /use selects the race', async () => {
   assert.match(send.last('message').text, /Managing/);
 });
 
-test('grouped menu: /start shows the category keyboard; groups open sub-menus', async () => {
+const CATEGORY_LABELS = ['🏁 Race', '👤 Start list', '⚙️ Setup', '📊 Results'];
+
+test('flat keyboard: /start offers one button per action; group labels still work', async () => {
   send.reset();
   await text(ALLOWED, '/start');
   const kb = send.last('message').extra.reply_markup;
   assert.ok(kb && kb.keyboard, 'a persistent reply keyboard is attached');
   const labels = kb.keyboard.flat().map((b) => b.text);
-  assert.ok(labels.includes('🏁 Race') && labels.includes('⚙️ Setup') && labels.includes('📊 Results'));
+  // CSV and PDF are on the keyboard itself: at a race they are wanted in one
+  // tap, not two behind a group.
+  assert.deepEqual(labels,
+    ['🏁 Races', '📋 List', '➕ Add', '📄 CSV', '📑 PDF', '🏆 League', '❓ Help']);
+  assert.ok(!labels.some((l) => CATEGORY_LABELS.includes(l)), 'no group buttons on the keyboard');
 
-  // Tapping a group opens an inline sub-menu of its actions.
+  // A phone still showing the grouped keyboard keeps working: the group labels
+  // open their inline sub-menus as before.
   send.reset();
   await text(ALLOWED, '📊 Results');
   const results = JSON.stringify(send.last('message').extra.reply_markup);
@@ -126,10 +133,16 @@ test('grouped menu: /start shows the category keyboard; groups open sub-menus', 
   await tap(ALLOWED, 'go:races');
   assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
 
-  // The old flat-keyboard labels still work (a phone showing the previous keyboard).
+  // Every keyboard button runs its command directly.
   send.reset();
   await text(ALLOWED, '🏁 Races');
   assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
+  send.reset();
+  await text(ALLOWED, '📄 CSV');
+  assert.ok(send.last('document'), '📄 CSV sends the results CSV in one tap');
+  send.reset();
+  await text(ALLOWED, '📑 PDF');
+  assert.ok(send.last('document'), '📑 PDF sends the results PDF in one tap');
 });
 
 test('/add (one line) creates a racer with a synthetic chip id', async () => {
