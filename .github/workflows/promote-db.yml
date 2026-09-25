@@ -1,0 +1,111 @@
+name: Promote staging DB to production
+
+# One-way data move on the VPS: staging's /data volume (SQLite database,
+# uploads, logs) REPLACES production's. Manual dispatch only, and only after
+# typing the confirmation phrase — it destroys whatever production holds.
+#
+# Production's current /data is tarred to ~/velogrip-db-backups first, so the
+# move is reversible: untar it back over the volume with the app stopped.
+#
+# Staging keeps its own copy. Both stacks then hold the same data and start
+# diverging again from the next write, so decide which one you actually use.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MOVE-STAGING-TO-PROD to overwrite the production database'
+        required: true
+        default: ''
+
+concurrency:
+  group: deploy-vps   # never run while a production deploy is rebuilding the stack
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: self-hosted
+    steps:
+      - name: Check the confirmation phrase
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "MOVE-STAGING-TO-PROD" ]; then
+            echo "Refusing: type MOVE-STAGING-TO-PROD to confirm." >&2
+            exit 1
+          fi
+
+      - name: Back up production, then copy staging's data over it
+        env:
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+          STAGING_DEPLOY_DIR: ${{ vars.STAGING_DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          PROD_DIR="${DEPLOY_DIR:-$HOME/projects/velogripscorer}"
+          STAGING_DIR="${STAGING_DEPLOY_DIR:-$HOME/projects/velogripscorer-staging}"
+          BACKUP_DIR="$HOME/velogrip-db-backups"
+          TS=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p "$BACKUP_DIR"
+
+          # The /data volume behind each stack's app container. Read off the
+          # container when there is one, else fall back to the compose default
+          # name; either way it must exist before anything is touched.
+          vol_for() {
+            local cid="$1" fallback="$2" v=""
+            if [ -n "$cid" ]; then
+              v=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' "$cid" 2>/dev/null || true)
+            fi
+            [ -n "$v" ] || v="$fallback"
+            docker volume inspect "$v" >/dev/null 2>&1 || { echo "No such volume: $v" >&2; exit 1; }
+            printf '%s' "$v"
+          }
+
+          PROD_CID=$(cd "$PROD_DIR" && docker compose ps -aq app 2>/dev/null | head -n1 || true)
+          STG_CID=$(cd "$STAGING_DIR" && docker compose -p velogrip-staging ps -aq app 2>/dev/null | head -n1 || true)
+          PROD_VOL=$(vol_for "$PROD_CID" "$(basename "$PROD_DIR" | tr -cd 'a-z0-9')_vgs_data")
+          STG_VOL=$(vol_for "$STG_CID" "velogrip-staging_vgs_data")
+          echo "production volume : $PROD_VOL"
+          echo "staging volume    : $STG_VOL"
+          if [ "$PROD_VOL" = "$STG_VOL" ]; then
+            echo "Refusing: both stacks resolve to the same volume." >&2
+            exit 1
+          fi
+
+          echo "--- before ---"
+          docker run --rm -v "$PROD_VOL":/d:ro alpine:3 ls -la /d || true
+          docker run --rm -v "$STG_VOL":/d:ro alpine:3 ls -la /d || true
+
+          # SQLite runs in WAL mode, so both apps stop before anything is read
+          # or written — a copy taken under load can land mid-transaction.
+          echo "--- stopping both apps ---"
+          (cd "$PROD_DIR" && docker compose stop app)
+          (cd "$STAGING_DIR" && docker compose -p velogrip-staging stop app)
+
+          echo "--- backing up (production first, then staging) ---"
+          docker run --rm -v "$PROD_VOL":/from:ro -v "$BACKUP_DIR":/to alpine:3 \
+            tar czf "/to/prod-data-$TS.tgz" -C /from .
+          docker run --rm -v "$STG_VOL":/from:ro -v "$BACKUP_DIR":/to alpine:3 \
+            tar czf "/to/staging-data-$TS.tgz" -C /from .
+          ls -la "$BACKUP_DIR"
+
+          echo "--- replacing production's data with staging's ---"
+          docker run --rm -v "$STG_VOL":/from:ro -v "$PROD_VOL":/to alpine:3 \
+            sh -c 'find /to -mindepth 1 -delete && cp -a /from/. /to/'
+
+          echo "--- starting both apps ---"
+          (cd "$PROD_DIR" && docker compose up -d app)
+          (cd "$STAGING_DIR" && docker compose -p velogrip-staging up -d app)
+
+          echo "--- after ---"
+          docker run --rm -v "$PROD_VOL":/d:ro alpine:3 ls -la /d
+
+          # Health check on production's own prefix, read from its .env.
+          BASE_PATH=$(grep -E '^BASE_PATH=' "$PROD_DIR/.env" 2>/dev/null | cut -d= -f2- || true)
+          HOST_PORT=$(grep -E '^HOST_PORT=' "$PROD_DIR/.env" 2>/dev/null | cut -d= -f2- || true)
+          sleep 5
+          curl -fsS "http://127.0.0.1:${HOST_PORT:-3000}${BASE_PATH}/api/health" \
+            && echo " <- production healthy on the promoted data"
+
+          echo
+          echo "Rollback: stop the app, then"
+          echo "  docker run --rm -v $PROD_VOL:/to -v $BACKUP_DIR:/from alpine:3 \\"
+          echo "    sh -c 'find /to -mindepth 1 -delete && tar xzf /from/prod-data-$TS.tgz -C /to'"
