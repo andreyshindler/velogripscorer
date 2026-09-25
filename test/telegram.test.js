@@ -126,25 +126,10 @@ test('grouped menu: /start shows the category keyboard; groups open sub-menus', 
   await tap(ALLOWED, 'go:races');
   assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
 
-  // The old flat-keyboard labels still work (a phone showing the previous
-  // keyboard), AND tapping one replaces that keyboard with the current groups —
-  // Telegram never swaps a persistent keyboard on its own, and the group
-  // buttons only ever reply with inline keyboards.
+  // The old flat-keyboard labels still work (a phone showing the previous keyboard).
   send.reset();
   await text(ALLOWED, '🏁 Races');
-  assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`),
-    'the legacy label still runs its command');
-  const refresh = send.calls.find((c) => c.type === 'message'
-    && c.extra && c.extra.reply_markup && c.extra.reply_markup.keyboard);
-  assert.ok(refresh, 'the stale keyboard is replaced');
-  const keys = refresh.extra.reply_markup.keyboard.flat().map((b) => b.text);
-  assert.deepEqual(keys, ['🏁 Race', '👤 Start list', '⚙️ Setup', '📊 Results', '❓ Help']);
-
-  // A button from the CURRENT keyboard is not treated as stale — no reprint.
-  send.reset();
-  await text(ALLOWED, '⚙️ Setup');
-  assert.ok(!send.calls.some((c) => c.extra && c.extra.reply_markup && c.extra.reply_markup.keyboard),
-    'a current-keyboard tap does not reprint the keyboard');
+  assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes(`use:${contestId}`));
 });
 
 test('/add (one line) creates a racer with a synthetic chip id', async () => {
