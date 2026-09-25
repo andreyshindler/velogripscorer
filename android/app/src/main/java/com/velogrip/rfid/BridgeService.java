@@ -83,9 +83,18 @@ public class BridgeService extends Service {
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
     private volatile java.util.Map<String, String> epcWave = java.util.Collections.emptyMap();
-    // epc -> when we last STORED a pass for it (0 = none). Distinct from
-    // lastSeen, which is the hardware dedupe and ticks even when we skip.
-    private final java.util.Map<String, Long> lastRecorded = new java.util.HashMap<>();
+    private volatile java.util.Map<String, String> epcDistance = java.util.Collections.emptyMap();
+    private volatile java.util.Map<String, Integer> lapCaps = java.util.Collections.emptyMap();
+    // epc -> how many CROSSINGS it has produced, and when the last one was.
+    // Distinct from lastSeen, which is the hardware dedupe and ticks even when
+    // the read is skipped.
+    private final java.util.Map<String, Crossings> crossingsByEpc = new java.util.HashMap<>();
+
+    /** A chip's recorded crossings so far: how many, and when the last one was. */
+    private static final class Crossings {
+        int count;
+        long last;
+    }
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
@@ -295,7 +304,7 @@ public class BridgeService extends Service {
         boolean started = raceHasGun();
         // No gun anywhere means setup or a restart: forget what we have stored,
         // so a re-gunned race records its crossings from scratch.
-        if (!started) { beepedRacers.clear(); lastRecorded.clear(); }
+        if (!started) { beepedRacers.clear(); crossingsByEpc.clear(); }
         // Gun time per wave, read fresh for each batch: a cached copy would keep
         // rejecting a wave's racers for seconds after its gun, losing the very
         // first crossings. Cheap — one query per batch, not per read.
@@ -329,18 +338,23 @@ public class BridgeService extends Service {
             final long crossingFrom = racerStarted ? waveGun + prefs.suppressSecs() * 1000L : Long.MAX_VALUE;
             // A crossing is a read that stands for a time: the finish, or a lap.
             boolean crossing = racerStarted && !checkpoint && read.readAtMs >= crossingFrom;
-            // A racer standing by the gate after crossing is read every dedupe
-            // window, and each stored pass re-renders the screen — which is what
-            // makes the finish list jump. Space crossings by the minimum lap
-            // gap, the same rule the engine uses. That thins out the parked-chip
-            // spam while never refusing a genuine later read — in a
-            // single-crossing race the engine keeps the first one anyway, so an
-            // extra stored pass cannot change a result.
+            // A racer who has finished and stands by the gate is read every
+            // dedupe window, and every stored pass re-renders the screen — which
+            // is what keeps throwing the finish list back to their row. A chip
+            // only has as many crossings to give as the race has laps, so stop
+            // recording once it has given them: a lap race takes its lap count,
+            // and a race without laps takes exactly one, the finish. Reads after
+            // that are still reported on the status strip, just not stored.
+            final long gapMs = prefs.lapGapSecs() * 1000L;
             boolean record = racerStarted;
+            Crossings cr = null;
             if (crossing) {
-                long lastRec = lastCrossingMs(read.epc, crossingFrom);
-                if (lastRec > 0 && read.readAtMs - lastRec < prefs.lapGapSecs() * 1000L) {
-                    record = false;
+                cr = crossingsFor(read.epc, crossingFrom, gapMs);
+                if (cr.count >= crossingCap(epcDistance.get(read.epc))) {
+                    record = false;    // every lap already timed: this racer is done
+                    crossing = false;
+                } else if (cr.count > 0 && read.readAtMs - cr.last < gapMs) {
+                    record = false;    // same crossing, read again within the lap gap
                     crossing = false;
                 }
             }
@@ -351,9 +365,9 @@ public class BridgeService extends Service {
                     store.addPassing(new TagRead(read.epc, read.rssi, prefs.toServerTime(read.readAtMs), read.antenna));
                 } else {
                     store.addPassing(read);
-                    // Only a crossing advances the marker; a start-mat read must
-                    // leave it alone or the racer's real finish gets blocked.
-                    if (crossing) lastRecorded.put(read.epc, read.readAtMs);
+                    // Only a crossing counts towards the lap tally; a start-mat
+                    // read must not, or the racer's real finish gets blocked.
+                    if (crossing && cr != null) { cr.count++; cr.last = read.readAtMs; }
                 }
             }
             // The beep marks a TIME, so it sounds on the crossing — not on the
@@ -373,21 +387,34 @@ public class BridgeService extends Service {
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events
     }
 
-    /** When this chip last produced a CROSSING — a read at or after minAt, the
-     *  end of the start-suppression window. 0 if it has none. Start-mat reads
-     *  are deliberately not counted here: they are stored for the roll call but
-     *  are not crossings, and mistaking one for a finish would silence the chip
-     *  for the rest of the race. Seeded from the store on first sight so a
-     *  mid-race app restart does not hand every racer an extra pass. */
-    private long lastCrossingMs(String epc, long minAt) {
-        Long cached = lastRecorded.get(epc);
-        if (cached != null) return cached;
-        long last = 0;
-        for (RaceStore.Passing p : store.passingsForEpc(epc)) {
-            if (p.readAtMs >= minAt) last = Math.max(last, p.readAtMs);
+    /** How many CROSSINGS this chip has produced, and when the last one was — a
+     *  read at or after minAt, the end of the start-suppression window. Start-mat
+     *  reads are deliberately not counted: they are stored for the roll call but
+     *  are not crossings, and mistaking one for a lap would retire the chip early.
+     *  Seeded from the store on first sight, applying the same lap gap, so a
+     *  mid-race app restart re-derives the tally instead of starting from zero
+     *  and handing every racer their laps a second time. */
+    private Crossings crossingsFor(String epc, long minAt, long gapMs) {
+        Crossings c = crossingsByEpc.get(epc);
+        if (c != null) return c;
+        c = new Crossings();
+        for (RaceStore.Passing p : store.passingsForEpc(epc)) { // ordered by read_at
+            if (p.readAtMs < minAt) continue;
+            if (c.count == 0 || p.readAtMs - c.last >= gapMs) { c.count++; c.last = p.readAtMs; }
         }
-        lastRecorded.put(epc, last);
-        return last;
+        crossingsByEpc.put(epc, c);
+        return c;
+    }
+
+    /** How many crossings this racer's distance is worth: its lap count, the
+     *  race-wide lap count, or — when the race is not scored on laps at all —
+     *  exactly one, the finish. An unknown lap count in a lap race is left
+     *  uncapped rather than guessed at. Mirrors CheckpointActivity.maxTaps. */
+    private int crossingCap(String distance) {
+        Integer laps = lapCaps.get(distance == null ? "" : distance);
+        if (laps != null && laps > 0) return laps;
+        if (prefs.raceLaps() > 0) return prefs.raceLaps();
+        return prefs.recordLaps() ? Integer.MAX_VALUE : 1;
     }
 
     /** True once any wave has a gun time (the race is running). */
@@ -423,16 +450,22 @@ public class BridgeService extends Service {
             java.util.HashSet<String> set = new java.util.HashSet<>();
             java.util.HashMap<String, String> map = new java.util.HashMap<>();
             java.util.HashMap<String, String> waves = new java.util.HashMap<>();
+            java.util.HashMap<String, String> dists = new java.util.HashMap<>();
             for (RaceStore.Racer r : store.racers()) {
                 if (r.epc == null || r.epc.isEmpty()) continue;
                 set.add(r.epc);
                 // two chips share a racer: key by bib so both beep as one racer
                 map.put(r.epc, (r.bib == null || r.bib.isEmpty()) ? "e:" + r.epc : "b:" + r.bib);
                 waves.put(r.epc, r.wave == null ? "" : r.wave);
+                dists.put(r.epc, r.distance == null ? "" : r.distance);
             }
             registeredEpcs = set;
             epcRacer = map;
             epcWave = waves;
+            epcDistance = dists;
+            // Laps per distance, refreshed with the roster so a lap count edited
+            // mid-race takes effect without restarting the service.
+            lapCaps = store.lapTargets();
             registeredAt = now;
         }
         java.util.Set<String> set = registeredEpcs;
