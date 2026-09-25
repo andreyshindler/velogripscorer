@@ -393,25 +393,25 @@ public class RaceTimingActivity extends BaseActivity {
         chip.setBackground(roundedTile(on ? (value == null ? 0xFF4F9E27 : waveColor(value)) : 0x33808080));
         final int fg = on ? 0xFFFFFFFF : getColor(R.color.text_muted);
 
-        // Name over distance, so the distance rides along without stealing width
-        // from the clock — the chips sit in a horizontal scroller.
-        LinearLayout labels = new LinearLayout(this);
-        labels.setOrientation(LinearLayout.VERTICAL);
+        // Name then distance, on one line with the clock: "wave1 10k 1:20.8"
+        // reads as a single fact about that wave. The distance is a touch
+        // smaller and dimmer so the wave name still leads.
         TextView name = new TextView(this);
         name.setText(label);
         name.setTextSize(13.5f);
         name.setTypeface(null, android.graphics.Typeface.BOLD);
         name.setTextColor(fg);
-        labels.addView(name);
+        chip.addView(name);
         if (distance != null && !distance.isEmpty()) {
             TextView dist = new TextView(this);
             dist.setText(distance);
-            dist.setTextSize(11f);
+            dist.setTextSize(12f);
+            dist.setTypeface(null, android.graphics.Typeface.BOLD);
             dist.setTextColor(fg);
             dist.setAlpha(0.8f);
-            labels.addView(dist);
+            dist.setPadding(dp(5), 0, 0, 0);
+            chip.addView(dist);
         }
-        chip.addView(labels);
 
         if (value != null) {
             TextView clock = new TextView(this);
