@@ -205,13 +205,19 @@ function btn(text, data) { return { text, callback_data: data }; }
 const CATEGORY = {
   '🏁 Race': 'race', '👤 Start list': 'startlist', '⚙️ Setup': 'setup', '📊 Results': 'results',
 };
-// Direct labels (Help) and the OLD flat-keyboard labels, kept so a phone still
-// showing the previous keyboard keeps working until it refreshes.
-const COMMAND_LABELS = {
-  '❓ Help': '/help',
+// Labels on the CURRENT keyboard that map straight to a command (the groups
+// above open a sub-menu instead).
+const CURRENT_LABELS = { '❓ Help': '/help' };
+// Labels from the OLD flat keyboard. Telegram caches a persistent keyboard per
+// chat until the bot sends a new one, so a phone that last heard from the bot
+// before the redesign still shows these — and they keep working. Receiving one
+// is also proof that chat's keyboard is stale, which is what triggers a
+// refresh in handleText.
+const LEGACY_LABELS = {
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '🔁 Laps': '/laps',
   '👥 Marshals': '/operators', '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league',
 };
+const COMMAND_LABELS = { ...CURRENT_LABELS, ...LEGACY_LABELS };
 function mainKeyboard() {
   return {
     keyboard: [
@@ -1020,7 +1026,17 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   }
 
   async function handleText(chatId, text) {
+    // A tap on an old flat-keyboard button proves this chat is still showing
+    // the pre-redesign keyboard, so replace it before running the command.
+    // Telegram only swaps a persistent keyboard when the bot sends a new one,
+    // and the group buttons reply with inline keyboards that never do — so
+    // without this the operator has to know to type /help.
+    const stale = Object.prototype.hasOwnProperty.call(LEGACY_LABELS, text);
     text = COMMAND_LABELS[text] || text; // a reply-keyboard tap arrives as its label
+    if (stale) {
+      await send.message(chatId, 'Menu updated — the buttons below are the new ones.',
+        { reply_markup: mainKeyboard() });
+    }
     const st = getState(chatId);
     if (text === '/cancel') { setState(chatId, null); await send.message(chatId, 'Cancelled.'); return; }
     // A group button opens its sub-menu (and interrupts any half-finished wizard).
