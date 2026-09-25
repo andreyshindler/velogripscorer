@@ -214,6 +214,8 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 .wave-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .wave-chip-leader b { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--ok); }
 .wave-chip b { color: var(--text); font-weight: 700; }
+/* The wave's distance, beside its name: present but not competing with it. */
+.wave-chip-dist { font-weight: 700; opacity: .75; }
 .wave-chip .wave-clock { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0; }
 .wave-chip.pending { opacity: .7; }
 

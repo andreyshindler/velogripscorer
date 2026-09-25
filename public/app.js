@@ -494,8 +494,10 @@ function waveChips(waves) {
   return `
         <div class="wave-chips">${named.map((w) => {
     const ms = w.started_at ? Date.parse(w.started_at) : NaN;
+    // The wave name alone doesn't say whether it is the 10k or the 5k.
+    const dist = w.distance ? ` <span class="wave-chip-dist">${esc(w.distance)}</span>` : '';
     if (Number.isNaN(ms)) {
-      return `<span class="wave-chip pending"><b>${esc(w.name)}</b> ${t('not_started')}</span>`;
+      return `<span class="wave-chip pending"><b>${esc(w.name)}</b>${dist} ${t('not_started')}</span>`;
     }
     const gun = ms + (w.gun_offset_ms || 0);
     // Who has won this wave so far, and in what time. The race clock says how
@@ -508,7 +510,7 @@ function waveChips(waves) {
            <span class="wave-chip-name">${esc(w.leader.participant || '')}</span>
            · <b>${esc(w.leader.elapsed)}</b></span>`
       : '';
-    return `<span class="wave-chip"><span class="wave-chip-top"><b>${esc(w.name)}</b> ${fmtTimeOfDay(w.started_at)} ·
+    return `<span class="wave-chip"><span class="wave-chip-top"><b>${esc(w.name)}</b>${dist} ${fmtTimeOfDay(w.started_at)} ·
               <span class="live-clock wave-clock" data-gun="${gun}">${fmtRaceClock(Date.now() + serverSkewMs - gun)}</span></span>${leader}</span>`;
   }).join('')}</div>`;
 }
@@ -521,13 +523,23 @@ function wavesOfResults(results) {
     const name = String(r.wave || '').trim();
     if (!name) continue;
     if (!byName.has(name)) {
-      byName.set(name, { name, started_at: r.wave_started_at, gun_offset_ms: r.wave_gun_offset_ms || 0 });
+      byName.set(name, {
+        name, started_at: r.wave_started_at, gun_offset_ms: r.wave_gun_offset_ms || 0, dists: new Set(),
+      });
     }
     // Rows arrive ranked, so the first finisher of a wave is its winner.
     const w = byName.get(name);
+    if (String(r.distance || '').trim()) w.dists.add(String(r.distance).trim());
     if (!w.leader && r.status === 'finished') {
       w.leader = { bib: r.bib, participant: r.participant, elapsed: r.elapsed };
     }
+  }
+  // Same summary rule as the server's live feed: two distances read fine, more
+  // would crowd the clock out of the chip.
+  for (const w of byName.values()) {
+    const ds = [...w.dists];
+    delete w.dists;
+    if (ds.length) w.distance = ds.length <= 2 ? ds.join(' · ') : `${ds[0]} · ${ds[1]} …`;
   }
   return [...byName.values()].sort((a, b) => {
     if (!a.started_at || !b.started_at) return (a.started_at ? 0 : 1) - (b.started_at ? 0 : 1);

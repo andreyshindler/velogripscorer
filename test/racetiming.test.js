@@ -654,8 +654,10 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   // Two racers per wave, each crossing once — so each wave has a winner.
   await request(app).post(`/api/contests/${live.id}/tags/bulk`).set(auth(o)).send({
     racers: [
-      { bib: '1', participant: 'Fast A', wave: 'A' }, { bib: '2', participant: 'Slow A', wave: 'A' },
-      { bib: '3', participant: 'Fast B', wave: 'B' }, { bib: '4', participant: 'Slow B', wave: 'B' },
+      { bib: '1', participant: 'Fast A', wave: 'A', distance: '10k' },
+      { bib: '2', participant: 'Slow A', wave: 'A', distance: '10k' },
+      { bib: '3', participant: 'Fast B', wave: 'B', distance: '5k' },
+      { bib: '4', participant: 'Slow B', wave: 'B', distance: '5k' },
     ],
   });
   const epcOf = (bib) => 'AA' + String(bib).padStart(4, '0'); // synthetic EPC the import assigns
@@ -687,6 +689,8 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   assert.equal(card.waves[0].leader.bib, '1', 'wave A leader');
   assert.equal(card.waves[0].leader.participant, 'Fast A');
   assert.equal(card.waves[1].leader.bib, '3', 'wave B leader is measured off ITS own gun');
+  assert.equal(card.waves[0].distance, '10k', 'the wave carries what it runs');
+  assert.equal(card.waves[1].distance, '5k');
   assert.ok(/^\d+:\d\d/.test(card.waves[0].leader.elapsed), 'leader carries a formatted time');
   assert.equal(card.waves[0].started_at, card.first_wave_start);
   const stagger = Date.parse(card.waves[1].started_at) - Date.parse(card.waves[0].started_at);

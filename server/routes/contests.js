@@ -267,10 +267,24 @@ router.get('/contests/live', (req, res) => {
       // none — an idle server pays nothing for this.
       let results = [];
       try { results = computeRaceResults(c); } catch { /* mid-import: skip */ }
+      const distByWave = new Map();
       for (const r of results) {
+        const name = String(r.wave || '');
+        const d = String(r.distance || '').trim();
+        if (d) {
+          if (!distByWave.has(name)) distByWave.set(name, new Set());
+          distByWave.get(name).add(d);
+        }
         if (r.status !== 'finished') continue;
-        const w = c.waves.find((x) => x.name === String(r.wave || '') && !x.leader);
+        const w = c.waves.find((x) => x.name === name && !x.leader);
         if (w) w.leader = { bib: r.bib, participant: r.participant, elapsed: r.elapsed };
+      }
+      // What each wave runs: "wave1" alone doesn't say whether it is the 10k or
+      // the 5k. Summarised past two so a long list can't crowd out the clock —
+      // the same rule the timing app's wave chips use.
+      for (const w of c.waves) {
+        const ds = [...(distByWave.get(w.name) || [])];
+        if (ds.length) w.distance = ds.length <= 2 ? ds.join(' · ') : `${ds[0]} · ${ds[1]} …`;
       }
     }
   }
