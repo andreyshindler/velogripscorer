@@ -203,9 +203,14 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: var(--f
 /* One chip per wave, under the race clock: name, gun time, own clock. */
 .wave-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 6px; }
 .wave-chip {
-  display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 9px; border-radius: var(--r-pill);
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 3px 10px; border-radius: var(--r-md);
   background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted);
 }
+.wave-chip-top { display: inline-flex; align-items: baseline; gap: 6px; }
+/* Who leads this wave, and in what time. */
+.wave-chip-leader { display: block; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wave-chip-leader b { font-variant-numeric: tabular-nums; color: var(--ok); }
 .wave-chip b { color: var(--text); font-weight: 700; }
 .wave-chip .wave-clock { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0; }
 .wave-chip.pending { opacity: .7; }

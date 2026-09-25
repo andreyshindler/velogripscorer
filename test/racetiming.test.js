@@ -650,6 +650,24 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   const w2 = (await request(app).post(`/api/contests/${live.id}/waves`).set(auth(o)).send({ name: 'B' })).body;
   await request(app).post(`/api/contests/${live.id}/waves/${w2.id}/start`).set(auth(o))
     .send({ at: new Date(Date.now() - 120_000).toISOString() });
+
+  // Two racers per wave, each crossing once — so each wave has a winner.
+  await request(app).post(`/api/contests/${live.id}/tags/bulk`).set(auth(o)).send({
+    racers: [
+      { bib: '1', participant: 'Fast A', wave: 'A' }, { bib: '2', participant: 'Slow A', wave: 'A' },
+      { bib: '3', participant: 'Fast B', wave: 'B' }, { bib: '4', participant: 'Slow B', wave: 'B' },
+    ],
+  });
+  const epcOf = (bib) => 'AA' + String(bib).padStart(4, '0'); // synthetic EPC the import assigns
+  const at = (secsAgo) => new Date(Date.now() - secsAgo * 1000).toISOString();
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', rd.token).send({
+    reads: [
+      { epc: epcOf(2), read_at: at(30) },   // wave A, 4:30 — slower
+      { epc: epcOf(1), read_at: at(60) },   // wave A, 4:00 — the winner
+      { epc: epcOf(4), read_at: at(10) },   // wave B, 1:50 — slower
+      { epc: epcOf(3), read_at: at(20) },   // wave B, 1:40 — the winner
+    ],
+  });
   res = await request(app).get('/api/contests/live');
 
   // The page runs a race clock off these: the first wave's gun, and the
@@ -663,6 +681,13 @@ test('GET /contests/live lists only started, recently active, unfinished races',
   // Every wave comes with its own gun, in gun order, so a staggered race can
   // show a clock per wave and not just the leading one's.
   assert.deepEqual(card.waves.map((w) => w.name), ['A', 'B'], 'waves in gun order');
+
+  // Each wave carries its OWN first finisher and their time — with a stagger
+  // the fastest overall is not the winner of every wave.
+  assert.equal(card.waves[0].leader.bib, '1', 'wave A leader');
+  assert.equal(card.waves[0].leader.participant, 'Fast A');
+  assert.equal(card.waves[1].leader.bib, '3', 'wave B leader is measured off ITS own gun');
+  assert.ok(/^\d+:\d\d/.test(card.waves[0].leader.elapsed), 'leader carries a formatted time');
   assert.equal(card.waves[0].started_at, card.first_wave_start);
   const stagger = Date.parse(card.waves[1].started_at) - Date.parse(card.waves[0].started_at);
   assert.ok(stagger > 170_000 && stagger < 190_000, `wave B is ~3 min behind, got ${stagger}ms`);

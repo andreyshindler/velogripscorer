@@ -498,8 +498,16 @@ function waveChips(waves) {
       return `<span class="wave-chip pending"><b>${esc(w.name)}</b> ${t('not_started')}</span>`;
     }
     const gun = ms + (w.gun_offset_ms || 0);
-    return `<span class="wave-chip"><b>${esc(w.name)}</b> ${fmtTimeOfDay(w.started_at)} ·
-              <span class="live-clock wave-clock" data-gun="${gun}">${fmtRaceClock(Date.now() + serverSkewMs - gun)}</span></span>`;
+    // Who has won this wave so far, and in what time. The race clock says how
+    // long the wave has been running; this says what the wave has produced.
+    const who = w.leader
+      ? `${w.leader.bib ? `#${esc(w.leader.bib)} ` : ''}${esc(w.leader.participant || '')}`.trim()
+      : '';
+    const leader = w.leader
+      ? `<span class="wave-chip-leader">🥇 ${who} · <b>${esc(w.leader.elapsed)}</b></span>`
+      : '';
+    return `<span class="wave-chip"><span class="wave-chip-top"><b>${esc(w.name)}</b> ${fmtTimeOfDay(w.started_at)} ·
+              <span class="live-clock wave-clock" data-gun="${gun}">${fmtRaceClock(Date.now() + serverSkewMs - gun)}</span></span>${leader}</span>`;
   }).join('')}</div>`;
 }
 
@@ -509,8 +517,15 @@ function wavesOfResults(results) {
   const byName = new Map();
   for (const r of results || []) {
     const name = String(r.wave || '').trim();
-    if (!name || byName.has(name)) continue;
-    byName.set(name, { name, started_at: r.wave_started_at, gun_offset_ms: r.wave_gun_offset_ms || 0 });
+    if (!name) continue;
+    if (!byName.has(name)) {
+      byName.set(name, { name, started_at: r.wave_started_at, gun_offset_ms: r.wave_gun_offset_ms || 0 });
+    }
+    // Rows arrive ranked, so the first finisher of a wave is its winner.
+    const w = byName.get(name);
+    if (!w.leader && r.status === 'finished') {
+      w.leader = { bib: r.bib, participant: r.participant, elapsed: r.elapsed };
+    }
   }
   return [...byName.values()].sort((a, b) => {
     if (!a.started_at || !b.started_at) return (a.started_at ? 0 : 1) - (b.started_at ? 0 : 1);

@@ -6,7 +6,7 @@ const { db, auditLog } = require('../db');
 const { requireAuth } = require('../auth');
 const { computeLeaderboard } = require('../scoring');
 const { sseSubscribe, notify, dispatchWebhooks } = require('../events');
-const { isTimeOnlySport } = require('../race-results');
+const { isTimeOnlySport, computeRaceResults } = require('../race-results');
 
 const router = express.Router();
 
@@ -261,6 +261,17 @@ router.get('/contests/live', (req, res) => {
       c.waves = waveRows
         .filter((w) => w.contest_id === c.id)
         .map(({ name, started_at, gun_offset_ms }) => ({ name, started_at, gun_offset_ms }));
+      // The first finisher in each wave, with their time. Results come back
+      // ranked, so the first finished row of a wave IS that wave's winner.
+      // Only computed for races that are actually live, which is nearly always
+      // none — an idle server pays nothing for this.
+      let results = [];
+      try { results = computeRaceResults(c); } catch { /* mid-import: skip */ }
+      for (const r of results) {
+        if (r.status !== 'finished') continue;
+        const w = c.waves.find((x) => x.name === String(r.wave || '') && !x.leader);
+        if (w) w.leader = { bib: r.bib, participant: r.participant, elapsed: r.elapsed };
+      }
     }
   }
   // `now` lets the page run its race clocks off the server's clock: a viewer
