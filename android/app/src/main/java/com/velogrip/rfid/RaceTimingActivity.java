@@ -545,8 +545,27 @@ public class RaceTimingActivity extends BaseActivity {
         }
         // Finish counter: finished so far / racers still expected to finish
         // (start list minus DNS — incl. roll-call no-shows — minus DNF/DSQ).
+        // It follows the wave chips like the list under it: with a wave picked,
+        // "✓ 3/24" is that wave's count, not the whole field's. The scan above
+        // stays whole-field because the grid needs every racer's status.
+        int shownFinished = finishedCount, shownOut = outCount, shownTotal = results.size();
+        if (multiWave && waveFilter != null) {
+            shownFinished = 0; shownOut = 0; shownTotal = 0;
+            for (RaceEngine.Result r : results) {
+                if (!waveFilter.equals(r.wave)) continue;
+                shownTotal++;
+                if ("finished".equals(r.status)) shownFinished++;
+                else if ("DNS".equals(r.status) || "DNF".equals(r.status) || "DSQ".equals(r.status)) shownOut++;
+            }
+        }
         ((TextView) findViewById(R.id.finishCounter)).setText(
-                "✓ " + finishedCount + "/" + Math.max(0, results.size() - outCount));
+                "✓ " + shownFinished + "/" + Math.max(0, shownTotal - shownOut));
+        // Name the wave over the list too. The big clock's subtitle already names
+        // it, but that is a screen's height away from the finishers.
+        ((TextView) findViewById(R.id.nameColHeader)).setText(
+                multiWave && waveFilter != null
+                        ? getString(R.string.name_col) + " · " + waveFilter
+                        : getString(R.string.name_col));
 
         List<RaceStore.Pending> pendingEntries = store.pendingEntries();
         java.util.Set<String> pendingBibs = new java.util.HashSet<>();
@@ -858,6 +877,18 @@ public class RaceTimingActivity extends BaseActivity {
         boolean recordLaps = prefs.recordLaps();
         java.util.Map<String, Integer> lapTargets = store.lapTargets();
 
+        // The wave chips already scope the bib grid and the big clock; the finish
+        // list follows them, so a place always means "in this wave". It has to:
+        // every elapsed time is measured from its own wave's gun, so a combined
+        // list ranks racers against numbers that are not comparable, and place 1
+        // can belong to a wave that started ten minutes later.
+        final boolean scoped = multiWave && waveFilter != null;
+        if (scoped) {
+            List<RaceEngine.Result> only = new ArrayList<>();
+            for (RaceEngine.Result r : results) if (waveFilter.equals(r.wave)) only.add(r);
+            results = only;
+        }
+
         // One row per lap crossing for multi-lap racers, one row per finish for
         // single-lap racers, plus banked No-Bib times — all ranked by time.
         List<ResRow> rows = new ArrayList<>();
@@ -870,8 +901,14 @@ public class RaceTimingActivity extends BaseActivity {
                 rows.add(new ResRow(r.elapsedMs, r, 0));
             }
         }
-        for (RaceStore.Pending p : pendingEntries) {
-            if (p.hasTime() && !p.hasRacer()) rows.add(new ResRow(gun == null ? 0 : p.readAtMs - gun, p));
+        // A banked No-Bib time has no racer yet, so it belongs to no wave and
+        // cannot hold a place within one. Under "All waves" it ranks normally;
+        // with a wave selected it moves to the tail below, unnumbered — hiding
+        // it outright would let an unassigned time be forgotten.
+        if (!scoped) {
+            for (RaceStore.Pending p : pendingEntries) {
+                if (p.hasTime() && !p.hasRacer()) rows.add(new ResRow(gun == null ? 0 : p.readAtMs - gun, p));
+            }
         }
         java.util.Collections.sort(rows, (a, b) -> Long.compare(a.elapsed, b.elapsed));
 
@@ -949,14 +986,40 @@ public class RaceTimingActivity extends BaseActivity {
                 if (who != null) lastTapText = getString(R.string.last_read, who);
             }
         }
-        // bib pre-entered, still waiting for a time
+        // Banked No-Bib times, when a wave is selected: still on screen and still
+        // tappable to assign a bib, but with "—" for a place so they cannot be
+        // mistaken for a finisher of this wave.
+        if (scoped) {
+            for (final RaceStore.Pending p : pendingEntries) {
+                if (!p.hasTime() || p.hasRacer()) continue;
+                String time = RaceEngine.formatElapsed(
+                        Math.max(0, gun == null ? 0 : p.readAtMs - gun), decimals);
+                resultsBox.addView(resultRow("—", "-", getString(R.string.select_a_bib), time, true,
+                        () -> assignTimePending(p), () -> assignTimePending(p)));
+            }
+        }
+
+        // bib pre-entered, still waiting for a time. With a wave selected these
+        // follow it too: `results` is already scoped, so a bib missing from it
+        // belongs to another wave.
+        java.util.Set<String> bibsInScope = new java.util.HashSet<>();
+        if (scoped) for (RaceEngine.Result r : results) if (r.bib != null) bibsInScope.add(r.bib);
         for (final RaceStore.Pending p : pendingEntries) {
+            if (scoped && !bibsInScope.contains(p.bib)) continue;
             if (p.hasRacer() && !p.hasTime()) {
                 resultsBox.addView(resultRow("—", p.bib, p.name, getString(R.string.tap_time), true,
                         () -> { store.recordPassing(p.epc, System.currentTimeMillis());
                                 store.deletePending(p.id); scrollToBib = p.bib; render(); },
                         () -> openRacerInfo(p.bib)));
             }
+        }
+
+        // An empty list under a selected wave reads as a fault; say it plainly.
+        if (resultsBox.getChildCount() == 0) {
+            TextView none = line(getString(R.string.no_finishers_yet), 14, false,
+                    getColor(R.color.text_muted));
+            none.setPadding(dp(12), dp(14), dp(12), dp(14));
+            resultsBox.addView(none);
         }
 
         // A chip crossing brings its racer's row into view, so the operator sees
