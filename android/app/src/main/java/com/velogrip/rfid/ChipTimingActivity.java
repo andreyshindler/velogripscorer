@@ -213,8 +213,30 @@ public class ChipTimingActivity extends BaseActivity {
     }
 
     private void showReader(boolean connected, String message) {
-        readerStatus.setText(connected ? getString(R.string.connected_reader, message) : message);
+        readerStatus.setText(connected ? getString(R.string.connected_reader, message)
+                : wifiReasonOr(message));
         readerStatus.setTextColor(connected ? 0xFF3F7A16 : 0xFFC0392B);
+    }
+
+    /** Why the reader did not answer, in the operator's terms.
+     *
+     *  With the reader on WiFi, a failed probe reports the symptom — "failed to
+     *  connect to /192.168.0.8 … from /192.168.1.122" — when ReaderWifi already
+     *  knows the cause. Say the cause instead.
+     *
+     *  Only when a hold was actually requested: without one the operator may be
+     *  on the reader's AP through Android's own WiFi settings, or on the cable,
+     *  and there the socket error IS the useful message. A hold that is up and
+     *  still cannot reach the reader also keeps the socket error — the network
+     *  is fine and the reader itself is the problem, which is worth saying. */
+    private String wifiReasonOr(String socketError) {
+        if (!ReaderWifi.isActive()) return socketError;
+        switch (ReaderWifi.state()) {
+            case ReaderWifi.CONNECTING: return getString(R.string.wifi_connecting, ReaderWifi.ssid());
+            case ReaderWifi.FAILED:     return getString(R.string.log_wifi_unavailable);
+            case ReaderWifi.LOST:       return getString(R.string.log_wifi_lost);
+            default:                    return socketError;
+        }
     }
 
     /** The same check the indicator runs, with the reason spelled out in a toast.
