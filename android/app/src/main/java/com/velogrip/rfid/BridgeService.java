@@ -196,6 +196,21 @@ public class BridgeService extends Service {
         }
     }
 
+    /**
+     * The reader↔device clock mapping, kept across reconnects on purpose.
+     *
+     * A fresh one starts out untrusted and stamps reads with their arrival time
+     * until the reader's clock has proved itself, which takes a few seconds of
+     * traffic. Since a new LlrpEngine is built on every reconnect, a backlog
+     * arriving the instant the link returns would land in exactly that window
+     * and be stamped at the reconnect — the very thing the mapping exists to
+     * prevent. Carrying it over means the offset learned before the outage is
+     * still there when the backlog arrives. A reader that rebooted in the
+     * meantime has its clock back near zero, which the mapping's own backstop
+     * rejects, so it simply falls back to arrival times.
+     */
+    private final LlrpEngine.ReaderClock readerClock = new LlrpEngine.ReaderClock();
+
     /** How often a buffered reader is asked to hand over what it has. */
     private static final long BUFFERED_POLL_MS = 250;
 
@@ -209,7 +224,7 @@ public class BridgeService extends Service {
         // Buffered: the reader accumulates reads and we poll for them, so a
         // read taken while the link was down still arrives once it is back.
         final boolean buffered = isLlrp && prefs.readerBuffered();
-        LlrpEngine llrp = isLlrp ? new LlrpEngine(buffered) : null;
+        LlrpEngine llrp = isLlrp ? new LlrpEngine(buffered, readerClock) : null;
         TagParser parser = isLlrp ? llrp
                 : Prefs.PROTOCOL_UHF.equals(prefs.protocol()) ? new UhfFrameParser()
                 : new AsciiLineParser();
@@ -219,9 +234,16 @@ public class BridgeService extends Service {
         // back to the ambiguous "default network" when neither is held — e.g.
         // the tablet is already sitting on the reader's WiFi as its only network.
         Network network = ReaderNet.pickForHost(this, prefs.readerHost());
-        Socket socket = network != null
-                ? network.getSocketFactory().createSocket()
-                : new Socket();
+        Socket socket;
+        try {
+            socket = network != null ? network.getSocketFactory().createSocket() : new Socket();
+        } catch (Exception bindFailed) {
+            // The chosen network died between picking it and using it. Rather
+            // than spend the whole race retrying a handle that will never bind
+            // again, take the default route: on a tablet whose cable has just
+            // come back that is usually the one that works.
+            socket = new Socket();
+        }
         readerSocket = socket;
         socket.connect(new InetSocketAddress(prefs.readerHost(), prefs.readerPort()), 8000);
         // Polling only gets its turn between reads, so the blocking read has to

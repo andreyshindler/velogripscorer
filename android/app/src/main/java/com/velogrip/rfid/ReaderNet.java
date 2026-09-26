@@ -43,14 +43,15 @@ public final class ReaderNet {
         if (cm != null && hostPrefix != null) {
             try {
                 for (Network net : cm.getAllNetworks()) {
-                    if (hostPrefix.equals(subnetOf(cm, net))) return net;
+                    if (hostPrefix.equals(subnetOf(cm, net)) && usable(cm, net)) return net;
                 }
             } catch (Exception ignored) { }
         }
         // No interface on the reader's subnet: use an explicit hold if we have one.
         Network eth = ReaderEthernet.getNetwork();
-        if (eth != null) return eth;
-        return ReaderWifi.getNetwork();
+        if (usable(cm, eth)) return eth;
+        Network wifi = ReaderWifi.getNetwork();
+        return usable(cm, wifi) ? wifi : null;
     }
 
     /**
@@ -78,6 +79,26 @@ public final class ReaderNet {
             return subnetOf(cm, net);
         } catch (Exception ignored) {
             return null;
+        }
+    }
+
+    /**
+     * Whether this handle can still be bound to.
+     *
+     * Pulling the cable destroys the Ethernet network, but a handle to it
+     * survives — held in {@link ReaderEthernet}, and briefly still listed by
+     * getAllNetworks() while it is torn down. Binding a socket to a dead handle
+     * fails with "Binding socket to network NNN failed: EPERM", which is what
+     * the reconnect loop was hitting over and over on the tablet: it would
+     * rather have used the plain default route, but was never given the chance.
+     * A destroyed network has no capabilities, which is the cheap way to ask.
+     */
+    private static boolean usable(ConnectivityManager cm, Network net) {
+        if (cm == null || net == null) return false;
+        try {
+            return cm.getNetworkCapabilities(net) != null;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 

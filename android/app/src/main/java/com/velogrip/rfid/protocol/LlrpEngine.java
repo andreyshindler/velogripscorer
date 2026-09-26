@@ -92,7 +92,7 @@ public final class LlrpEngine implements TagParser {
     private final ByteArrayOutputStream outbound = new ByteArrayOutputStream();
     private volatile boolean keepaliveSeen = false;
     private final boolean buffered;
-    private final ReaderClock readerClock = new ReaderClock();
+    private final ReaderClock readerClock;
     private long arrivalMs;
 
     /** Streaming mode: the reader pushes every read as it happens. */
@@ -109,7 +109,18 @@ public final class LlrpEngine implements TagParser {
      *   reader's own FirstSeenTimestamp, not from when we received them.
      */
     public LlrpEngine(boolean buffered) {
+        this(buffered, new ReaderClock());
+    }
+
+    /**
+     * @param clock a mapping to go on using. Pass the same one across
+     *   reconnects and the offset learned before an outage is still there when
+     *   the reader's backlog arrives, instead of a brand-new mapping stamping
+     *   it all at the reconnect.
+     */
+    public LlrpEngine(boolean buffered, ReaderClock clock) {
         this.buffered = buffered;
+        this.readerClock = clock;
     }
 
     /** Handshake bytes to send right after the TCP connection opens. */
@@ -472,7 +483,7 @@ public final class LlrpEngine implements TagParser {
      * worse than today. Until then, and whenever the answer looks impossible,
      * the arrival time is returned — exactly the old behaviour.
      */
-    private static final class ReaderClock {
+    public static final class ReaderClock {
         private static final int SRC_NONE = 0, SRC_UTC = 1, SRC_UPTIME = 2;
 
         /** Rotate the minimum this often, bounding how stale the offset can be. */
@@ -506,7 +517,7 @@ public final class LlrpEngine implements TagParser {
         private long anchorReader;
 
         /** Device-clock time for one read; falls back to arrival when unsure. */
-        long stamp(long arrival, Long seenUtcUs, Long seenUptimeUs) {
+        synchronized long stamp(long arrival, Long seenUtcUs, Long seenUptimeUs) {
             // Lock onto one source for the connection. Feeding an uptime value
             // through a UTC-derived offset (or the reverse) would be wildly
             // wrong, so a reader that reports both must not be allowed to
