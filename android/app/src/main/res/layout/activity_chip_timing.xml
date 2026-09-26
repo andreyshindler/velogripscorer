@@ -37,6 +37,18 @@
                     android:inputType="text" />
             </LinearLayout>
 
+            <!-- Live reader status, right under the IP it reflects: the answer to
+                 "is the reader plugged in?" without leaving the screen. -->
+            <TextView
+                android:id="@+id/readerStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:paddingVertical="6dp"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
             <Button
                 android:id="@+id/scanReader"
                 android:layout_width="match_parent"

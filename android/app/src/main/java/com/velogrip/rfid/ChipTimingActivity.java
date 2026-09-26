@@ -1,7 +1,10 @@
 package com.velogrip.rfid;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -13,8 +16,6 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.Locale;
 
 /**
@@ -30,6 +31,11 @@ public class ChipTimingActivity extends BaseActivity {
     private EditText readerHost, chipsPerRacer, suppress, lapGap, antennaPower, rollCall;
     private android.widget.Switch rollCallOn;
     private Switch chipIdBib, beepUnknown, startBeepLong;
+    private TextView readerStatus;
+    // Set as soon as BridgeService tells us the reader state, so a race in
+    // progress is never probed behind its back — see onResume.
+    private boolean heardFromService;
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,6 +53,17 @@ public class ChipTimingActivity extends BaseActivity {
 
         systemValue = findViewById(R.id.systemValue);
         readerHost = findViewById(R.id.readerHost);
+        readerStatus = findViewById(R.id.readerStatus);
+        readerStatus.setOnClickListener(v -> checkReader());   // tap to re-check
+        // Re-check when the operator finishes typing a new IP, not on every
+        // keystroke — each check opens a real connection to the reader.
+        readerHost.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) return;
+            String typed = readerHost.getText().toString().trim();
+            if (typed.equals(prefs.readerHost())) return;
+            prefs.saveReaderHostPort(typed, prefs.readerPort());
+            checkReader();
+        });
         chipsPerRacer = findViewById(R.id.chipsPerRacer);
         suppress = findViewById(R.id.suppress);
         lapGap = findViewById(R.id.lapGap);
@@ -132,36 +149,90 @@ public class ChipTimingActivity extends BaseActivity {
         findViewById(R.id.navTest).setOnClickListener(v -> testConnection());
     }
 
+    /** While a race is running BridgeService owns the reader and publishes its
+     *  state; reflect that instead of connecting, so this screen can never take
+     *  the reader's single client slot out from under a live race. */
+    private final BroadcastReceiver bridgeReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            heardFromService = true;
+            showReader(i.getBooleanExtra(BridgeService.EXTRA_READER_CONNECTED, false),
+                    prefs.readerHost() + ":" + prefs.readerPort());
+        }
+    };
+
     @Override
     protected void onResume() {
         super.onResume();
         systemValue.setText(protocolLabel(prefs.protocol()));
         readerHost.setText(prefs.readerHost());
+
+        heardFromService = false;
+        registerReceiver(bridgeReceiver, new IntentFilter(BridgeService.ACTION_STATUS));
+        readerStatus.setText(R.string.connecting);
+        readerStatus.setTextColor(getColor(R.color.text_muted));
+        // Give the service a moment to answer. Only if it doesn't — the normal
+        // setup case, where it isn't running at all — do we connect ourselves.
+        ui.postDelayed(() -> { if (!heardFromService) checkReader(); }, 900);
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        ui.removeCallbacksAndMessages(null);
+        try { unregisterReceiver(bridgeReceiver); } catch (IllegalArgumentException ignored) { }
+    }
+
+    /** Ask the reader whether it is there, and say so on screen. Connects,
+     *  reports, and releases at once: an LLRP reader takes one client, so
+     *  holding it would lock out Program Chips and the race service. */
+    private void checkReader() {
+        if (heardFromService) return;   // a running race already owns the answer
+        readerStatus.setText(R.string.connecting);
+        readerStatus.setTextColor(getColor(R.color.text_muted));
+        final ChipProgrammer probe = new ChipProgrammer(this, prefs,
+                (message, connected) -> runOnUiThread(() -> showReader(connected, message)));
+        new Thread(() -> {
+            try { probe.connect(); } finally { probe.close(); }
+        }).start();
+    }
+
+    private void showReader(boolean connected, String message) {
+        readerStatus.setText(connected ? getString(R.string.connected_reader, message) : message);
+        readerStatus.setTextColor(connected ? 0xFF3F7A16 : 0xFFC0392B);
+    }
+
+    /** The same check the indicator runs, with the reason spelled out in a toast.
+     *
+     *  This used to open a bare `new Socket()`, which rides Android's default
+     *  network. With the reader on a router that has no internet uplink, the
+     *  tablet keeps WiFi as default and the connection leaves on the wrong
+     *  interface — so a reader that was plugged in and working reported a
+     *  failure every time. ChipProgrammer binds to the interface on the
+     *  reader's own subnet (ReaderNet.pickForHost) and speaks LLRP, so a pass
+     *  here means a reader actually answered. */
     private void testConnection() {
         save();
-        String host = readerHost.getText().toString().trim();
         if (Prefs.PROTOCOL_DEMO.equals(prefs.protocol())) {
             Toast.makeText(this, R.string.test_demo_ok, Toast.LENGTH_LONG).show();
+            checkReader();
             return;
         }
-        if (host.isEmpty()) {
+        if (prefs.readerHost().isEmpty()) {
             Toast.makeText(this, R.string.reader_needs_config, Toast.LENGTH_LONG).show();
             return;
         }
-        final int port = prefs.readerPort();
         Toast.makeText(this, R.string.test_connecting, Toast.LENGTH_SHORT).show();
+        final int port = prefs.readerPort();
+        final ChipProgrammer probe = new ChipProgrammer(this, prefs, (message, connected) ->
+                runOnUiThread(() -> {
+                    showReader(connected, message);
+                    Toast.makeText(this, connected
+                            ? getString(R.string.test_reader_ok, prefs.readerHost(), port)
+                            : getString(R.string.test_reader_failed, message),
+                            Toast.LENGTH_LONG).show();
+                }));
         new Thread(() -> {
-            String message;
-            try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress(host, port), 4000);
-                message = getString(R.string.test_reader_ok, host, port);
-            } catch (Exception e) {
-                message = getString(R.string.test_reader_failed, e.getMessage());
-            }
-            final String text = message;
-            runOnUiThread(() -> Toast.makeText(this, text, Toast.LENGTH_LONG).show());
+            try { probe.connect(); } finally { probe.close(); }
         }).start();
     }
 
