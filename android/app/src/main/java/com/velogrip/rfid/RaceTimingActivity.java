@@ -40,6 +40,7 @@ public class RaceTimingActivity extends BaseActivity {
     private TextView syncStatus;
     private boolean online = true; // last sync state reported by BridgeService
     private boolean readerConnected = false;
+    private String lastReaderError;
     private boolean bridgeRunning = false;
     private String lastSyncError;  // why the last upload failed, shown on the strip
     private SnapScrollView pager;
@@ -121,6 +122,11 @@ public class RaceTimingActivity extends BaseActivity {
             boolean fromReader = prefs.chipTiming() && !readerUp;
             if (online) lastSyncError = null;
             else if (!fromReader && log != null && !log.isEmpty()) lastSyncError = log;
+            // Keep the reader's reason for its own strip. "Connecting…" does not
+            // distinguish a pulled cable from a reader that is refusing, and the
+            // operator cannot act on a reason they are never shown.
+            if (readerUp) lastReaderError = null;
+            else if (fromReader && log != null && !log.isEmpty()) lastReaderError = log;
             scheduleRender(); // a new crossing (or status change) landed in the store
         }
     };
@@ -520,7 +526,9 @@ public class RaceTimingActivity extends BaseActivity {
                 syncStatus.setText(getString(R.string.no_reader));
             } else {
                 syncStatus.setBackgroundColor(0xFFB9770E); // amber: retrying on its own
-                syncStatus.setText(getString(R.string.reader_connecting));
+                syncStatus.setText(lastReaderError != null
+                        ? lastReaderError
+                        : getString(R.string.reader_connecting));
             }
             return;
         }
