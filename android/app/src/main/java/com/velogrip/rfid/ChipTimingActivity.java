@@ -35,6 +35,10 @@ public class ChipTimingActivity extends BaseActivity {
     // Set as soon as BridgeService tells us the reader state, so a race in
     // progress is never probed behind its back — see onResume.
     private boolean heardFromService;
+    // Re-checking keeps running while this screen is in front, so pulling or
+    // replugging the reader's cable shows up on its own.
+    private boolean onScreen, probing;
+    private static final long RECHECK_MS = 2000;
     private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override
@@ -167,6 +171,7 @@ public class ChipTimingActivity extends BaseActivity {
         readerHost.setText(prefs.readerHost());
 
         heardFromService = false;
+        onScreen = true;
         registerReceiver(bridgeReceiver, new IntentFilter(BridgeService.ACTION_STATUS));
         readerStatus.setText(R.string.connecting);
         readerStatus.setTextColor(getColor(R.color.text_muted));
@@ -178,21 +183,32 @@ public class ChipTimingActivity extends BaseActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        onScreen = false;               // stops the re-check loop rescheduling
         ui.removeCallbacksAndMessages(null);
         try { unregisterReceiver(bridgeReceiver); } catch (IllegalArgumentException ignored) { }
     }
 
     /** Ask the reader whether it is there, and say so on screen. Connects,
      *  reports, and releases at once: an LLRP reader takes one client, so
-     *  holding it would lock out Program Chips and the race service. */
+     *  holding it would lock out Program Chips and the race service.
+     *
+     *  Reschedules itself while the screen is in front, so unplugging or
+     *  replugging the cable is picked up without leaving and coming back. The
+     *  next check is booked when this one FINISHES rather than on a fixed tick,
+     *  so two probes can never overlap: connected, a round trip is a few
+     *  milliseconds; unreachable, it is the 5 s connect timeout, and the loop
+     *  paces itself to that instead of piling up. */
     private void checkReader() {
-        if (heardFromService) return;   // a running race already owns the answer
-        readerStatus.setText(R.string.connecting);
-        readerStatus.setTextColor(getColor(R.color.text_muted));
+        if (heardFromService || probing) return;   // a running race owns the answer
+        probing = true;
         final ChipProgrammer probe = new ChipProgrammer(this, prefs,
                 (message, connected) -> runOnUiThread(() -> showReader(connected, message)));
         new Thread(() -> {
             try { probe.connect(); } finally { probe.close(); }
+            runOnUiThread(() -> {
+                probing = false;
+                if (onScreen && !heardFromService) ui.postDelayed(this::checkReader, RECHECK_MS);
+            });
         }).start();
     }
 
