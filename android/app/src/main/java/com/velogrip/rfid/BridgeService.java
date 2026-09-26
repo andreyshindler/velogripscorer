@@ -196,6 +196,11 @@ public class BridgeService extends Service {
         }
     }
 
+    /** Silent this long and the operator is told the reader is down. */
+    private static final long SILENT_WARN_MS = LlrpEngine.KEEPALIVE_MS * 3L;
+    /** Silent this long and the connection is written off and rebuilt. */
+    private static final long SILENT_DROP_MS = 60_000L;
+
     private void connectAndRead() throws Exception {
         boolean isLlrp = Prefs.PROTOCOL_LLRP.equals(prefs.protocol());
         LlrpEngine llrp = isLlrp ? new LlrpEngine() : null;
@@ -252,14 +257,32 @@ public class BridgeService extends Service {
                 // and the link looks alive forever. Once the reader has proved
                 // it sends keepalives we can call silence what it is — and
                 // only then, so a reader that ignores the config (or an idle
-                // stretch with no chips crossing) is never torn down.
-                if (isLlrp && llrp.keepaliveSeen()
-                        && System.currentTimeMillis() - lastByteAt > LlrpEngine.KEEPALIVE_MS * 3L) {
+                // stretch with no chips crossing) is never judged at all.
+                if (!isLlrp || !llrp.keepaliveSeen()) continue;
+                long silentFor = System.currentTimeMillis() - lastByteAt;
+                // Warning and giving up are deliberately NOT the same moment.
+                // While the cable is out the reader keeps timing tags and piling
+                // the reports into its socket; TCP retransmits, so plugging back
+                // in delivers that backlog — with the reader's own timestamps,
+                // so those racers get the time they actually crossed. Closing
+                // the socket is what throws that away for good. So say the
+                // reader is down early, where the operator can act on it, and
+                // only reconnect once the link has had a fair chance to heal.
+                if (silentFor > SILENT_DROP_MS) {
                     throw new java.io.IOException("reader stopped answering");
+                }
+                if (silentFor > SILENT_WARN_MS && readerConnected.compareAndSet(true, false)) {
+                    broadcastStatus(null);
                 }
                 continue; // idle: loop to honor poll schedule and running flag
             }
             lastByteAt = System.currentTimeMillis();
+            if (n > 0 && readerConnected.compareAndSet(false, true)) {
+                // It healed on its own, without a reconnect — so whatever the
+                // reader buffered is arriving now rather than being discarded.
+                broadcastStatus(getString(R.string.log_reader_connected,
+                        prefs.readerHost() + ":" + prefs.readerPort()));
+            }
             if (n < 0) throw new java.io.EOFException("reader closed the connection");
             if (n > 0) {
                 handleReads(parser.feed(buf, n));

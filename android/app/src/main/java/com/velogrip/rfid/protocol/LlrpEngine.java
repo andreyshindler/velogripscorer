@@ -435,8 +435,15 @@ public final class LlrpEngine implements TagParser {
         private static final long PROMPT_MS = 1000;
         private static final int MIN_SAMPLES = 8;
         private static final long MIN_SPAN_MS = 10_000;
-        /** Furthest back a corrected time may land: covers any legitimate backlog. */
-        private static final long MAX_LAG_MS = 30_000;
+        /**
+         * Furthest back a corrected time may land. This has to cover the whole
+         * window the service is willing to wait on a silent link before it
+         * rebuilds the connection, because everything the reader buffered
+         * during an outage arrives at the end of it — clamp tighter and the
+         * recovered reads would be thrown back to their arrival time, which is
+         * the very thing this class exists to stop.
+         */
+        private static final long MAX_LAG_MS = 120_000;
         /** A read cannot have happened meaningfully after we parsed it. */
         private static final long MAX_LEAD_MS = 250;
 
