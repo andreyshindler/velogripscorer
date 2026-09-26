@@ -21,7 +21,9 @@ import java.util.List;
  *   ENABLE_EVENTS_AND_REPORTS
  *
  * Incoming RO_ACCESS_REPORT messages are decoded into TagReads (EPC-96 or
- * EPCData, PeakRSSI when present). KEEPALIVEs are acknowledged so the reader
+ * EPCData, PeakRSSI when present). Each read is stamped with the time the
+ * READER saw the tag, not the time this app got round to parsing it — see
+ * {@link ReaderClock}. KEEPALIVEs are acknowledged so the reader
  * does not drop the connection, and {@link #keepaliveSeen()} reports whether
  * any has arrived — a caller can only treat silence as a dead link once the
  * reader has proved it does send them. All other messages (responses, reader event
@@ -87,6 +89,8 @@ public final class LlrpEngine implements TagParser {
     private int messageId = 100;
     private final ByteArrayOutputStream outbound = new ByteArrayOutputStream();
     private volatile boolean keepaliveSeen = false;
+    private final ReaderClock readerClock = new ReaderClock();
+    private long arrivalMs;
 
     /** Handshake bytes to send right after the TCP connection opens. */
     public byte[] onConnect() {
@@ -197,7 +201,18 @@ public final class LlrpEngine implements TagParser {
 
     @Override
     public List<TagRead> feed(byte[] data, int length) {
+        return feed(data, length, System.currentTimeMillis());
+    }
+
+    /**
+     * As {@link #feed(byte[], int)}, with the moment the bytes arrived passed in
+     * explicitly. One reference for the whole batch: a single socket read can
+     * carry a hundred tags, and measuring each against its own "now" would
+     * spread them by parse cost rather than by when they actually crossed.
+     */
+    List<TagRead> feed(byte[] data, int length, long arrivedAtMs) {
         List<TagRead> reads = new ArrayList<>();
+        arrivalMs = arrivedAtMs;
         int offset = 0;
         while (offset < length) {
             int chunk = Math.min(length - offset, buf.length - size);
@@ -251,18 +266,26 @@ public final class LlrpEngine implements TagParser {
         String epc = null;
         Double rssi = null;
         Integer antenna = null;
+        Long seenUtcUs = null;
+        Long seenUptimeUs = null;
         while (pos < end) {
             int first = buf[pos] & 0xFF;
             if ((first & 0x80) != 0) { // TV parameter
                 int tvType = first & 0x7F;
                 int valueLen = tvValueLength(tvType);
-                if (valueLen < 0 || pos + 1 + valueLen > end) return finishTag(epc, rssi, antenna);
+                if (valueLen < 0 || pos + 1 + valueLen > end) {
+                    return finishTag(epc, rssi, antenna, seenUtcUs, seenUptimeUs);
+                }
                 if (tvType == TV_EPC_96) {
                     epc = hex(pos + 1, 12);
                 } else if (tvType == TV_PEAK_RSSI) {
                     rssi = (double) buf[pos + 1]; // signed dBm
                 } else if (tvType == TV_ANTENNA_ID) {
                     antenna = ((buf[pos + 1] & 0xFF) << 8) | (buf[pos + 2] & 0xFF); // u16
+                } else if (tvType == TV_FIRST_SEEN_UTC) {
+                    seenUtcUs = u64At(pos + 1);      // microseconds since epoch
+                } else if (tvType == TV_FIRST_SEEN_UPTIME) {
+                    seenUptimeUs = u64At(pos + 1);   // microseconds since reader boot
                 }
                 pos += 1 + valueLen;
             } else { // TLV parameter
@@ -278,12 +301,14 @@ public final class LlrpEngine implements TagParser {
                 pos += plen;
             }
         }
-        return finishTag(epc, rssi, antenna);
+        return finishTag(epc, rssi, antenna, seenUtcUs, seenUptimeUs);
     }
 
-    private TagRead finishTag(String epc, Double rssi, Integer antenna) {
+    private TagRead finishTag(String epc, Double rssi, Integer antenna,
+                              Long seenUtcUs, Long seenUptimeUs) {
         if (epc == null || epc.length() < 4) return null;
-        return new TagRead(epc, rssi, System.currentTimeMillis(), antenna);
+        return new TagRead(epc, rssi,
+                readerClock.stamp(arrivalMs, seenUtcUs, seenUptimeUs), antenna);
     }
 
     private static int tvValueLength(int type) {
@@ -357,6 +382,12 @@ public final class LlrpEngine implements TagParser {
         return new byte[]{(byte) (v >>> 24), (byte) (v >>> 16), (byte) (v >>> 8), (byte) v};
     }
 
+    private long u64At(int pos) {
+        long v = 0;
+        for (int i = 0; i < 8; i++) v = (v << 8) | (buf[pos + i] & 0xFF);
+        return v;
+    }
+
     private long u32At(int pos) {
         return ((long) (buf[pos] & 0xFF) << 24) | ((buf[pos + 1] & 0xFF) << 16)
                 | ((buf[pos + 2] & 0xFF) << 8) | (buf[pos + 3] & 0xFF);
@@ -370,5 +401,103 @@ public final class LlrpEngine implements TagParser {
 
     private static void writeAll(ByteArrayOutputStream out, byte[] bytes) {
         out.write(bytes, 0, bytes.length);
+    }
+
+    /**
+     * Maps the reader's own clock onto the device clock, so a read is stamped
+     * when the tag crossed rather than when this app parsed the bytes.
+     *
+     * Why an offset and not the reader's time directly: the reader sits on a
+     * router with no internet uplink, so its UTC clock has never been set. Its
+     * absolute value is meaningless — often zero, and an unsynced reader is
+     * meant to send uptime-since-boot instead. What it CAN be trusted for is
+     * ticking, so only the difference between the two clocks is used, which
+     * makes the absolute value irrelevant and lets uptime work identically.
+     *
+     * The offset is the MINIMUM of (arrival - reader time) over recent reads:
+     * the least-delayed read carries the least buffering, and a buffered burst
+     * has a large difference, so it can never drag the estimate. The minimum is
+     * kept over two rotating windows rather than for the whole connection, so
+     * drift between the two crystals cannot accumulate over a long race.
+     *
+     * Nothing is trusted until the reader's clock has proved it advances at the
+     * same rate as ours. The failure this guards against is a reader reporting a
+     * CONSTANT timestamp: every read would map to one instant, which is far
+     * worse than today. Until then, and whenever the answer looks impossible,
+     * the arrival time is returned — exactly the old behaviour.
+     */
+    private static final class ReaderClock {
+        private static final int SRC_NONE = 0, SRC_UTC = 1, SRC_UPTIME = 2;
+
+        /** Rotate the minimum this often, bounding how stale the offset can be. */
+        private static final long WINDOW_MS = 60_000;
+        /** A read no later than this past the offset counts as promptly delivered. */
+        private static final long PROMPT_MS = 1000;
+        private static final int MIN_SAMPLES = 8;
+        private static final long MIN_SPAN_MS = 10_000;
+        /** Furthest back a corrected time may land: covers any legitimate backlog. */
+        private static final long MAX_LAG_MS = 30_000;
+        /** A read cannot have happened meaningfully after we parsed it. */
+        private static final long MAX_LEAD_MS = 250;
+
+        private int source = SRC_NONE;
+        private boolean trusted;
+
+        private long curMin = Long.MAX_VALUE;
+        private long prevMin = Long.MAX_VALUE;
+        private long windowStart;
+        private boolean started;
+
+        private int prompt;
+        private long anchorArrival;
+        private long anchorReader;
+
+        /** Device-clock time for one read; falls back to arrival when unsure. */
+        long stamp(long arrival, Long seenUtcUs, Long seenUptimeUs) {
+            // Lock onto one source for the connection. Feeding an uptime value
+            // through a UTC-derived offset (or the reverse) would be wildly
+            // wrong, so a reader that reports both must not be allowed to
+            // alternate between them.
+            if (source == SRC_NONE) {
+                if (seenUtcUs != null) source = SRC_UTC;
+                else if (seenUptimeUs != null) source = SRC_UPTIME;
+                else return arrival;
+            }
+            Long us = source == SRC_UTC ? seenUtcUs : seenUptimeUs;
+            if (us == null) return arrival; // this read lost the field: don't guess
+            long readerMs = us / 1000;
+
+            long delta = arrival - readerMs;
+            rotate(arrival);
+            if (delta < curMin) curMin = delta;
+            long offset = Math.min(curMin, prevMin);
+
+            // Validate on promptly-delivered reads only. A buffered read is
+            // late by definition, so letting it speak here would make a healthy
+            // reader look like a drifting one every time the link hiccuped.
+            if (delta <= offset + PROMPT_MS) {
+                if (prompt == 0) { anchorArrival = arrival; anchorReader = readerMs; }
+                prompt++;
+                long ours = arrival - anchorArrival;
+                long theirs = readerMs - anchorReader;
+                // A frozen clock never passes this: its span stays 0 while ours grows.
+                trusted = prompt >= MIN_SAMPLES && ours >= MIN_SPAN_MS
+                        && Math.abs(theirs - ours) <= ours / 50 + 100;
+            }
+            if (!trusted) return arrival;
+
+            long corrected = readerMs + offset;
+            if (corrected > arrival + MAX_LEAD_MS) return arrival;
+            if (corrected < arrival - MAX_LAG_MS) return arrival;
+            return corrected;
+        }
+
+        private void rotate(long arrival) {
+            if (!started) { started = true; windowStart = arrival; return; }
+            if (arrival - windowStart < WINDOW_MS) return;
+            prevMin = curMin;
+            curMin = Long.MAX_VALUE;
+            windowStart = arrival;
+        }
     }
 }

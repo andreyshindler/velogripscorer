@@ -311,7 +311,17 @@ public class BridgeService extends Service {
             beep();
             return;
         }
-        long now = System.currentTimeMillis();
+        // Reads now carry the time the READER saw the tag, so a batch is not
+        // necessarily in order once a backlog flushes. Sort it: the duplicate
+        // and lap-gap tests below both walk forward from the last crossing.
+        if (reads.size() > 1) {
+            reads = new java.util.ArrayList<>(reads);
+            java.util.Collections.sort(reads, new java.util.Comparator<TagRead>() {
+                @Override public int compare(TagRead a, TagRead b) {
+                    return Long.compare(a.readAtMs, b.readAtMs);
+                }
+            });
+        }
         int window = prefs.dedupeWindowMs();
         // Fresh gun check per batch (not the 5 s roster cache) so recording
         // starts the instant the race does; while there's no gun (setup / after
@@ -328,8 +338,11 @@ public class BridgeService extends Service {
         for (TagRead read : reads) {
             if (!registered(read.epc)) continue;               // ignore tags not on the start list
             Long prev = lastSeen.get(read.epc);
-            if (prev != null && now - prev < window) continue; // same tag within window
-            lastSeen.put(read.epc, now);
+            // Against the read's own time, not the batch's. A burst that flushes
+            // after an outage spans real seconds; measuring it against a single
+            // "now" would collapse a racer's two genuine crossings into one.
+            if (prev != null && Math.abs(read.readAtMs - prev) < window) continue;
+            lastSeen.put(read.epc, read.readAtMs);
             // Before the gun there is nothing to time against: the engine drops
             // reads earlier than the start, and the start-line roll call only
             // counts reads since the gun. Storing them just fills the device and
@@ -368,7 +381,11 @@ public class BridgeService extends Service {
                 if (cr.count >= crossingCap(epcDistance.get(read.epc))) {
                     record = false;    // every lap already timed: this racer is done
                     crossing = false;
-                } else if (cr.count > 0 && read.readAtMs - cr.last < gapMs) {
+                } else if (cr.count > 0 && Math.abs(read.readAtMs - cr.last) < gapMs) {
+                    // Absolute: a read either side of the last crossing by less
+                    // than the lap gap is that same crossing read again. One
+                    // EARLIER by more than the gap is a real crossing that
+                    // arrived late, and must not be written off as a duplicate.
                     record = false;    // same crossing, read again within the lap gap
                     crossing = false;
                 }
@@ -382,7 +399,7 @@ public class BridgeService extends Service {
                     store.addPassing(read);
                     // Only a crossing counts towards the lap tally; a start-mat
                     // read must not, or the racer's real finish gets blocked.
-                    if (crossing && cr != null) { cr.count++; cr.last = read.readAtMs; }
+                    if (crossing && cr != null) { cr.count++; cr.last = Math.max(cr.last, read.readAtMs); }
                 }
             }
             // The beep marks a TIME, so it sounds on the crossing — not on the
