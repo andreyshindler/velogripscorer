@@ -196,6 +196,9 @@ public class BridgeService extends Service {
         }
     }
 
+    /** How often a buffered reader is asked to hand over what it has. */
+    private static final long BUFFERED_POLL_MS = 250;
+
     /** Silent this long and the operator is told the reader is down. */
     private static final long SILENT_WARN_MS = LlrpEngine.KEEPALIVE_MS * 3L;
     /** Silent this long and the connection is written off and rebuilt. */
@@ -203,7 +206,10 @@ public class BridgeService extends Service {
 
     private void connectAndRead() throws Exception {
         boolean isLlrp = Prefs.PROTOCOL_LLRP.equals(prefs.protocol());
-        LlrpEngine llrp = isLlrp ? new LlrpEngine() : null;
+        // Buffered: the reader accumulates reads and we poll for them, so a
+        // read taken while the link was down still arrives once it is back.
+        final boolean buffered = isLlrp && prefs.readerBuffered();
+        LlrpEngine llrp = isLlrp ? new LlrpEngine(buffered) : null;
         TagParser parser = isLlrp ? llrp
                 : Prefs.PROTOCOL_UHF.equals(prefs.protocol()) ? new UhfFrameParser()
                 : new AsciiLineParser();
@@ -218,7 +224,9 @@ public class BridgeService extends Service {
                 : new Socket();
         readerSocket = socket;
         socket.connect(new InetSocketAddress(prefs.readerHost(), prefs.readerPort()), 8000);
-        socket.setSoTimeout(2000);
+        // Polling only gets its turn between reads, so the blocking read has to
+        // be shorter than the poll interval or the poll schedule slips to it.
+        socket.setSoTimeout(buffered ? 200 : 2000);
         socket.setKeepAlive(true); // TCP-level belt and braces; slow, but free
         readerConnected.set(true);
         broadcastStatus(getString(R.string.log_reader_connected,
@@ -238,13 +246,16 @@ public class BridgeService extends Service {
                 out.flush();
             }
         }
-        byte[] poll = isLlrp ? new byte[0] : hexToBytes(prefs.pollHex());
+        byte[] poll = isLlrp
+                ? (buffered ? llrp.getReport() : new byte[0])
+                : hexToBytes(prefs.pollHex());
+        long pollEveryMs = buffered ? BUFFERED_POLL_MS : prefs.pollIntervalMs();
         long lastPoll = 0;
         long lastByteAt = System.currentTimeMillis();
 
         byte[] buf = new byte[4096];
         while (running.get() && !socket.isClosed()) {
-            if (poll.length > 0 && System.currentTimeMillis() - lastPoll >= prefs.pollIntervalMs()) {
+            if (poll.length > 0 && System.currentTimeMillis() - lastPoll >= pollEveryMs) {
                 out.write(poll);
                 out.flush();
                 lastPoll = System.currentTimeMillis();

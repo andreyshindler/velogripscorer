@@ -38,6 +38,7 @@ public final class LlrpEngine implements TagParser {
 
     // message types
     private static final int MSG_SET_READER_CONFIG = 3;
+    private static final int MSG_GET_REPORT = 60;
     private static final int MSG_ADD_ROSPEC = 20;
     private static final int MSG_DELETE_ROSPEC = 21;
     private static final int MSG_START_ROSPEC = 22;
@@ -56,6 +57,7 @@ public final class LlrpEngine implements TagParser {
     private static final int P_AISPEC_STOP_TRIGGER = 184;
     private static final int P_INVENTORY_PARAMETER_SPEC = 186;
     private static final int P_KEEPALIVE_SPEC = 220;
+    private static final int P_EVENTS_AND_REPORTS = 1023;
     private static final int P_RO_REPORT_SPEC = 237;
     private static final int P_TAG_REPORT_CONTENT_SELECTOR = 238;
     private static final int P_TAG_REPORT_DATA = 240;
@@ -89,19 +91,50 @@ public final class LlrpEngine implements TagParser {
     private int messageId = 100;
     private final ByteArrayOutputStream outbound = new ByteArrayOutputStream();
     private volatile boolean keepaliveSeen = false;
+    private final boolean buffered;
     private final ReaderClock readerClock = new ReaderClock();
     private long arrivalMs;
+
+    /** Streaming mode: the reader pushes every read as it happens. */
+    public LlrpEngine() {
+        this(false);
+    }
+
+    /**
+     * @param buffered ask the reader to ACCUMULATE reads and hand them over
+     *   when polled ({@link #getReport()}), instead of pushing each one down
+     *   the socket as it happens. Pushed reads are gone if the link is down
+     *   when they occur; buffered ones survive it, at the cost of arriving in
+     *   polls. Recorded times are unaffected either way — they come from the
+     *   reader's own FirstSeenTimestamp, not from when we received them.
+     */
+    public LlrpEngine(boolean buffered) {
+        this.buffered = buffered;
+    }
 
     /** Handshake bytes to send right after the TCP connection opens. */
     public byte[] onConnect() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeAll(out, message(MSG_SET_READER_CONFIG, keepaliveConfig()));
+        writeAll(out, message(MSG_SET_READER_CONFIG, readerConfig()));
+        if (buffered) {
+            // Drain anything the reader held for us FIRST — before the DELETE
+            // below tears down the ROSpec that accumulated it. The reader
+            // answers in order, so the backlog is already on its way out by the
+            // time the delete lands.
+            writeAll(out, message(MSG_ENABLE_EVENTS_AND_REPORTS, new byte[0]));
+            writeAll(out, message(MSG_GET_REPORT, new byte[0]));
+        }
         writeAll(out, message(MSG_DELETE_ROSPEC, u32(0)));
-        writeAll(out, message(MSG_ADD_ROSPEC, buildROSpec()));
+        writeAll(out, message(MSG_ADD_ROSPEC, buildROSpec(buffered)));
         writeAll(out, message(MSG_ENABLE_ROSPEC, u32(ROSPEC_ID)));
         writeAll(out, message(MSG_START_ROSPEC, u32(ROSPEC_ID)));
         writeAll(out, message(MSG_ENABLE_EVENTS_AND_REPORTS, new byte[0]));
         return out.toByteArray();
+    }
+
+    /** Ask the reader to hand over everything it has accumulated. */
+    public byte[] getReport() {
+        return message(MSG_GET_REPORT, new byte[0]);
     }
 
     /**
@@ -114,11 +147,19 @@ public final class LlrpEngine implements TagParser {
     }
 
     /** SET_READER_CONFIG payload: keep our settings, add a periodic keepalive. */
-    private static byte[] keepaliveConfig() {
-        byte[] spec = tlv(P_KEEPALIVE_SPEC, u8(1), u32(KEEPALIVE_MS)); // 1 = periodic
-        byte[] payload = new byte[1 + spec.length];
+    private byte[] readerConfig() {
+        ByteArrayOutputStream params = new ByteArrayOutputStream();
+        writeAll(params, tlv(P_KEEPALIVE_SPEC, u8(1), u32(KEEPALIVE_MS))); // 1 = periodic
+        if (buffered) {
+            // HoldEventsAndReportsUponReconnect: on the next connection the
+            // reader keeps what it has until we ask for it, instead of firing
+            // it at a client that may not be ready.
+            writeAll(params, tlv(P_EVENTS_AND_REPORTS, u8(0x80)));
+        }
+        byte[] specs = params.toByteArray();
+        byte[] payload = new byte[1 + specs.length];
         payload[0] = 0; // do NOT reset the reader to factory defaults
-        System.arraycopy(spec, 0, payload, 1, spec.length);
+        System.arraycopy(specs, 0, payload, 1, specs.length);
         return payload;
     }
 
@@ -359,7 +400,7 @@ public final class LlrpEngine implements TagParser {
         return out;
     }
 
-    private static byte[] buildROSpec() {
+    private static byte[] buildROSpec(boolean buffered) {
         byte[] startTrigger = tlv(P_ROSPEC_START_TRIGGER, u8(0));            // null: started explicitly
         byte[] stopTrigger = tlv(P_ROSPEC_STOP_TRIGGER, u8(0), u32(0));      // never stops
         byte[] boundary = tlv(P_RO_BOUNDARY_SPEC, startTrigger, stopTrigger);
@@ -368,9 +409,14 @@ public final class LlrpEngine implements TagParser {
         byte[] invParam = tlv(P_INVENTORY_PARAMETER_SPEC, u16(1), u8(1));    // id=1, EPCGlobal C1G2
         byte[] aiSpec = tlv(P_AISPEC, u16(1), u16(0), aiStop, invParam);     // 1 entry, antenna 0 = all
 
-        // report every tag; include AntennaID + PeakRSSI + FirstSeenTimestamp
+        // include AntennaID + PeakRSSI + FirstSeenTimestamp
         byte[] selector = tlv(P_TAG_REPORT_CONTENT_SELECTOR, u16(0x1600));
-        byte[] reportSpec = tlv(P_RO_REPORT_SPEC, u8(1), u16(1), selector);
+        // Trigger 0 = report only when asked, so reads pile up in the reader
+        // and outlive a broken link. Trigger 1 with N=1 = push every tag the
+        // instant it is seen, which is lost if nothing is listening.
+        byte[] reportSpec = buffered
+                ? tlv(P_RO_REPORT_SPEC, u8(0), u16(0), selector)
+                : tlv(P_RO_REPORT_SPEC, u8(1), u16(1), selector);
 
         return tlv(P_ROSPEC, u32(ROSPEC_ID), u8(0) /* priority */, u8(0) /* Disabled */,
                 boundary, aiSpec, reportSpec);

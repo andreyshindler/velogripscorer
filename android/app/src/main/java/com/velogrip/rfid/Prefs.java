@@ -124,6 +124,12 @@ public final class Prefs {
     public void setRaceFinalized(boolean on) { sp.edit().putBoolean("raceFinalized", on).apply(); }
 
     /** Short beep on each detected chip (defaults on). */
+    // Off by default: pushed reporting is what every race has run on. Buffered
+    // survives a link outage but depends on the reader honouring it, so it is
+    // opt-in and meant to be proven on the hardware before a real race.
+    public boolean readerBuffered() { return sp.getBoolean("readerBuffered", false); }
+    public void setReaderBuffered(boolean on) { sp.edit().putBoolean("readerBuffered", on).apply(); }
+
     public boolean beepOnRead() { return sp.getBoolean("beepOnRead", true); }
     public void setBeepOnRead(boolean on) { sp.edit().putBoolean("beepOnRead", on).apply(); }
 

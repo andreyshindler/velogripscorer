@@ -66,6 +66,8 @@ public class SettingsActivity extends BaseActivity {
         PasswordReveal.attach(findViewById(R.id.wifiPassShow), wifiPass);
         android.widget.Switch beepSwitch = findViewById(R.id.beepOnRead);
         beepSwitch.setChecked(prefs.beepOnRead());
+        android.widget.Switch bufferedSwitch = findViewById(R.id.readerBuffered);
+        bufferedSwitch.setChecked(prefs.readerBuffered());
 
         Button themeMode = findViewById(R.id.themeMode);
         themeMode.setText(themeLabel(prefs.themeMode()));
@@ -89,6 +91,7 @@ public class SettingsActivity extends BaseActivity {
         save.setOnClickListener(v -> {
             save(prefs);
             prefs.setBeepOnRead(beepSwitch.isChecked());
+            prefs.setReaderBuffered(bufferedSwitch.isChecked());
             Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show();
             finish();
         });

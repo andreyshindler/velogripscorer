@@ -451,6 +451,8 @@
     <string name="hint_hex">למשל A0 04 01 89 01 D1</string>
     <string name="label_poll_interval">מרווח תשאול (מ״ש)</string>
     <string name="label_dedupe">חלון כפילויות לתג (מ״ש)</string>
+    <string name="label_reader_buffered">הקורא אוגר קריאות (שורד ניתוק כבל)</string>
+    <string name="hint_reader_buffered">הקורא מוסר קריאות כשנשאל במקום לשלוח כל אחת מיד. קריאה שנקלטה בזמן שהקו היה מנותק עדיין תגיע כשהוא יחזור. בדוק מול הקורא שלך לפני מרוץ.</string>
     <string name="label_beep">צפצוף בזיהוי שבב</string>
     <string name="label_appearance">מראה</string>
     <string name="appearance_system">לפי המערכת</string>
