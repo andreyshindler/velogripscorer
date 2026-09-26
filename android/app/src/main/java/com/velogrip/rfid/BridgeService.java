@@ -214,6 +214,7 @@ public class BridgeService extends Service {
         readerSocket = socket;
         socket.connect(new InetSocketAddress(prefs.readerHost(), prefs.readerPort()), 8000);
         socket.setSoTimeout(2000);
+        socket.setKeepAlive(true); // TCP-level belt and braces; slow, but free
         readerConnected.set(true);
         broadcastStatus(getString(R.string.log_reader_connected,
                 prefs.readerHost() + ":" + prefs.readerPort()));
@@ -234,6 +235,7 @@ public class BridgeService extends Service {
         }
         byte[] poll = isLlrp ? new byte[0] : hexToBytes(prefs.pollHex());
         long lastPoll = 0;
+        long lastByteAt = System.currentTimeMillis();
 
         byte[] buf = new byte[4096];
         while (running.get() && !socket.isClosed()) {
@@ -246,8 +248,18 @@ public class BridgeService extends Service {
             try {
                 n = in.read(buf);
             } catch (java.net.SocketTimeoutException timeout) {
+                // A yanked cable sends no FIN, so read() just keeps timing out
+                // and the link looks alive forever. Once the reader has proved
+                // it sends keepalives we can call silence what it is — and
+                // only then, so a reader that ignores the config (or an idle
+                // stretch with no chips crossing) is never torn down.
+                if (isLlrp && llrp.keepaliveSeen()
+                        && System.currentTimeMillis() - lastByteAt > LlrpEngine.KEEPALIVE_MS * 3L) {
+                    throw new java.io.IOException("reader stopped answering");
+                }
                 continue; // idle: loop to honor poll schedule and running flag
             }
+            lastByteAt = System.currentTimeMillis();
             if (n < 0) throw new java.io.EOFException("reader closed the connection");
             if (n > 0) {
                 handleReads(parser.feed(buf, n));
@@ -260,6 +272,9 @@ public class BridgeService extends Service {
                 }
             }
         }
+        // Fell out without throwing (stopped, or the socket was closed under
+        // us): the status strip must not go on claiming a live reader.
+        readerConnected.set(false);
     }
 
     private void demoLoop() {

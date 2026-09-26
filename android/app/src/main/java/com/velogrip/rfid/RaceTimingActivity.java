@@ -39,6 +39,8 @@ public class RaceTimingActivity extends BaseActivity {
     private TextView clockText, clockSub, hint;
     private TextView syncStatus;
     private boolean online = true; // last sync state reported by BridgeService
+    private boolean readerConnected = false;
+    private boolean bridgeRunning = false;
     private String lastSyncError;  // why the last upload failed, shown on the strip
     private SnapScrollView pager;
     private LinearLayout pagerInner;
@@ -104,12 +106,21 @@ public class RaceTimingActivity extends BaseActivity {
     private final android.content.BroadcastReceiver bridgeReceiver = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent i) {
             online = i.getBooleanExtra(BridgeService.EXTRA_ONLINE, online);
+            bridgeRunning = i.getBooleanExtra(BridgeService.EXTRA_RUNNING, bridgeRunning);
+            boolean readerUp = i.getBooleanExtra(BridgeService.EXTRA_READER_CONNECTED, readerConnected);
+            readerConnected = readerUp;
             // Keep WHY the last upload failed. "Offline" is the wrong words for a
             // server that is reachable and refusing, and the operator cannot act
             // on a reason they never see.
+            //
+            // Both loops broadcast into the same log field, so a reader fault
+            // used to surface as "N passes not uploaded — Reader error: …".
+            // When the reader is the thing that is down, its error belongs to
+            // the reader strip; leave the upload strip to say only what it knows.
             String log = i.getStringExtra(BridgeService.EXTRA_LOG);
+            boolean fromReader = prefs.chipTiming() && !readerUp;
             if (online) lastSyncError = null;
-            else if (log != null && !log.isEmpty()) lastSyncError = log;
+            else if (!fromReader && log != null && !log.isEmpty()) lastSyncError = log;
             scheduleRender(); // a new crossing (or status change) landed in the store
         }
     };
@@ -498,6 +509,21 @@ public class RaceTimingActivity extends BaseActivity {
     private void updateSyncStatus() {
         if (syncStatus == null) return;
         long pending = store.pendingCount();
+        // A reader that has stopped answering outranks anything about uploads:
+        // passes already taken are safe in the store, but passes not being read
+        // are gone for good. Unlike the upload strip this must show even when
+        // everything is synced, so it goes first and returns.
+        if (bridgeRunning && prefs.chipTiming() && !readerConnected) {
+            syncStatus.setVisibility(android.view.View.VISIBLE);
+            if (prefs.readerHost().isEmpty()) {
+                syncStatus.setBackgroundColor(0xFFC0392B); // red: nothing to connect to
+                syncStatus.setText(getString(R.string.no_reader));
+            } else {
+                syncStatus.setBackgroundColor(0xFFB9770E); // amber: retrying on its own
+                syncStatus.setText(getString(R.string.reader_connecting));
+            }
+            return;
+        }
         if (pending == 0 && online) {
             syncStatus.setVisibility(android.view.View.GONE);
             return;

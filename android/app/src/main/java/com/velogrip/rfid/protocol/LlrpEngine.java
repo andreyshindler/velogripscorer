@@ -13,6 +13,7 @@ import java.util.List;
  *
  * On connect the engine queues a handshake that puts the reader into
  * continuous inventory:
+ *   SET_READER_CONFIG — ask for periodic KEEPALIVEs, so silence means trouble
  *   DELETE_ROSPEC(0)  — clear anything a previous session left behind
  *   ADD_ROSPEC        — null start/stop triggers, all antennas, report per tag
  *   ENABLE_ROSPEC
@@ -21,7 +22,9 @@ import java.util.List;
  *
  * Incoming RO_ACCESS_REPORT messages are decoded into TagReads (EPC-96 or
  * EPCData, PeakRSSI when present). KEEPALIVEs are acknowledged so the reader
- * does not drop the connection. All other messages (responses, reader event
+ * does not drop the connection, and {@link #keepaliveSeen()} reports whether
+ * any has arrived — a caller can only treat silence as a dead link once the
+ * reader has proved it does send them. All other messages (responses, reader event
  * notifications) are skipped by length.
  *
  * Wire formats:
@@ -32,6 +35,7 @@ import java.util.List;
 public final class LlrpEngine implements TagParser {
 
     // message types
+    private static final int MSG_SET_READER_CONFIG = 3;
     private static final int MSG_ADD_ROSPEC = 20;
     private static final int MSG_DELETE_ROSPEC = 21;
     private static final int MSG_START_ROSPEC = 22;
@@ -49,6 +53,7 @@ public final class LlrpEngine implements TagParser {
     private static final int P_AISPEC = 183;
     private static final int P_AISPEC_STOP_TRIGGER = 184;
     private static final int P_INVENTORY_PARAMETER_SPEC = 186;
+    private static final int P_KEEPALIVE_SPEC = 220;
     private static final int P_RO_REPORT_SPEC = 237;
     private static final int P_TAG_REPORT_CONTENT_SELECTOR = 238;
     private static final int P_TAG_REPORT_DATA = 240;
@@ -74,20 +79,43 @@ public final class LlrpEngine implements TagParser {
 
     private static final int ROSPEC_ID = 1;
 
+    /** How often the reader is asked to send a KEEPALIVE. */
+    public static final int KEEPALIVE_MS = 5000;
+
     private final byte[] buf = new byte[65536];
     private int size = 0;
     private int messageId = 100;
     private final ByteArrayOutputStream outbound = new ByteArrayOutputStream();
+    private volatile boolean keepaliveSeen = false;
 
     /** Handshake bytes to send right after the TCP connection opens. */
     public byte[] onConnect() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeAll(out, message(MSG_SET_READER_CONFIG, keepaliveConfig()));
         writeAll(out, message(MSG_DELETE_ROSPEC, u32(0)));
         writeAll(out, message(MSG_ADD_ROSPEC, buildROSpec()));
         writeAll(out, message(MSG_ENABLE_ROSPEC, u32(ROSPEC_ID)));
         writeAll(out, message(MSG_START_ROSPEC, u32(ROSPEC_ID)));
         writeAll(out, message(MSG_ENABLE_EVENTS_AND_REPORTS, new byte[0]));
         return out.toByteArray();
+    }
+
+    /**
+     * True once the reader has actually sent a KEEPALIVE. Until then a quiet
+     * socket is indistinguishable from a healthy one with no chips crossing,
+     * so callers must not time it out.
+     */
+    public boolean keepaliveSeen() {
+        return keepaliveSeen;
+    }
+
+    /** SET_READER_CONFIG payload: keep our settings, add a periodic keepalive. */
+    private static byte[] keepaliveConfig() {
+        byte[] spec = tlv(P_KEEPALIVE_SPEC, u8(1), u32(KEEPALIVE_MS)); // 1 = periodic
+        byte[] payload = new byte[1 + spec.length];
+        payload[0] = 0; // do NOT reset the reader to factory defaults
+        System.arraycopy(spec, 0, payload, 1, spec.length);
+        return payload;
     }
 
     // ---- chip programming: write a new EPC into the tag's EPC memory bank ----
@@ -195,6 +223,7 @@ public final class LlrpEngine implements TagParser {
             if (type == MSG_RO_ACCESS_REPORT) {
                 parseReport(10, (int) total, reads);
             } else if (type == MSG_KEEPALIVE) {
+                keepaliveSeen = true;
                 long id = u32At(6);
                 outbound.write(header(MSG_KEEPALIVE_ACK, 10, (int) id), 0, 10);
             }
