@@ -912,6 +912,19 @@ public class RaceTimingActivity extends BaseActivity {
         }
         java.util.Collections.sort(rows, (a, b) -> Long.compare(a.elapsed, b.elapsed));
 
+        // On a mixed list a finish time says nothing on its own: 0:15.3 is a 10k
+        // time or a 5k time depending on whose row it is. Name the distance on
+        // every row of an "All waves" list, and on a scoped one only when that
+        // wave itself runs more than one — there the column header already names
+        // the wave, so repeating a single distance per row is noise.
+        java.util.Set<String> rowDists = new java.util.LinkedHashSet<>();
+        for (ResRow rd : rows) {
+            if (rd.result == null || rd.result.distance == null) continue;
+            String d = rd.result.distance.trim();
+            if (!d.isEmpty()) rowDists.add(d);
+        }
+        final boolean showDist = (multiWave && !scoped) || rowDists.size() > 1;
+
         // Who just crossed, by wall clock — the finish list is ordered by
         // elapsed time, so a new finisher lands mid-list and the sorted order
         // cannot answer "who just came through". Names them in the strip below,
@@ -948,7 +961,8 @@ public class RaceTimingActivity extends BaseActivity {
                 lastTapText = getString(R.string.last_tap, ordinal(seq), time, gap, getString(R.string.no_bib));
             } else {
                 final RaceEngine.Result r = row.result;
-                String label = row.lap > 0 ? r.name + " (" + row.lap + ")" : r.name;
+                CharSequence label = row.lap > 0 ? r.name + " (" + row.lap + ")" : r.name;
+                if (showDist) label = withDistance(label.toString(), r.distance);
                 View rv;
                 if (row.lap > 0) {
                     // multi-lap split row: view-only, arrow opens racer info
@@ -1075,12 +1089,30 @@ public class RaceTimingActivity extends BaseActivity {
         startActivity(i);
     }
 
-    private View resultRow(String place, String bib, String name, String time, boolean unassigned,
+    private View resultRow(String place, String bib, CharSequence name, String time, boolean unassigned,
                            Runnable onTimeTap, Runnable onArrowTap) {
         return resultRow(place, bib, name, time, unassigned, onTimeTap, onArrowTap, null, null);
     }
 
-    private View resultRow(String place, String bib, String name, String time, boolean unassigned,
+    /** A racer's name with their distance trailing it, smaller and dimmer so the
+     *  name still leads. Returns the name untouched when there is no distance. */
+    private CharSequence withDistance(String name, String distance) {
+        String d = distance == null ? "" : distance.trim();
+        if (d.isEmpty()) return name;
+        // Isolate the distance: a Latin "10k" appended to a Hebrew name is
+        // reordered by the bidi algorithm and comes out split ("10…k") unless it
+        // is wrapped as its own run.
+        String all = name + "   " + android.text.BidiFormatter.getInstance().unicodeWrap(d);
+        android.text.SpannableString sp = new android.text.SpannableString(all);
+        int at = name.length();
+        sp.setSpan(new android.text.style.RelativeSizeSpan(0.72f), at, all.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sp.setSpan(new android.text.style.ForegroundColorSpan(getColor(R.color.text_muted)), at, all.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sp;
+    }
+
+    private View resultRow(String place, String bib, CharSequence name, String time, boolean unassigned,
                            Runnable onTimeTap, Runnable onArrowTap, Runnable onSeqTap, Runnable onBibTap) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
