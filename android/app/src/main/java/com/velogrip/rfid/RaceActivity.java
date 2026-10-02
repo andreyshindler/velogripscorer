@@ -363,7 +363,7 @@ public class RaceActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), false, prefs.leaderEndsRaceActive());
+                store.lapTargets(), prefs.raceLaps(), false, prefs.leaderEndsRaceActive());
 
         // Multiple distances: standings split per distance with its own places
         java.util.LinkedHashMap<String, List<RaceEngine.Result>> sections = new java.util.LinkedHashMap<>();

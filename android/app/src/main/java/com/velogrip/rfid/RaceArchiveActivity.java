@@ -82,7 +82,7 @@ public class RaceArchiveActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 racers, store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), prefs.raceFinalized(), prefs.leaderEndsRaceActive());
+                store.lapTargets(), prefs.raceLaps(), prefs.raceFinalized(), prefs.leaderEndsRaceActive());
         TextView standings = new TextView(this);
         standings.setTypeface(android.graphics.Typeface.MONOSPACE);
         standings.setTextSize(13);

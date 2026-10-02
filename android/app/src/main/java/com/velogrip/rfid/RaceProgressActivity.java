@@ -58,7 +58,7 @@ public class RaceProgressActivity extends BaseActivity {
         box.removeAllViews();
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
+                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(), prefs.raceLaps(),
                 prefs.raceFinalized(), prefs.leaderEndsRaceActive());
 
         // Tally per distance, keeping first-seen order then sorting by km.

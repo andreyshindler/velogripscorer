@@ -559,7 +559,7 @@ public class RaceTimingActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized(), System.currentTimeMillis(),
+                prefs.raceLaps(), prefs.raceFinalized(), System.currentTimeMillis(),
                 prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRaceActive());
 
         java.util.Set<String> finishedBibs = new java.util.HashSet<>();
@@ -810,6 +810,7 @@ public class RaceTimingActivity extends BaseActivity {
         int margin = dp(4);
         boolean recordLaps = prefs.recordLaps();
         java.util.Map<String, Integer> lapTargets = store.lapTargets();
+        int raceLaps = prefs.raceLaps();
         // Every tile — No Bib, racer, and the blank slot left by a finished
         // racer — is pinned to the same height, so rows stay even (no gaps when
         // a box disappears) and the No Bib box matches the others. This is also
@@ -845,8 +846,7 @@ public class RaceTimingActivity extends BaseActivity {
                 final RaceStore.Racer r = (RaceStore.Racer) t;
                 boolean waiting = pendingBibs.contains(r.bib);
                 // Multi-lap racers: show "On lap X/Y" and recolour each lap.
-                int target = recordLaps && lapTargets != null
-                        ? Math.max(1, lapTargets.getOrDefault(r.distance, 1)) : 1;
+                int target = RaceEngine.lapTarget(recordLaps, lapTargets, raceLaps, r.distance);
                 Integer done = lapsByBib.get(r.bib);
                 int currentLap = Math.min(target, (done == null ? 0 : done) + 1);
                 boolean multiLap = target > 1;
@@ -910,6 +910,7 @@ public class RaceTimingActivity extends BaseActivity {
 
         boolean recordLaps = prefs.recordLaps();
         java.util.Map<String, Integer> lapTargets = store.lapTargets();
+        int raceLaps = prefs.raceLaps();
 
         // The wave chips already scope the bib grid and the big clock; the finish
         // list follows them, so a place always means "in this wave". It has to:
@@ -927,8 +928,7 @@ public class RaceTimingActivity extends BaseActivity {
         // single-lap racers, plus banked No-Bib times — all ranked by time.
         List<ResRow> rows = new ArrayList<>();
         for (RaceEngine.Result r : results) {
-            int target = recordLaps && lapTargets != null
-                    ? Math.max(1, lapTargets.getOrDefault(r.distance, 1)) : 1;
+            int target = RaceEngine.lapTarget(recordLaps, lapTargets, raceLaps, r.distance);
             if (target > 1) {
                 for (int i = 0; i < r.lapElapsed.length; i++) rows.add(new ResRow(r.lapElapsed[i], r, i + 1));
             } else if ("finished".equals(r.status)) {
@@ -1536,7 +1536,7 @@ public class RaceTimingActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                true, prefs.leaderEndsRaceActive());
+                prefs.raceLaps(), true, prefs.leaderEndsRaceActive());
         final List<RaceEngine.Result> onCourse = new ArrayList<>();
         for (RaceEngine.Result r : results) {
             if ("on_course".equals(r.status) || "not_started".equals(r.status)) onCourse.add(r);
@@ -1677,7 +1677,7 @@ public class RaceTimingActivity extends BaseActivity {
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceFinalized(), System.currentTimeMillis(),
+                prefs.raceLaps(), prefs.raceFinalized(), System.currentTimeMillis(),
                 prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRaceActive());
         int finished = 0, onCourse = 0, notStarted = 0, dns = 0;
         long lastElapsed = 0;

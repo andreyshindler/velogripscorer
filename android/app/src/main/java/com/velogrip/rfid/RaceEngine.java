@@ -95,17 +95,17 @@ public final class RaceEngine {
                                        Map<String, Integer> lapTargets, boolean finalizeLapsDown,
                                        long nowMs, long rollCallWindowMs, long rollCallClosedAt) {
         return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
-                lapTargets, finalizeLapsDown, nowMs, rollCallWindowMs, rollCallClosedAt, false);
+                lapTargets, 0, finalizeLapsDown, nowMs, rollCallWindowMs, rollCallClosedAt, false);
     }
 
     /** As above plus the MTB "leader ends race" rule (opt-in). */
     public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
                                        List<RaceStore.Passing> passings,
                                        int suppressSecs, int minLapGapSecs, boolean recordLaps,
-                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown,
-                                       boolean leaderEndsRace) {
+                                       Map<String, Integer> lapTargets, int raceLaps,
+                                       boolean finalizeLapsDown, boolean leaderEndsRace) {
         return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
-                lapTargets, finalizeLapsDown, 0L, 0L, 0L, leaderEndsRace);
+                lapTargets, raceLaps, finalizeLapsDown, 0L, 0L, 0L, leaderEndsRace);
     }
 
     /**
@@ -116,7 +116,8 @@ public final class RaceEngine {
     public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
                                        List<RaceStore.Passing> passings,
                                        int suppressSecs, int minLapGapSecs, boolean recordLaps,
-                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown,
+                                       Map<String, Integer> lapTargets, int raceLaps,
+                                       boolean finalizeLapsDown,
                                        long nowMs, long rollCallWindowMs, long rollCallClosedAt,
                                        boolean leaderEndsRace) {
         Map<String, Long> gunByWave = new HashMap<>();
@@ -153,7 +154,7 @@ public final class RaceEngine {
                 if (!declaredStatus(group).isEmpty()) continue;
                 Long gun = gunByWave.get(racer.wave);
                 if (gun == null) continue;
-                int target = resolveTarget(recordLaps, lapTargets, racer.distance);
+                int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
                 if (target == Integer.MAX_VALUE) continue;
                 List<Long> cr = buildCrossings(collectRaw(group, readsByEpc), gun, suppressMs, lapGapMs, target);
                 if (cr.size() >= target) cutoff = Math.min(cutoff, cr.get(target - 1));
@@ -178,7 +179,7 @@ public final class RaceEngine {
                 continue;
             }
             List<Read> raw = collectRaw(group, readsByEpc);
-            int target = resolveTarget(recordLaps, lapTargets, racer.distance);
+            int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
             List<Long> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target);
 
             // Leader rule: finish on the first crossing that reaches the target
@@ -259,12 +260,39 @@ public final class RaceEngine {
         return raw;
     }
 
-    /** Laps to finish: per-distance target, else 1; unlimited when no targets. */
-    private static int resolveTarget(boolean recordLaps, Map<String, Integer> lapTargets, String distance) {
+    /**
+     * The lap target this engine will score a distance against. Public so the
+     * console's tiles and per-lap rows resolve it the same way the scoring does
+     * — they used to carry their own copy of the rule, which is how they ended
+     * up showing "Tap to finish" for a race the engine was scoring over laps.
+     */
+    public static int lapTarget(boolean recordLaps, Map<String, Integer> lapTargets,
+                                int raceLaps, String distance) {
+        return resolveTarget(recordLaps, lapTargets, raceLaps, distance);
+    }
+
+    /**
+     * Laps to finish: this distance's own target, else the race-wide count,
+     * else 1. Unlimited only in the legacy null-map mode.
+     *
+     * The race-wide count is what "set the whole race to 3 laps" produces — the
+     * web's race-wide field and Telegram's /laps 3. It is stored separately from
+     * the per-distance targets, and this engine used to ignore it entirely and
+     * fall straight to 1: every racer was finished on their FIRST crossing while
+     * the server, which does honour it (race-results.js targetFor), published
+     * the full lap count. One race, two official results, and nothing on screen
+     * to suggest the two disagreed. BridgeService.crossingCap and
+     * CheckpointActivity.maxTaps already resolved it in this order; the scoring
+     * engine was the odd one out.
+     */
+    private static int resolveTarget(boolean recordLaps, Map<String, Integer> lapTargets,
+                                     int raceLaps, String distance) {
         if (!recordLaps) return 1;
         if (lapTargets == null) return Integer.MAX_VALUE;
         Integer t = lapTargets.get(distance);
-        return Math.max(1, t == null ? 1 : t);
+        if (t != null && t > 0) return t;
+        if (raceLaps > 0) return raceLaps;
+        return 1;
     }
 
     /** Valid crossings (suppression + lap-gap applied), capped at the target. */
