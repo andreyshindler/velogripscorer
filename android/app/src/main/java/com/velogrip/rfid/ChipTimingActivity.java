@@ -159,6 +159,11 @@ public class ChipTimingActivity extends BaseActivity {
     private final BroadcastReceiver bridgeReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             heardFromService = true;
+            // Carry the clock state through: whether reads are being stamped
+            // when the tag crossed or merely when we parsed them is invisible
+            // otherwise, and it is the difference between a real finish time
+            // and an approximate one.
+            clockState = i.getStringExtra(BridgeService.EXTRA_READER_CLOCK);
             showReader(i.getBooleanExtra(BridgeService.EXTRA_READER_CONNECTED, false),
                     prefs.readerHost() + ":" + prefs.readerPort());
         }
@@ -212,9 +217,13 @@ public class ChipTimingActivity extends BaseActivity {
         }).start();
     }
 
+    private String clockState;
+
     private void showReader(boolean connected, String message) {
-        readerStatus.setText(connected ? getString(R.string.connected_reader, message)
-                : wifiReasonOr(message));
+        String text = connected ? getString(R.string.connected_reader, message)
+                : wifiReasonOr(message);
+        if (clockState != null && !clockState.isEmpty()) text = text + "\n" + clockState;
+        readerStatus.setText(text);
         readerStatus.setTextColor(connected ? 0xFF3F7A16 : 0xFFC0392B);
     }
 

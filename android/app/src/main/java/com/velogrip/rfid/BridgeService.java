@@ -51,6 +51,7 @@ public class BridgeService extends Service {
 
     public static final String EXTRA_RUNNING = "running";
     public static final String EXTRA_READER_CONNECTED = "readerConnected";
+    public static final String EXTRA_READER_CLOCK = "readerClock";
     public static final String EXTRA_WIFI_STATE = "wifiState";
     public static final String EXTRA_PENDING = "pending";
     public static final String EXTRA_UPLOADED = "uploaded";
@@ -620,6 +621,7 @@ public class BridgeService extends Service {
         intent.setPackage(getPackageName());
         intent.putExtra(EXTRA_RUNNING, running.get());
         intent.putExtra(EXTRA_READER_CONNECTED, readerConnected.get());
+        intent.putExtra(EXTRA_READER_CLOCK, readerClock.state());
         intent.putExtra(EXTRA_WIFI_STATE, networkState());
         intent.putExtra(EXTRA_PENDING, store.pendingCount());
         intent.putExtra(EXTRA_UPLOADED, uploadedTotal.get());

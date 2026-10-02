@@ -143,6 +143,11 @@ public final class LlrpEngine implements TagParser {
         return out.toByteArray();
     }
 
+    /** What the reader→device clock mapping is currently doing. */
+    public String clockState() {
+        return readerClock.state();
+    }
+
     /** Ask the reader to hand over everything it has accumulated. */
     public byte[] getReport() {
         return message(MSG_GET_REPORT, new byte[0]);
@@ -490,7 +495,11 @@ public final class LlrpEngine implements TagParser {
         private static final long WINDOW_MS = 60_000;
         /** A read no later than this past the offset counts as promptly delivered. */
         private static final long PROMPT_MS = 1000;
-        private static final int MIN_SAMPLES = 8;
+        // Two samples ten seconds apart already pin the rate to well inside a
+        // percent; eight was caution, and caution that never passes is just a
+        // permanent fallback to arrival times. A short test race, or a quiet
+        // stretch of a real one, may simply never offer eight reads.
+        private static final int MIN_SAMPLES = 3;
         private static final long MIN_SPAN_MS = 10_000;
         /**
          * Furthest back a corrected time may land. This has to cover the whole
@@ -516,8 +525,35 @@ public final class LlrpEngine implements TagParser {
         private long anchorArrival;
         private long anchorReader;
 
+        // Counters purely so the operator (and we) can see WHY times look wrong.
+        private int seen;
+        private int withTime;
+        private int backdated;
+        private long lastArrival;
+
+        /**
+         * One line describing what this mapping is actually doing, for the
+         * reader status line. Three very different faults look identical from
+         * the outside — a reader that sends no timestamps, a clock that never
+         * passed validation, and one whose answers keep failing the backstop —
+         * and all three silently fall back to arrival times.
+         */
+        public synchronized String state() {
+            if (seen == 0) return "clock: no reads yet";
+            if (source == SRC_NONE) return "clock: reader sends no timestamps (" + seen + " reads)";
+            String src = source == SRC_UTC ? "UTC" : "uptime";
+            if (!trusted) {
+                long span = prompt > 0 ? (lastArrival - anchorArrival) / 1000 : 0;
+                return "clock: " + src + " warming " + prompt + "/" + MIN_SAMPLES
+                        + ", " + span + "s/" + (MIN_SPAN_MS / 1000) + "s";
+            }
+            return "clock: " + src + " ok, " + backdated + "/" + withTime + " backdated";
+        }
+
         /** Device-clock time for one read; falls back to arrival when unsure. */
         synchronized long stamp(long arrival, Long seenUtcUs, Long seenUptimeUs) {
+            seen++;
+            lastArrival = arrival;
             // Lock onto one source for the connection. Feeding an uptime value
             // through a UTC-derived offset (or the reverse) would be wildly
             // wrong, so a reader that reports both must not be allowed to
@@ -529,6 +565,7 @@ public final class LlrpEngine implements TagParser {
             }
             Long us = source == SRC_UTC ? seenUtcUs : seenUptimeUs;
             if (us == null) return arrival; // this read lost the field: don't guess
+            withTime++;
             long readerMs = us / 1000;
 
             long delta = arrival - readerMs;
@@ -544,15 +581,21 @@ public final class LlrpEngine implements TagParser {
                 prompt++;
                 long ours = arrival - anchorArrival;
                 long theirs = readerMs - anchorReader;
-                // A frozen clock never passes this: its span stays 0 while ours grows.
+                // The two spans are each measured from an arrival, so each end
+                // carries up to PROMPT_MS of delivery latency — the tolerance
+                // has to cover that or ordinary jitter knocks trust straight
+                // back off and every read quietly reverts to its arrival time.
+                // The percentage on top is what actually watches for drift.
+                // A frozen clock never passes: its span stays 0 while ours grows.
                 trusted = prompt >= MIN_SAMPLES && ours >= MIN_SPAN_MS
-                        && Math.abs(theirs - ours) <= ours / 50 + 100;
+                        && Math.abs(theirs - ours) <= ours / 50 + 2 * PROMPT_MS + 100;
             }
             if (!trusted) return arrival;
 
             long corrected = readerMs + offset;
             if (corrected > arrival + MAX_LEAD_MS) return arrival;
             if (corrected < arrival - MAX_LAG_MS) return arrival;
+            if (corrected != arrival) backdated++;
             return corrected;
         }
 
