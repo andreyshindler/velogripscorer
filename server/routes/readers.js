@@ -324,7 +324,8 @@ function readerFromToken(req) {
 router.post('/ingest/finish', (req, res) => {
   const reader = readerFromToken(req);
   if (!reader) return res.status(401).json({ error: 'unknown reader token' });
-  db.prepare(`UPDATE contests SET status = 'finished' WHERE id = ? AND status = 'active'`).run(reader.contest_id);
+  db.prepare(`UPDATE contests SET status = 'finished', finished_at = datetime('now')
+              WHERE id = ? AND status = 'active'`).run(reader.contest_id);
   // The app is authoritative for its race setup: adopt its lap mode so a
   // single-crossing race never shows phantom "lap times" from double reads.
   if (typeof req.body?.record_laps === 'boolean') {

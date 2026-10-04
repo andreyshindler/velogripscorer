@@ -336,7 +336,11 @@ async function loadRecentFinished() {
     const params = new URLSearchParams({ status: 'finished' });
     if (q) params.set('q', q);
     const { contests } = await api(`/contests?${params}`);
-    const sorted = contests.slice().sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+    // By when the race actually finished. start_at is only the scheduled date,
+    // so a race set up for August and run in October would otherwise sort below
+    // one scheduled in September and drop straight off this list.
+    const endedAt = (c) => c.finished_at || c.start_at;
+    const sorted = contests.slice().sort((a, b) => new Date(endedAt(b)) - new Date(endedAt(a)));
     const list = q ? sorted : sorted.slice(0, 3);
     box.innerHTML = list.length
       ? `<h2 class="page-title-center">${t('recently_finished')}</h2>

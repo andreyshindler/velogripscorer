@@ -198,7 +198,13 @@ router.get('/contests', (req, res) => {
   if (to) rows = rows.filter((c) => c.start_at <= to);
 
   if (sort === 'popular') rows.sort((a, b) => b.vote_count + b.entry_count - (a.vote_count + a.entry_count));
-  else rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  // Finished races rank by when they finished — start_at is only the scheduled
+  // date, and it is the wrong answer for a race set up weeks before it is run.
+  // Races finished before finished_at existed fall back to it.
+  else if (status === 'finished') {
+    const endedAt = (c) => c.finished_at || c.start_at;
+    rows.sort((a, b) => (endedAt(a) < endedAt(b) ? 1 : endedAt(a) > endedAt(b) ? -1 : 0));
+  } else rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
   res.json({
     contests: rows.slice(0, 100).map((c) => ({ ...c, tags: JSON.parse(c.tags || '[]'), voting_open: votingOpen(c) })),
@@ -749,7 +755,8 @@ router.post('/contests/:id/reopen', requireAuth, (req, res) => {
   if (!contest) return res.status(404).json({ error: 'contest not found' });
   if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
   if (contest.kind !== 'race') return res.status(400).json({ error: 'only races can be reopened' });
-  db.prepare(`UPDATE contests SET status = 'active' WHERE id = ? AND status = 'finished'`).run(contest.id);
+  db.prepare(`UPDATE contests SET status = 'active', finished_at = NULL
+              WHERE id = ? AND status = 'finished'`).run(contest.id);
   auditLog(req.user.id, 'contest.reopen', 'contest', contest.id);
   res.json({ ok: true, status: 'active' });
 });
@@ -764,7 +771,11 @@ router.patch('/contests/:id/status', requireAuth, (req, res) => {
   if (contest.kind !== 'race') return res.status(400).json({ error: 'only races have this status' });
   const status = req.body?.status;
   if (!['active', 'finished'].includes(status)) return res.status(400).json({ error: 'invalid status' });
-  db.prepare('UPDATE contests SET status = ? WHERE id = ?').run(status, contest.id);
+  // Stamp when it finished, and clear that again when it is put back to
+  // active, so "recently finished" orders by when the race actually ended.
+  db.prepare(`UPDATE contests SET status = ?,
+                finished_at = CASE WHEN ? = 'finished' THEN datetime('now') ELSE NULL END
+              WHERE id = ?`).run(status, status, contest.id);
   auditLog(req.user.id, 'contest.status', 'contest', contest.id, status);
   res.json({ ok: true, status });
 });

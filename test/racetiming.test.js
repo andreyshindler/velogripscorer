@@ -426,6 +426,60 @@ test('xlsx start-list upload: Webscorer format, two chips per racer, delete race
   assert.equal(tokenDead.status, 401, 'pairing token dies with the race');
 });
 
+test('"recently finished" ranks by when the race ended, not its scheduled date', async () => {
+  const o = await register('ended-org@test.co', 'Ended Org');
+  // The reported case: an MTB race set up for August, run in October, vanished
+  // from the home page behind a race SCHEDULED later but finished long ago.
+  const older = new Date(Date.now() - 60 * 86400_000).toISOString(); // scheduled 60 days ago
+  const newer = new Date(Date.now() - 10 * 86400_000).toISOString(); // scheduled 10 days ago
+  const mk = async (title, start_at) => (await request(app).post('/api/contests').set(auth(o)).send({
+    title, category: 'other', start_at, end_at: future, kind: 'race',
+    criteria: [{ name: 'Overall', weight: 100 }],
+  })).body;
+
+  const scheduledLater = await mk('Scheduled later, finished first', newer);
+  const scheduledEarlier = await mk('Scheduled earlier, finished last', older);
+
+  // Finish the one scheduled LATER first, then the one scheduled earlier.
+  const finish = async (c) => {
+    const tok = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(o))
+      .send({ name: 'Finish', location: 'finish' })).body.token;
+    const res = await request(app).post('/api/ingest/finish').set('X-Reader-Token', tok).send({});
+    assert.equal(res.status, 200);
+  };
+  await finish(scheduledLater);
+  await new Promise((r) => setTimeout(r, 1100)); // finished_at has one-second resolution
+  await finish(scheduledEarlier);
+
+  const list = await request(app).get('/api/contests?status=finished');
+  assert.equal(list.status, 200);
+  const mine = list.body.contests.filter((c) => [scheduledLater.id, scheduledEarlier.id].includes(c.id));
+  assert.equal(mine.length, 2, 'both finished races are listed');
+  for (const c of mine) assert.ok(c.finished_at, 'finishing stamps finished_at');
+
+  assert.equal(mine[0].id, scheduledEarlier.id,
+    'the race that finished most recently comes first, even though it was scheduled earliest');
+  assert.ok(mine[0].start_at < mine[1].start_at,
+    'and it really is the one with the older scheduled date — the old sort would have put it last');
+
+  // Reopening clears the stamp, so a race put back to active cannot linger.
+  const reopened = await request(app).post(`/api/contests/${scheduledEarlier.id}/reopen`).set(auth(o));
+  assert.equal(reopened.status, 200);
+  const after = (await request(app).get(`/api/contests/${scheduledEarlier.id}`)).body;
+  assert.equal(after.status, 'active');
+  assert.equal(after.finished_at, null, 'reopening clears finished_at');
+
+  // The organizer status flip stamps it too, and clears it going back to active.
+  const flip = await request(app).patch(`/api/contests/${scheduledEarlier.id}/status`)
+    .set(auth(o)).send({ status: 'finished' });
+  assert.equal(flip.status, 200);
+  assert.ok((await request(app).get(`/api/contests/${scheduledEarlier.id}`)).body.finished_at,
+    'the status flip stamps finished_at');
+  await request(app).patch(`/api/contests/${scheduledEarlier.id}/status`).set(auth(o)).send({ status: 'active' });
+  assert.equal((await request(app).get(`/api/contests/${scheduledEarlier.id}`)).body.finished_at, null,
+    'flipping back to active clears it');
+});
+
 test('finished status: create + duplicate stay active; finished race can be reopened', async () => {
   const o = await register('reopen-org@test.co', 'Reopen Org');
   // A freshly created race is NOT finished.

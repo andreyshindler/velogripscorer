@@ -361,6 +361,12 @@ for (const stmt of [
   // over — everyone still out finishes only their current lap. 1 = apply the
   // rule in results (needs a lap target); 0 = every crossing counts (default).
   `ALTER TABLE contests ADD COLUMN leader_ends_race INTEGER NOT NULL DEFAULT 0`,
+  // When results were actually posted. start_at is only the SCHEDULED date, so
+  // without this "recently finished" ranked a race run today below one
+  // scheduled weeks later — a race set up for August and run in October sank
+  // out of the list the moment it finished. NULL for races finished before
+  // this column existed; callers fall back to start_at for those.
+  `ALTER TABLE contests ADD COLUMN finished_at TEXT`,
 ]) {
   try {
     db.exec(stmt);
