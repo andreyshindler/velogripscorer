@@ -46,6 +46,29 @@ jobs:
           docker image prune -f
           docker compose ps
 
+          # Wait for the app to ANSWER, not just for the container to exist.
+          # Read the port and prefix from .env so this follows the stack it is
+          # deploying instead of hard-coding them.
+          # "|| true": a missing .env must not kill the step with a bare exit 2.
+          PORT="$(sed -n 's/^HOST_PORT=//p' .env 2>/dev/null | tail -1 || true)"
+          BASE="$(sed -n 's/^BASE_PATH=//p' .env 2>/dev/null | tail -1 || true)"
+          URL="http://127.0.0.1:${PORT:-3000}${BASE}/api/health"
+          echo "Waiting for $URL"
+          healthy=0
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 "$URL" >/dev/null 2>&1; then
+              healthy=1; echo "healthy after $((i * 2))s"; break
+            fi
+            sleep 2
+          done
+          if [ "$healthy" != 1 ]; then
+            echo "::error::app did not answer $URL within 60s"
+            # Put the reason in THIS log. Without it a failure says only
+            # "exit code 1" and the cause has to be chased on the box.
+            docker compose logs --tail=80 app || true
+            exit 1
+          fi
+
       - name: Notify Telegram
         if: always() && env.TG_BOT_TOKEN != ''
         env:
