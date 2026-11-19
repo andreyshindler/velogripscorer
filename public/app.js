@@ -2017,6 +2017,12 @@ async function renderManage(box, c) {
   // wins". A per-distance target or a race-wide count will do.
   const hasLapTarget = () => Number(lapData.race_laps) >= 1
     || Object.values(lapTargets).some((v) => Number(v) >= 1);
+  // A blank count is not "no cap" once laps are being recorded — it is a field
+  // with no finish line: the server treats it as unlimited laps while the
+  // tablet's resolveTarget returns MAX_VALUE, so those riders never finish on
+  // either side. So the count is required exactly while record_laps is on. A
+  // running race keeps it optional, since there laps are off and meaningless.
+  const lapsRequired = c.record_laps !== 0;
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
@@ -2083,13 +2089,14 @@ async function renderManage(box, c) {
       </form>
 
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
-      <h4 style="margin:0">${t('laps_per_distance')}</h4>
-      <p class="muted" style="margin:4px 0;font-size:.82rem">${t('laps_per_distance_help')}</p>
+      <h4 style="margin:0">${t('laps_per_distance')}<span class="lap-req-star" style="color:var(--danger);${lapsRequired ? '' : 'display:none'}"> *</span></h4>
+      <p id="laps-help" class="muted" style="margin:4px 0;font-size:.82rem">${t(lapsRequired ? 'laps_per_distance_help_required' : 'laps_per_distance_help')}</p>
       ${lapDistances.length ? `
       <form id="lap-targets-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:8px">
         ${lapDistances.map((d) => `
-          <label style="margin:0">${esc(d)}
+          <label style="margin:0">${esc(d)}<span class="lap-req-star" style="color:var(--danger);${lapsRequired ? '' : 'display:none'}"> *</span>
             <input class="lap-target-input" data-distance="${esc(d)}" type="number" min="1" max="999"
+                   ${lapsRequired ? 'required' : ''}
                    value="${lapTargets[d] != null ? Number(lapTargets[d]) : ''}"
                    placeholder="—" style="display:block;margin-top:4px;width:90px"></label>`).join('')}
         <button class="btn small">${t('save_settings')}</button>
@@ -2518,11 +2525,31 @@ async function renderManage(box, c) {
     const has = Number(lapData.race_laps) >= 1 || typed;
     leWarn.style.display = leBox && leBox.checked && !has ? '' : 'none';
   };
-  if (leWarn) {
-    if (leBox) leBox.addEventListener('change', syncLeaderWarn);
-    box.querySelectorAll('.lap-target-input').forEach((inp) => inp.addEventListener('input', syncLeaderWarn));
-    syncLeaderWarn();
-  }
+  if (leWarn && leBox) leBox.addEventListener('change', syncLeaderWarn);
+  // The counts are required only while laps are being recorded, and that box is
+  // in another card whose save does not re-render — so follow it live rather
+  // than leaving a form that still demands a count for a race that has none.
+  const syncLapsRequired = () => {
+    const on = rlBox ? rlBox.checked : lapsRequired;
+    box.querySelectorAll('.lap-target-input').forEach((inp) => {
+      inp.required = on;
+      if (!on) inp.setCustomValidity('');
+    });
+    box.querySelectorAll('.lap-req-star').forEach((el) => { el.style.display = on ? '' : 'none'; });
+    const help = $('#laps-help');
+    if (help) help.textContent = t(on ? 'laps_per_distance_help_required' : 'laps_per_distance_help');
+  };
+  if (rlBox) rlBox.addEventListener('change', syncLapsRequired);
+  box.querySelectorAll('.lap-target-input').forEach((inp) => {
+    // The browser's own "please fill out this field" says nothing about which
+    // field or why, and this form is a row of identical number boxes.
+    inp.addEventListener('invalid', () => inp.setCustomValidity(t('laps_required_msg')));
+    inp.addEventListener('input', () => {
+      inp.setCustomValidity(''); // or the field stays invalid after it is fixed
+      syncLeaderWarn();
+    });
+  });
+  syncLeaderWarn();
   $('#timing-settings').onsubmit = async (e) => {
     e.preventDefault();
     try {
