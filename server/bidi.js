@@ -39,11 +39,27 @@ function dirOf(ch) {
   return 'N';
 }
 
+// Direction for choosing the PARAGRAPH's base, where a digit counts for
+// nothing. UAX#9 P2 looks for the first STRONG character, and a European number
+// is not one — it takes its direction from its surroundings rather than setting
+// theirs. dirOf cannot answer this because it deliberately calls digits L, to
+// keep a number in its own upright run; reusing it for the base meant a string
+// that merely STARTED with a number was laid out as if the whole thing were
+// left-to-right. "5 ק״מ" came out with the number on the left and "-1 הקפה"
+// read back as "הקפה 1-", both mirrored from what a browser shows.
+function strongDirOf(ch) {
+  if (isHebrew(ch)) return 'R';
+  if (isLatin(ch)) return 'L';
+  return null;
+}
+
 /** Resolve directions and coalesce into logical-order runs. */
 function resolveRuns(str) {
   const chars = Array.from(str);
   const strong = chars.map(dirOf);
-  const base = strong.find((s) => s !== 'N') || 'L'; // first strong char (UAX#9)
+  // First strong character (UAX#9 P2/P3), digits excluded; all-neutral or
+  // digits-only falls back to L, which leaves a time or a bib upright.
+  const base = chars.map(strongDirOf).find(Boolean) || 'L';
 
   const resolved = strong.slice();
   for (let i = 0; i < chars.length; i++) {
