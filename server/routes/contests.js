@@ -119,12 +119,15 @@ function serializeContest(contest, user) {
   // A reader row exists from the moment the race is created (the organizer
   // needs its token), so its mere existence proves nothing: only last_seen says
   // something ever reported in.
-  const timingReaders = db
-    .prepare(`SELECT name FROM readers
+  const reportedIn = db
+    .prepare(`SELECT name, protocol FROM readers
                WHERE contest_id = ? AND name != 'Manual entry' AND last_seen IS NOT NULL
                ORDER BY id`)
-    .all(contest.id)
-    .map((r) => r.name);
+    .all(contest.id);
+  const timingReaders = reportedIn.map((r) => r.name);
+  // The protocol the app reported. Older builds send nothing, so this stays
+  // null and the panel falls back to plain "RFID".
+  const protocol = (reportedIn.find((r) => r.protocol) || {}).protocol || null;
   const readSources = db
     .prepare('SELECT DISTINCT source FROM tag_reads WHERE contest_id = ? ORDER BY source')
     .all(contest.id)
@@ -145,7 +148,7 @@ function serializeContest(contest, user) {
     criteria,
     prizes,
     organizer,
-    timing: { readers: timingReaders, sources: readSources, chip_read: chipRead },
+    timing: { readers: timingReaders, sources: readSources, chip_read: chipRead, protocol },
     started,
     ...counts,
     voting_open: votingOpen(contest),

@@ -234,7 +234,8 @@ public class PostResultsActivity extends BaseActivity {
             String error = null;
             int uploaded = 0;
             try {
-                Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
+                Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken())
+                .protocol(prefs.protocol());
                 // Re-send every gun time (force) so the web clock matches the app,
                 // even for waves already synced with an out-of-date start.
                 for (RaceStore.Wave wave : store.waves()) {

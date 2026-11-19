@@ -18,6 +18,9 @@ const router = express.Router();
 
 const MAX_BATCH = 500;
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
+// Mirrors Prefs.PROTOCOL_* in the Android app. 'demo' means no reader at all:
+// the passes are simulated, so a demo run must never be shown as chip timing.
+const READER_PROTOCOLS = ['llrp', 'ascii', 'uhf', 'demo'];
 
 function viewableContest(req, res) {
   const contest = getContest(req.params.id);
@@ -144,6 +147,17 @@ router.post('/ingest/reads', (req, res) => {
     if (reader.clock_offset_ms) db.prepare('UPDATE readers SET clock_offset_ms = 0 WHERE id = ?').run(reader.id);
   } else {
     recordClockOffset(reader, req.body?.client_time);
+  }
+
+  // How this device is talking to the reader. Only the app knows — the website
+  // used to state "RFID - LLRP" for every race from a hardcoded string, which
+  // was wrong for an ASCII or UHF reader and badly wrong for a demo run, where
+  // nothing is read at all. Whitelisted, because it is rendered to the public.
+  // Older app builds send nothing and leave it NULL, and the panel then says
+  // only "RFID", exactly as it does today.
+  const proto = String(req.body?.reader || '').toLowerCase();
+  if (READER_PROTOCOLS.includes(proto) && proto !== reader.protocol) {
+    db.prepare('UPDATE readers SET protocol = ? WHERE id = ?').run(proto, reader.id);
   }
 
   const reads = Array.isArray(req.body?.reads) ? req.body.reads.slice(0, MAX_BATCH) : null;

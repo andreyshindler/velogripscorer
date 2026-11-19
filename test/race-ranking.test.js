@@ -549,3 +549,53 @@ test('a hand-entered race is not credited to a chip reader', async () => {
   assert.equal(after.body.timing.chip_read, false, 'no chip crossing happened');
   assert.deepEqual(after.body.timing.readers, [], 'the Manual entry reader is not an RFID reader');
 });
+
+// The app is the only side that knows how it is talking to the reader, so it
+// reports it; the panel used to state "RFID - LLRP" for everyone.
+test('the reader protocol is taken from the app, and only known ones', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `proto-${Date.now()}@test.co`, password: 'password123', name: 'Proto' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  let n = 0;
+  const race = async () => {
+    n++;
+    const epc = `FD0000${n}0`;
+    const made = await request(app).post('/api/contests').set(auth).send({
+      title: 'Proto ' + n, kind: 'race', sport: 'MTB — Cross-country (XCO)',
+      start_at: iso(-60), end_at: iso(3600),
+    });
+    const wave = await request(app).post(`/api/contests/${made.body.id}/waves`).set(auth)
+      .send({ name: 'w' });
+    await request(app).post(`/api/contests/${made.body.id}/tags`).set(auth)
+      .send({ epc, bib: '1', participant: 'R', wave_id: wave.body.id });
+    return { id: made.body.id, token: made.body.app_token, epc };
+  };
+  const send = (r, body) => request(app).post('/api/ingest/reads')
+    .set('X-Reader-Token', r.token).send({ reads: [{ epc: r.epc, read_at: iso(60) }], ...body });
+  const timing = async (id) => (await request(app).get(`/api/contests/${id}`).set(auth)).body.timing;
+
+  for (const proto of ['llrp', 'ascii', 'uhf', 'demo']) {
+    const r = await race();
+    await send(r, { reader: proto });
+    assert.equal((await timing(r.id)).protocol, proto, `${proto} round-trips`);
+  }
+
+  // An older build says nothing: the panel falls back to plain "RFID" rather
+  // than naming a protocol nobody reported.
+  const quiet = await race();
+  await send(quiet, {});
+  assert.equal((await timing(quiet.id)).protocol, null);
+
+  // It is rendered on a public page, so anything unrecognised is dropped.
+  const junk = await race();
+  await send(junk, { reader: '<script>alert(1)</script>' });
+  assert.equal((await timing(junk.id)).protocol, null, 'unknown protocols are not stored');
+
+  // Uppercase is the same protocol.
+  const shouty = await race();
+  await send(shouty, { reader: 'LLRP' });
+  assert.equal((await timing(shouty.id)).protocol, 'llrp');
+});

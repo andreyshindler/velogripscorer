@@ -29,6 +29,19 @@ public final class Uploader {
     private final String serverUrl;
     private final String readerToken;
     private final SimpleDateFormat iso;
+    private String protocol = "";
+
+    /**
+     * The reader protocol this device is bridging (Prefs.PROTOCOL_*), sent with
+     * each upload. Only this side knows it: the website used to state
+     * "RFID - LLRP" on every race from a hardcoded string, which is wrong for an
+     * ASCII or UHF reader and badly wrong for a demo run, where no chip is read
+     * at all. Leave it unset to claim nothing.
+     */
+    public Uploader protocol(String p) {
+        this.protocol = p == null ? "" : p.trim();
+        return this;
+    }
 
     public Uploader(String serverUrl, String readerToken) {
         this.serverUrl = serverUrl;
@@ -57,6 +70,11 @@ public final class Uploader {
             json.append(",\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append("\"}");
         }
         json.append(']');
+        // A checkpoint's passes are a marshal's taps, not a reader's: they go up
+        // pre-reconciled, and they claim no protocol.
+        if (!preReconciled && !protocol.isEmpty()) {
+            json.append(",\"reader\":").append(jsonString(protocol));
+        }
         if (preReconciled) {
             json.append(",\"pre_reconciled\":true}");
         } else {

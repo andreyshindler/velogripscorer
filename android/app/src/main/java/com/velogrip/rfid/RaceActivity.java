@@ -170,7 +170,8 @@ public class RaceActivity extends BaseActivity {
         new Thread(() -> {
             String message;
             try {
-                Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
+                Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken())
+                .protocol(prefs.protocol());
                 for (RaceStore.Wave wave : store.unsyncedStartedWaves()) {
                     if (wave.name.isEmpty()) continue; // local mass-start marker
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) {

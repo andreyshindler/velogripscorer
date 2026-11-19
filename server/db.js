@@ -375,6 +375,12 @@ for (const stmt of [
   // Rows written before this column default to 'app', which is what nearly all
   // of them were; nothing can tell retroactively.
   `ALTER TABLE tag_reads ADD COLUMN source TEXT NOT NULL DEFAULT 'app'`,
+  // Which reader protocol the timing app is bridging: 'llrp', 'ascii', 'uhf' or
+  // 'demo'. Reported by the app on upload — it is the only side that knows, and
+  // the race info panel used to simply assert LLRP. A property of the
+  // connection, not of each read, so it lives on the reader. NULL while nothing
+  // has said (an older app build, or a reader that has never reported).
+  `ALTER TABLE readers ADD COLUMN protocol TEXT`,
 ]) {
   try {
     db.exec(stmt);

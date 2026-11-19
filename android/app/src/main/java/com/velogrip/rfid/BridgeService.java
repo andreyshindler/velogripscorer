@@ -564,7 +564,8 @@ public class BridgeService extends Service {
     // ---- Upload loop ----
 
     private void uploadLoop() {
-        Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken());
+        Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken())
+                .protocol(prefs.protocol());
         boolean lapTargetsSynced = false;
         while (running.get()) {
             try {

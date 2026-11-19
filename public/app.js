@@ -1515,9 +1515,14 @@ function raceInfoPanel(c, results) {
     [t('location'), loc],
     [t('start_type'), startType],
     [t('racers'), results.length],
+    // The protocol comes from the app, which is the only side that knows it. An
+    // older build reports none and we fall back to plain "RFID" rather than
+    // naming a protocol we are guessing at. A demo run reads no chip at all, so
+    // it says so instead of posing as timing hardware.
     ...(timing.chip_read ? [
       [t('timed_on'), t('timed_on_value')],
-      [t('chip_timing'), 'RFID'],
+      [t('chip_timing'), timing.protocol === 'demo' ? t('protocol_demo')
+        : timing.protocol ? `RFID - ${timing.protocol.toUpperCase()}` : 'RFID'],
     ] : []),
     // True of every race here, timed or not, so it needs no evidence.
     [t('timed_with'), 'VeloGripScorer'],
