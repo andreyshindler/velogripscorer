@@ -1624,6 +1624,12 @@ function fmtElapsedMs(ms) {
 function isTimeOnlySport(sport) {
   return /run|walk/i.test(String(sport || ''));
 }
+// Mass-start, fixed-lap MTB: the format the leader-ends-race rule exists for.
+// Mirrors isXcoSport in server/race-results.js, which decides whether that
+// rule actually applies when results are computed.
+function isXcoSport(sport) {
+  return /xco/i.test(String(sport || ''));
+}
 // Set from the open race's sport, so the results tables below agree with the
 // server about whether laps decide a place.
 let raceRanksOnTime = false;
@@ -2180,7 +2186,7 @@ async function renderManage(box, c) {
           <input name="lapgap" type="number" min="0" value="${wavesData.min_lap_gap_secs}" style="width:70px">
           <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px">
             <input name="recordlaps" type="checkbox" ${c.record_laps === 0 ? '' : 'checked'} style="width:auto">${t('record_laps_label')}</label>
-          ${/xco/i.test(String(c.sport || '')) ? `<label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px" title="${t('leader_ends_hint')}">
+          ${isXcoSport(c.sport) ? `<label style="margin:0;font-weight:400;display:flex;align-items:center;gap:4px" title="${t('leader_ends_hint')}">
             <input name="leaderends" type="checkbox" ${c.leader_ends_race ? 'checked' : ''} style="width:auto">${t('leader_ends_label')}</label>` : ''}
           <button class="btn small secondary">${t('save_settings')}</button>
         </form>

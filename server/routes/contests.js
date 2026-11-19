@@ -6,7 +6,7 @@ const { db, auditLog } = require('../db');
 const { requireAuth } = require('../auth');
 const { computeLeaderboard } = require('../scoring');
 const { sseSubscribe, notify, dispatchWebhooks } = require('../events');
-const { isTimeOnlySport, computeRaceResults } = require('../race-results');
+const { isTimeOnlySport, isXcoSport, computeRaceResults } = require('../race-results');
 
 const router = express.Router();
 
@@ -605,6 +605,14 @@ router.post('/contests', requireAuth, (req, res) => {
     if (kind === 'race' && isTimeOnlySport(b.sport)) {
       db.prepare('UPDATE contests SET record_laps = 0 WHERE id = ?').run(contestId);
     }
+    // XCO is the mirror image: a mass start over fixed laps, where the first
+    // rider home ends it for the field. Both switches are what make the format
+    // work, and leader_ends_race defaults to OFF, so an XCO race used to come
+    // out scored as if every crossing were a finish. Set explicitly (not left
+    // to the column default) so the intent survives a change to that default.
+    if (kind === 'race' && isXcoSport(b.sport)) {
+      db.prepare('UPDATE contests SET record_laps = 1, leader_ends_race = 1 WHERE id = ?').run(contestId);
+    }
     if (kind === 'race') {
       // one device token per race, created up front: the organizer pastes it
       // into the Android timing app; no manual "reader" setup needed.
@@ -691,6 +699,15 @@ router.patch('/contests/:id', requireAuth, (req, res) => {
     fields.voting_end_at, fields.blind_voting, fields.participant_cap, fields.photo_url,
     fields.location, fields.sport, contest.id
   );
+  // Sport is editable, so a race can become XCO after it was created — the
+  // usual route being a copy of last year's running event. Turn the two XCO
+  // rules on then too, but ONLY on the transition INTO XCO: a race that was
+  // already XCO keeps whatever the organizer last saved, so deliberately
+  // unticking the leader rule (a combined running + MTB event needs it off)
+  // is not quietly undone by an unrelated edit to the title.
+  if (contest.kind === 'race' && isXcoSport(fields.sport) && !isXcoSport(contest.sport)) {
+    db.prepare('UPDATE contests SET record_laps = 1, leader_ends_race = 1 WHERE id = ?').run(contest.id);
+  }
   auditLog(req.user.id, 'contest.update', 'contest', contest.id);
   res.json(serializeContest(getContest(contest.id), req.user));
 });
@@ -712,15 +729,22 @@ router.post('/contests/:id/duplicate', requireAuth, (req, res) => {
         (organizer_id, title, description, category, tags, visibility, invite_code,
          voting_mode, blind_voting, scale_max, participant_cap,
          start_at, end_at, voting_start_at, voting_end_at, kind, sport, location, photo_url, organizer_name,
-         suppress_secs, min_lap_gap_secs)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         suppress_secs, min_lap_gap_secs, record_laps, leader_ends_race, race_laps, lap_targets)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       req.user.id, title, src.description, src.category, src.tags,
       src.visibility, src.visibility === 'private' ? crypto.randomBytes(6).toString('hex') : null,
       src.voting_mode, src.blind_voting, src.scale_max, src.participant_cap,
       b.start_at || src.start_at, b.end_at || src.end_at, src.voting_start_at, src.voting_end_at,
       src.kind, src.sport, src.location, src.photo_url, src.organizer_name,
-      src.suppress_secs, src.min_lap_gap_secs
+      // The copy carries the scoring rules too. It used to clone only the two
+      // debounce windows, so duplicating an XCO race produced one with no lap
+      // count (race_laps and lap_targets are nullable, no default) and the
+      // leader rule off — the same start list, silently scored as a single-lap
+      // event. Of the four, only record_laps happened to survive, by sharing
+      // the column default.
+      src.suppress_secs, src.min_lap_gap_secs,
+      src.record_laps, src.leader_ends_race, src.race_laps, src.lap_targets
     );
     const newId = info.lastInsertRowid;
     db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')

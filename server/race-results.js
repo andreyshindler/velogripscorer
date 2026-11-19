@@ -22,6 +22,17 @@ function isTimeOnlySport(sport) {
 }
 
 /**
+ * MTB cross-country: a mass start over a fixed number of laps, where the first
+ * rider home ends the race for everyone. Those two rules — lap recording and
+ * the leader cutoff — are not optional extras for this format, they ARE the
+ * format, so a race created with an XCO sport gets both turned on.
+ * Mirrored in public/app.js.
+ */
+function isXcoSport(sport) {
+  return /xco/i.test(String(sport || ''));
+}
+
+/**
  * Compute the ranked results for one contest row (needs suppress_secs and
  * min_lap_gap_secs on it). Returns the results array with rank / behind /
  * category_rank filled in for finishers.
@@ -89,8 +100,8 @@ function computeRaceResults(contest, { category } = {}) {
   };
   // The leader-ends-race rule is MTB-XCO only (mass-start, fixed laps) — never
   // running or XCM — so it also requires the race's sport to be an XCO type.
-  const isXco = /xco/i.test(String(contest.sport || ''));
-  const leaderRule = contest.leader_ends_race === 1 && contest.record_laps === 1 && isXco;
+  const leaderRule = contest.leader_ends_race === 1 && contest.record_laps === 1
+    && isXcoSport(contest.sport);
 
   // Racers can carry two chips (Chip ID + Chip ID2): assignments sharing a
   // non-empty bib are merged, and a read from either chip counts.
@@ -260,5 +271,5 @@ const isMaleG = (g) => ['m', 'male', 'זכר', 'גבר'].includes(String(g || ''
 const genderLabelG = (g) => (isMaleG(g) ? 'Male' : isFemaleG(g) ? 'Female' : '');
 
 module.exports = {
-  computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG, isTimeOnlySport,
+  computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG, isTimeOnlySport, isXcoSport,
 };

@@ -137,6 +137,90 @@ test('a new running race is created with lap recording off', async () => {
 
   const xco = await mk('MTB — Cross-country (XCO)');
   assert.equal(xco.body.record_laps, 1, 'a lap sport keeps lap recording on');
+  // XCO is not "laps happen to be allowed" — the format IS a fixed lap count
+  // ended by the leader. leader_ends_race defaults to 0, so an XCO race used
+  // to be created scored as if the first crossing were a finish, and nothing
+  // said so.
+  assert.equal(xco.body.leader_ends_race, 1, 'XCO starts with the leader rule on');
+  assert.equal(running.body.leader_ends_race, 0, 'a running race does not get the leader rule');
+});
+
+// The sport is editable, and the usual way an XCO race appears is as a copy of
+// last season's event with the sport changed over.
+test('switching a race to XCO turns the two XCO rules on', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `sw-${Date.now()}@test.co`, password: 'password123', name: 'Sw' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Was a run', kind: 'race', sport: 'Running',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  assert.equal(made.body.record_laps, 0);
+  assert.equal(made.body.leader_ends_race, 0);
+
+  const moved = await request(app).patch(`/api/contests/${made.body.id}`).set(auth)
+    .send({ sport: 'MTB — Cross-country (XCO)' });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.record_laps, 1, 'lap recording comes back on');
+  assert.equal(moved.body.leader_ends_race, 1, 'and so does the leader rule');
+});
+
+// A combined running + MTB event needs the leader rule OFF, because the cutoff
+// is field-wide: the first runner home on their single lap would end the MTB
+// race too. That choice has to survive editing the title.
+test('an XCO race keeps the organizer\'s leader-rule choice across later edits', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `keep-${Date.now()}@test.co`, password: 'password123', name: 'Keep' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Combined', kind: 'race', sport: 'MTB — Cross-country (XCO)',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  assert.equal(made.body.leader_ends_race, 1);
+  // The organizer turns it off for the combined event.
+  db.prepare('UPDATE contests SET leader_ends_race = 0 WHERE id = ?').run(made.body.id);
+
+  const renamed = await request(app).patch(`/api/contests/${made.body.id}`).set(auth)
+    .send({ title: 'Combined run + MTB' });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.body.leader_ends_race, 0, 'an unrelated edit must not re-tick it');
+});
+
+// Duplicating is how a series reuses a start list, so the copy has to be the
+// same race. It cloned only the two debounce windows: race_laps and lap_targets
+// are nullable with no default, so the copy of a 3-lap XCO race had no lap
+// count at all and the leader rule off.
+test('duplicating an XCO race carries its lap settings', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `dup-${Date.now()}@test.co`, password: 'password123', name: 'Dup' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Season opener', kind: 'race', sport: 'MTB — Cross-country (XCO)',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  db.prepare('UPDATE contests SET race_laps = 4, lap_targets = ? WHERE id = ?')
+    .run(JSON.stringify({ Elite: 5, Sport: 3 }), made.body.id);
+
+  const copy = await request(app).post(`/api/contests/${made.body.id}/duplicate`).set(auth)
+    .send({ title: 'Round 2' });
+  assert.equal(copy.status, 201);
+  const row = db.prepare('SELECT * FROM contests WHERE id = ?').get(copy.body.id);
+  assert.equal(row.record_laps, 1);
+  assert.equal(row.leader_ends_race, 1, 'the copy keeps the leader rule');
+  assert.equal(row.race_laps, 4, 'the copy keeps the race-wide lap count');
+  assert.deepEqual(JSON.parse(row.lap_targets), { Elite: 5, Sport: 3 }, 'and the per-distance targets');
 });
 
 // A rider who finishes and then lingers near the mat gets read again. Past the
