@@ -465,3 +465,87 @@ test('PDF: a running race ignores laps entirely', () => {
   const tie = raceSectionRows([mk('a', 1, 60_000), mk('b', 2, 60_000)], true);
   assert.deepEqual(tie.map((r) => r.place), [1, 1], 'equal time ties regardless of laps');
 });
+
+// ---------------------------------------------------------------------------
+// The race info panel states only what actually happened.
+// ---------------------------------------------------------------------------
+
+// Reported from the details page: a race that had not started yet announced
+// "Timed on: Android tablet / Chip timing: RFID - LLRP / RFID reader: Timing
+// app / Updated from: App" to everyone looking at it. Those four lines were
+// hardcoded, so they were never derived from anything - a race timed by hand
+// or imported from a file said exactly the same.
+test('a race that has not been timed claims nothing about how it was timed', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `tim-${Date.now()}@test.co`, password: 'password123', name: 'Tim' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Untimed', kind: 'race', sport: 'MTB — Cross-country (XCO)',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  // The reader row is created up front so the organizer has a token to paste,
+  // so "a reader exists" must not be read as "a reader reported".
+  assert.ok(made.body.app_token, 'the token exists from the start');
+  assert.deepEqual(made.body.timing.readers, [], 'nothing has reported in');
+  assert.deepEqual(made.body.timing.sources, [], 'no reads at all');
+  assert.equal(made.body.timing.chip_read, false, 'no chip has been read');
+});
+
+test('a chip read through the app is what makes the timing lines appear', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `chip-${Date.now()}@test.co`, password: 'password123', name: 'Chip' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Timed', kind: 'race', sport: 'MTB — Cross-country (XCO)',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  const wave = await request(app).post(`/api/contests/${made.body.id}/waves`).set(auth)
+    .send({ name: 'wave1' });
+  await request(app).post(`/api/contests/${made.body.id}/tags`).set(auth)
+    .send({ epc: 'FA110001', bib: '1', participant: 'Rider', wave_id: wave.body.id });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', made.body.app_token)
+    .send({ reads: [{ epc: 'FA110001', read_at: iso(60) }] });
+
+  const after = await request(app).get(`/api/contests/${made.body.id}`).set(auth);
+  assert.deepEqual(after.body.timing.readers, ['Timing app'], 'the reader has now reported');
+  assert.deepEqual(after.body.timing.sources, ['app']);
+  assert.equal(after.body.timing.chip_read, true);
+});
+
+// A marshal tapping bibs goes through the same app and the same reader row, so
+// taps alone must not be presented as a chip reader on the mat.
+test('a hand-entered race is not credited to a chip reader', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `man-${Date.now()}@test.co`, password: 'password123', name: 'Man' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'By hand', kind: 'race', sport: 'Running',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  const wave = await request(app).post(`/api/contests/${made.body.id}/waves`).set(auth)
+    .send({ name: 'wave1' });
+  await request(app).post(`/api/contests/${made.body.id}/waves/${wave.body.id}/start`).set(auth)
+    .send({ at: new Date(gun).toISOString() });
+  await request(app).post(`/api/contests/${made.body.id}/tags`).set(auth)
+    .send({ epc: 'FB220001', bib: '7', participant: 'Walker', wave_id: wave.body.id });
+  const tap = await request(app).post(`/api/contests/${made.body.id}/manual-read`).set(auth)
+    .send({ bib: '7', at: iso(300) });
+  assert.equal(tap.status, 201, JSON.stringify(tap.body));
+
+  const after = await request(app).get(`/api/contests/${made.body.id}`).set(auth);
+  assert.deepEqual(after.body.timing.sources, ['manual'], 'the read is marked hand-entered');
+  assert.equal(after.body.timing.chip_read, false, 'no chip crossing happened');
+  assert.deepEqual(after.body.timing.readers, [], 'the Manual entry reader is not an RFID reader');
+});

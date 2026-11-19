@@ -367,6 +367,14 @@ for (const stmt of [
   // out of the list the moment it finished. NULL for races finished before
   // this column existed; callers fall back to start_at for those.
   `ALTER TABLE contests ADD COLUMN finished_at TEXT`,
+  // How a read reached us: 'app' (the timing app uploaded it), 'manual' (typed
+  // into the website) or 'import' (read out of a file). The race info panel
+  // used to ASSERT "timed on an Android tablet, updated from the app" on every
+  // race, from a hardcoded string, including races that had never been timed at
+  // all. last_seen cannot answer it, because a file import stamps that too.
+  // Rows written before this column default to 'app', which is what nearly all
+  // of them were; nothing can tell retroactively.
+  `ALTER TABLE tag_reads ADD COLUMN source TEXT NOT NULL DEFAULT 'app'`,
 ]) {
   try {
     db.exec(stmt);

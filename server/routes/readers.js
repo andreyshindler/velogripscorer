@@ -156,7 +156,8 @@ router.post('/ingest/reads', (req, res) => {
 
   const accepted = [];
   const insert = db.prepare(
-    'INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, manual, read_at) VALUES (?,?,?,?,?,?,?)'
+    `INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, manual, read_at, source)
+     VALUES (?,?,?,?,?,?,?,'app')`
   );
   const tx = db.transaction(() => {
     for (const r of reads) {
@@ -747,7 +748,10 @@ router.post('/contests/:id/readers/:rid/import-reads', requireAuth, uploadMemory
     return null;
   };
 
-  const insert = db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, read_at, manual) VALUES (?,?,?,?,0)');
+  // Read out of a file, not off the mat: the panel must not call this a race
+  // timed on a tablet just because the reader row it landed on says so.
+  const insert = db.prepare(
+    "INSERT INTO tag_reads (reader_id, contest_id, epc, read_at, manual, source) VALUES (?,?,?,?,0,'import')");
   let imported = 0; const errors = [];
   db.transaction(() => {
     for (const r of reads) {
@@ -1154,7 +1158,8 @@ router.post('/contests/:id/manual-read', requireAuth, (req, res) => {
   const at = req.body?.at && !Number.isNaN(Date.parse(req.body.at))
     ? new Date(req.body.at).toISOString()
     : new Date().toISOString();
-  db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, manual, read_at) VALUES (?,?,?,?,1,?)')
+  db.prepare(
+    "INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, manual, read_at, source) VALUES (?,?,?,?,1,?,'manual')")
     .run(manual.id, contest.id, assignment.epc, null, at);
   auditLog(req.user.id, 'read.manual', 'contest', contest.id, `bib ${bib} @ ${at}`);
   sseBroadcast(contest.id, 'tag_reads', {

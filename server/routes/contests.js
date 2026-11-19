@@ -109,10 +109,32 @@ function serializeContest(contest, user) {
     )
     .get(contest.id);
   const organizer = db.prepare('SELECT id, name, avatar_url FROM users WHERE id = ?').get(contest.organizer_id);
-  const readerNames = db
-    .prepare(`SELECT name FROM readers WHERE contest_id = ? AND name != 'Manual entry' ORDER BY id`)
+  // What is actually known about how this race was timed. The race info panel
+  // used to state all of this from hardcoded strings — "Android tablet",
+  // "RFID - LLRP", "App" — on every race, so a race that had not been timed at
+  // all, or was typed in by hand, still announced a tablet and a chip reader to
+  // every spectator on the public results page. Each line is now derived, and
+  // the panel drops the ones there is nothing to say about yet.
+  //
+  // A reader row exists from the moment the race is created (the organizer
+  // needs its token), so its mere existence proves nothing: only last_seen says
+  // something ever reported in.
+  const timingReaders = db
+    .prepare(`SELECT name FROM readers
+               WHERE contest_id = ? AND name != 'Manual entry' AND last_seen IS NOT NULL
+               ORDER BY id`)
     .all(contest.id)
     .map((r) => r.name);
+  const readSources = db
+    .prepare('SELECT DISTINCT source FROM tag_reads WHERE contest_id = ? ORDER BY source')
+    .all(contest.id)
+    .map((r) => r.source);
+  // A chip crossing: uploaded by the app AND not a marshal's tap. Only this
+  // justifies claiming a chip reader was involved — a race scored entirely on
+  // checkpoint taps goes through the same app and the same reader row.
+  const chipRead = !!db
+    .prepare("SELECT 1 FROM tag_reads WHERE contest_id = ? AND source = 'app' AND manual = 0 LIMIT 1")
+    .get(contest.id);
   // A race is only "live" once its gun has fired — i.e. some wave has a start.
   const started = !!db
     .prepare('SELECT 1 FROM waves WHERE contest_id = ? AND started_at IS NOT NULL LIMIT 1')
@@ -123,7 +145,7 @@ function serializeContest(contest, user) {
     criteria,
     prizes,
     organizer,
-    reader_names: readerNames,
+    timing: { readers: timingReaders, sources: readSources, chip_read: chipRead },
     started,
     ...counts,
     voting_open: votingOpen(contest),

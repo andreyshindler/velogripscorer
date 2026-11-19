@@ -1499,16 +1499,32 @@ function raceInfoPanel(c, results) {
   const loc = c.location
     ? `${esc(c.location)} &nbsp;<a href="https://www.google.com/maps/search/${encodeURIComponent(c.location)}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">${t('view_on_map')}</a>`
     : '–';
+  // Everything about HOW the race was timed is reported by the server from what
+  // actually happened, and a line it cannot answer yet is left out rather than
+  // guessed. Before the gun this panel is the six facts that are already true:
+  // sport, place, start type, entrants, who is running it, who can see it.
+  const timing = c.timing || {};
+  const readers = timing.readers || [];
+  const sources = timing.sources || [];
+  const sourceLabel = { app: t('app_label'), manual: t('source_manual'), import: t('source_import') };
+  // A chip crossing is what justifies "timed on a tablet, by a chip reader".
+  // Checkpoint taps arrive through the same app and the same reader row, so a
+  // race scored entirely on taps says only where its reads came from.
   const rows = [
     [t('sport'), esc(sportLabel(c.sport))],
     [t('location'), loc],
     [t('start_type'), startType],
     [t('racers'), results.length],
-    [t('timed_on'), t('timed_on_value')],
+    ...(timing.chip_read ? [
+      [t('timed_on'), t('timed_on_value')],
+      [t('chip_timing'), 'RFID'],
+    ] : []),
+    // True of every race here, timed or not, so it needs no evidence.
     [t('timed_with'), 'VeloGripScorer'],
-    [t('chip_timing'), 'RFID - LLRP'],
-    ...(c.reader_names && c.reader_names.length ? [[t('rfid_reader'), esc(c.reader_names.join(', '))]] : []),
-    [t('updated_from'), t('app_label')],
+    ...(readers.length ? [[t('rfid_reader'), esc(readers.join(', '))]] : []),
+    ...(sources.length
+      ? [[t('updated_from'), sources.map((s) => sourceLabel[s] || s).join(', ')]]
+      : []),
     [t('race_visibility'), c.visibility === 'public' ? t('visibility_public') : t('visibility_private')],
   ];
   // Responsive columns (flex-basis with shrink) so the panel never forces the
