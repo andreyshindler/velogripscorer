@@ -374,3 +374,94 @@ test('race-reset un-starts the waves so the web stops calling the race live', as
   assert.equal(r.body.cleared, 1);
   assert.equal(reads(), 0, 'discard clears the uploaded reads');
 });
+
+// ---------------------------------------------------------------------------
+// Category places are per DISTANCE + category, and the PDF knows about laps.
+// ---------------------------------------------------------------------------
+
+// Age bands repeat across fields: an XCO race with Elite and Sport has a 43-45
+// in both. Keyed on the category alone, the two fields were ranked against each
+// other and one podium came out for what are two separate races.
+test('category places are counted within each distance, not across the race', () => {
+  const contestId = db.prepare(
+    `INSERT INTO contests (organizer_id, title, description, category, tags, visibility,
+       start_at, end_at, kind, sport, status, suppress_secs, min_lap_gap_secs, record_laps)
+     VALUES (?,?,'','other','[]','public',?,?, 'race', 'MTB — Cross-country (XCO)', 'finished', 10, 30, 1)`
+  ).run(organizerId, 'Two fields', iso(-60), iso(3600)).lastInsertRowid;
+  const readerId = db.prepare('INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)')
+    .run(contestId, 'Timing app', `tok_cat_${contestId}`, '').lastInsertRowid;
+  const waveId = db.prepare('INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)')
+    .run(contestId, 'wave1', new Date(gun).toISOString()).lastInsertRowid;
+
+  // Interleaved on the clock, so a race-wide count would read 1,2,3,4.
+  const field = [
+    ['EPC_E1', '1', 'Elite fast', 'Elite', 100],
+    ['EPC_S1', '2', 'Sport fast', 'Sport', 110],
+    ['EPC_E2', '3', 'Elite slow', 'Elite', 120],
+    ['EPC_S2', '4', 'Sport slow', 'Sport', 130],
+  ];
+  for (const [epc, bib, name, distance, at] of field) {
+    db.prepare(`INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id, category, distance)
+                VALUES (?,?,?,?,?,?,?)`).run(contestId, epc, bib, name, waveId, '43-45', distance);
+    db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, read_at) VALUES (?,?,?,?)')
+      .run(readerId, contestId, epc, iso(at));
+  }
+
+  const out = computeRaceResults(db.prepare('SELECT * FROM contests WHERE id = ?').get(contestId));
+  const by = Object.fromEntries(out.map((r) => [r.bib, r]));
+  assert.equal(by['1'].rank, 1, 'overall order is unchanged');
+  assert.equal(by['2'].rank, 2);
+  assert.equal(by['3'].rank, 3);
+  assert.equal(by['4'].rank, 4);
+  // Each field has its own 43-45 podium.
+  assert.equal(by['1'].category_rank, 1, 'Elite 43-45 winner');
+  assert.equal(by['3'].category_rank, 2, 'Elite 43-45 runner-up');
+  assert.equal(by['2'].category_rank, 1, 'Sport 43-45 winner, not 2nd behind an Elite');
+  assert.equal(by['4'].category_rank, 2, 'Sport 43-45 runner-up, not 4th');
+});
+
+// The PDF is what gets handed out, and it rendered a rider a whole lap down as
+// a small "+time" gap - on a one-lap running field that never came up, on a
+// multi-lap MTB field it is simply wrong.
+const { raceSectionRows } = require('../server/results-pdf');
+const mk = (bib, laps, elapsedMs) => ({
+  bib, laps, elapsed_ms: elapsedMs, participant: 'R' + bib, team: '', category: '', gender: '',
+  elapsed: String(elapsedMs),
+});
+
+test('PDF: a lap race places on laps first and reads the gap in laps', () => {
+  // The 2-lap rider is QUICKER on the clock, and still finishes behind.
+  const rows = raceSectionRows([mk('b', 2, 29 * 60_000), mk('a', 3, 30 * 60_000)], false);
+  assert.deepEqual(rows.map((r) => r.bib), ['a', 'b'], 'more laps beats a faster time');
+  assert.deepEqual(rows.map((r) => r.place), [1, 2]);
+  assert.equal(rows[0].behind, '', 'the leader has no gap');
+  assert.equal(rows[1].behind, '-1 הקפה', 'not a time gap to someone who rode further');
+  assert.deepEqual(rows.map((r) => r.laps), [3, 2], 'laps reach the renderer');
+});
+
+test('PDF: two laps down is plural, and the gap stays a time within a lap', () => {
+  const rows = raceSectionRows(
+    [mk('a', 5, 60_000), mk('b', 5, 72_400), mk('c', 3, 50_000)], false);
+  assert.equal(rows[1].behind, '+0:12.4', 'same lap count -> a time gap');
+  assert.equal(rows[2].behind, '-2 הקפות', 'two laps down reads plural');
+});
+
+// Equal elapsed time was enough to share a place, whatever the laps said.
+test('PDF: equal time is only a tie when the laps match too', () => {
+  const same = raceSectionRows([mk('a', 3, 60_000), mk('b', 3, 60_000)], false);
+  assert.deepEqual(same.map((r) => r.place), [1, 1], 'same laps and time really is a tie');
+
+  const split = raceSectionRows([mk('a', 3, 60_000), mk('b', 2, 60_000)], false);
+  assert.deepEqual(split.map((r) => r.place), [1, 2], 'a lap down is not a tie');
+  assert.equal(split[1].behind, '-1 הקפה');
+});
+
+// A running race is scored on one crossing: an extra "lap" is a stray double
+// read, so it must not sort, break a tie, or print as "-1 הקפה".
+test('PDF: a running race ignores laps entirely', () => {
+  const rows = raceSectionRows([mk('slow', 2, 70_000), mk('fast', 1, 60_000)], true);
+  assert.deepEqual(rows.map((r) => r.bib), ['fast', 'slow'], 'the faster runner wins');
+  assert.equal(rows[1].behind, '+0:10.0', 'a time gap, never a lap gap');
+  const tie = raceSectionRows([mk('a', 1, 60_000), mk('b', 2, 60_000)], true);
+  assert.deepEqual(tie.map((r) => r.place), [1, 1], 'equal time ties regardless of laps');
+});

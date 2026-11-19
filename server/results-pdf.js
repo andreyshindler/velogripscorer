@@ -13,7 +13,7 @@ const path = require('path');
 const { PDFDocument, rgb } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 const { visualParts } = require('./bidi');
-const { formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('./race-results');
+const { formatElapsed, isFemaleG, isMaleG, genderLabelG, isTimeOnlySport } = require('./race-results');
 
 // Hebrew column headers + labels, matching the web UI (public/i18n.js `he`).
 const H = {
@@ -22,7 +22,11 @@ const H = {
   total: 'סה״כ', overall: 'כללי', female: 'נשים', male: 'גברים',
   finishers: 'מסיימים', dnf: 'לא סיימו', races: 'מרוצים', counted: 'נספרים',
   teamStandings: 'ניקוד קבוצתי', individualStandings: 'ניקוד אישי',
-  laps: 'סיבובים', points: 'ניקוד', cumulative: 'ניקוד מצטבר', deduction: 'הפחתה',
+  // הקפה / הקפות, as the web UI says it (public/i18n.js he.lap / he.laps).
+  // This used to read 'סיבובים', which nothing rendered and the website never
+  // said; "-1 הקפה" below has to match what a rider sees on screen.
+  laps: 'הקפות', lap: 'הקפה',
+  points: 'ניקוד', cumulative: 'ניקוד מצטבר', deduction: 'הפחתה',
 };
 // gender label for a cell (singular) or a section/group title (plural).
 function genderHe(label, plural) {
@@ -165,6 +169,52 @@ function drawSub(ctx, text, x0, totalW) {
   ctx.y -= 16;
 }
 
+/**
+ * Gap to the leader of one section. A rider a lap down reads "-N הקפות", not a
+ * time: the clock difference to someone who rode further says nothing, and on
+ * a multi-lap field a rider a whole lap back used to print as "+0:12.4" — as
+ * if twelve seconds covered it. Mirrors r.behind in race-results.js and
+ * gapToLeader in public/app.js, so the sheet, the API and the screen agree.
+ */
+function sectionGap(r, leader, timeOnly) {
+  if (r === leader) return '';
+  if (!timeOnly && Number.isFinite(r.laps) && Number.isFinite(leader.laps) && r.laps < leader.laps) {
+    const down = leader.laps - r.laps;
+    return `-${down} ${down > 1 ? H.laps : H.lap}`;
+  }
+  // Clamp rather than print a negative: with laps deciding places the leader is
+  // not always the quickest on the clock.
+  if (r.elapsed_ms <= leader.elapsed_ms) return '';
+  return '+' + formatElapsed(r.elapsed_ms - leader.elapsed_ms);
+}
+
+/**
+ * The rows of one results section, placed and gapped within that section.
+ * Exported so the placing rules can be checked without rendering a PDF.
+ *
+ * timeOnly mirrors computeRaceResults: a running race is ranked on elapsed time
+ * ALONE, because it is scored on one crossing and an extra "lap" there is a
+ * stray double read. So laps must not sort, break a tie, or show as "-1 הקפה"
+ * in that case — and anywhere else a lap is a place and all three apply.
+ */
+function raceSectionRows(rowsIn, timeOnly) {
+  const rows = rowsIn.slice()
+    .sort((a, b) => (timeOnly ? 0 : b.laps - a.laps) || (a.elapsed_ms - b.elapsed_ms));
+  const leader = rows[0];
+  let prev = null, prevPlace = 0;
+  return rows.map((r, i) => {
+    // Equal elapsed time alone is not a tie in a lap race: the rider a lap down
+    // covered a shorter distance in it, and used to be handed the same place.
+    const tied = prev && r.elapsed_ms === prev.elapsed_ms && (timeOnly || r.laps === prev.laps);
+    const place = tied ? prevPlace : i + 1;
+    prev = r; prevPlace = place;
+    return {
+      place, bib: r.bib, name: r.participant, team: r.team, category: r.category,
+      gender: r.gender, laps: r.laps, time: r.elapsed, behind: sectionGap(r, leader, timeOnly),
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 1) Per-race results
 // ---------------------------------------------------------------------------
@@ -172,47 +222,33 @@ async function raceResultsPdf(contest, results) {
   const ctx = await newDoc(true);
   addPage(ctx);
 
-  const columns = [
-    { header: H.place, width: 34, align: 'r' },
-    { header: H.bib, width: 40, align: 'r' },
-    { header: H.name, width: 140, align: 'r' },
-    { header: H.team, width: 145, align: 'r' },
-    { header: H.category, width: 64, align: 'r' },
-    { header: H.gender, width: 42, align: 'r' },
-    { header: H.time, width: 60, align: 'r' },
-    { header: H.behind, width: 64, align: 'r' },
+  // A lap race is placed on laps first, so the sheet has to show them — without
+  // the column, two riders a lap apart differ only by a gap the reader cannot
+  // account for. A running race is placed on time alone and every finisher has
+  // one lap, so the column would be a stripe of 1s: left out there.
+  const timeOnly = isTimeOnlySport(contest.sport);
+  const cols = [
+    { header: H.place, width: 34, align: 'r', render: (r) => r.place },
+    { header: H.bib, width: 40, align: 'r', render: (r) => r.bib },
+    { header: H.name, width: 140, align: 'r', render: (r) => r.name },
+    { header: H.team, width: 145, align: 'r', render: (r) => r.team },
+    { header: H.category, width: 64, align: 'r', render: (r) => r.category },
+    { header: H.gender, width: 42, align: 'r', render: (r) => genderHe(genderLabelG(r.gender), false) },
+    ...(timeOnly ? [] : [{ header: H.laps, width: 44, align: 'r', render: (r) => r.laps }]),
+    { header: H.time, width: 60, align: 'r', render: (r) => r.time },
+    { header: H.behind, width: 70, align: 'r', render: (r) => r.behind },
   ];
-  const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const totalW = cols.reduce((s, c) => s + c.width, 0);
   const x0 = ctx.size.W - MARGIN - totalW; // right-anchor the RTL table block
 
   drawTitle(ctx, contest.title || 'Race results', 15, x0, totalW);
   drawSub(ctx, `${results.filter((r) => r.status === 'finished').length} ${H.finishers}`, x0, totalW);
 
   const finished = results.filter((r) => r.status === 'finished');
-  const byTime = (a, b) => (b.laps - a.laps) || (a.elapsed_ms - b.elapsed_ms);
 
   const section = (title, rowsIn) => {
-    const rows = rowsIn.slice().sort(byTime);
-    if (!rows.length) return;
-    const leaderMs = rows[0].elapsed_ms;
-    let prevMs = null, prevPlace = 0;
-    const view = rows.map((r, i) => {
-      const place = (prevMs !== null && r.elapsed_ms === prevMs) ? prevPlace : i + 1;
-      prevMs = r.elapsed_ms; prevPlace = place;
-      const behind = r.elapsed_ms === leaderMs ? '' : '+' + formatElapsed(r.elapsed_ms - leaderMs);
-      return { place, bib: r.bib, name: r.participant, team: r.team, category: r.category,
-        gender: genderHe(genderLabelG(r.gender), false), time: r.elapsed, behind };
-    });
-    const cols = [
-      { ...columns[0], render: (r) => r.place },
-      { ...columns[1], render: (r) => r.bib },
-      { ...columns[2], render: (r) => r.name },
-      { ...columns[3], render: (r) => r.team },
-      { ...columns[4], render: (r) => r.category },
-      { ...columns[5], render: (r) => r.gender },
-      { ...columns[6], render: (r) => r.time },
-      { ...columns[7], render: (r) => r.behind },
-    ];
+    if (!rowsIn.length) return;
+    const view = raceSectionRows(rowsIn, timeOnly);
     ctx.y -= 4;
     drawTitle(ctx, title, 11, x0, totalW);
     drawTable(ctx, cols, view, x0);
@@ -335,4 +371,6 @@ function bestNote(teams) {
   return c ? `${c} ${H.counted}` : H.overall;
 }
 
-module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf };
+// raceSectionRows is exported for the tests: it carries the placing, tie and
+// gap rules, none of which can be read back out of a rendered PDF.
+module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceSectionRows };

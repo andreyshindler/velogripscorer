@@ -249,8 +249,15 @@ function computeRaceResults(contest, { category } = {}) {
     r.behind = r.rank === 1 ? '' : (!timeOnly && r.laps < leader.laps
       ? `-${leader.laps - r.laps} lap${leader.laps - r.laps > 1 ? 's' : ''}`
       : '+' + formatElapsed(r.elapsed_ms - leader.elapsed_ms));
-    const place = (categoryPlace.get(r.category) || 0) + 1;
-    categoryPlace.set(r.category, place);
+    // Keyed by distance AND category. Age bands repeat across fields — an XCO
+    // race with Elite and Sport has a 43-45 in both, and a combined running +
+    // MTB event certainly does — so keying on the category alone ranked a
+    // runner against a rider and handed out one podium for two races. The
+    // public results page, the CSV and the PDF all section per distance and
+    // always did; this is the number behind them finally agreeing.
+    const key = `${r.distance || ''}\u0000${r.category || ''}`;
+    const place = (categoryPlace.get(key) || 0) + 1;
+    categoryPlace.set(key, place);
     r.category_rank = place;
   });
 
