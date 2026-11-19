@@ -289,6 +289,34 @@ router.post('/ingest/lap-targets', (req, res) => {
     }
   }
   db.prepare('UPDATE contests SET lap_targets = ? WHERE id = ?').run(JSON.stringify(merged), reader.contest_id);
+
+  // The four settings below are PRESENT only when the operator changed them on
+  // the device and the server has not been told yet (Prefs.timingDirty in the
+  // app). Absent means the device is asserting nothing, and whatever the
+  // organizer set on the website stands.
+  //
+  // record_laps and leader_ends_race used to be sent on every run of the upload
+  // loop, so a tablet that had not re-downloaded the start list would quietly
+  // push its stale copy over a change made on the website minutes earlier. The
+  // server cannot tell a stale assertion from a fresh one, so the app stopped
+  // making one unless the operator actually touched the switch. An app built
+  // before that change still sends them every time; only a new build fixes it.
+  const setIfNum = (col, raw, max) => {
+    // Not `Number(raw)` alone: Number(null), Number('') and Number([]) are all
+    // 0, so a null — which is what a missing field becomes once JSON has been
+    // through a round trip — would have set the column to zero. Zero is a
+    // meaningful, damaging value here: no start suppression at all, so the
+    // starting gun's own chip reads count as finishes.
+    if (typeof raw !== 'number' && typeof raw !== 'string') return;
+    if (typeof raw === 'string' && !raw.trim()) return;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > max) return;
+    db.prepare(`UPDATE contests SET ${col} = ? WHERE id = ?`).run(Math.round(n), reader.contest_id);
+  };
+  // Start suppression and the minimum lap gap: the device is an equal author of
+  // these now, so the operator can set them at the mat without a laptop.
+  setIfNum('suppress_secs', req.body?.suppress_secs, 3600);
+  setIfNum('min_lap_gap_secs', req.body?.min_lap_gap_secs, 3600);
   if (typeof req.body?.record_laps === 'boolean') {
     db.prepare('UPDATE contests SET record_laps = ? WHERE id = ?').run(req.body.record_laps ? 1 : 0, reader.contest_id);
   }

@@ -94,13 +94,14 @@ public class ChipTimingActivity extends BaseActivity {
             rollCall.setAlpha(checked ? 1f : 0.4f);
             rollCallHint.setVisibility(checked ? View.VISIBLE : View.GONE);
         });
-        // Start suppression and the minimum lap gap belong to the race, not the
-        // tablet: the start-list sync overwrites them here on every download and
-        // never sends them back, and the published results are scored with the
-        // server's copy. Editing them here only ever looked like it worked, so
-        // show them read-only and point the operator at the website.
-        makeServerOwned(suppress);
-        makeServerOwned(lapGap);
+        // Start suppression and the minimum lap gap were read-only here, because
+        // the device could not send them back: a download overwrote them and the
+        // published results were scored with the server's copy, so editing them
+        // only looked like it worked. The device is an author of both now — it
+        // uploads them and a pending edit survives a sync — so they are editable,
+        // and the operator can set them at the mat without a laptop.
+        makeScrollable(suppress, R.string.no_detect_after_start);
+        makeScrollable(lapGap, R.string.no_redetect_after_lap);
         // Set these timers with a scroll-wheel picker instead of typing.
         makeScrollable(rollCall, R.string.rollcall_window_hint);
         // Chips per racer is 1 or 2 (single chip, or two chips merged by bib).
@@ -283,27 +284,21 @@ public class ChipTimingActivity extends BaseActivity {
         }).start();
     }
 
-    /** A value the website owns: visible here, but not editable, and tapping it
-     *  says where to change it. */
-    private void makeServerOwned(EditText field) {
-        field.setFocusable(false);
-        field.setFocusableInTouchMode(false);
-        field.setCursorVisible(false);
-        field.setLongClickable(false);
-        field.setAlpha(0.55f);
-        field.setOnClickListener(v ->
-                Toast.makeText(this, R.string.timing_set_on_web, Toast.LENGTH_LONG).show());
-    }
-
     private void save() {
         prefs.saveReaderHostPort(readerHost.getText().toString().trim(), prefs.readerPort());
+        final int newSuppress = parseMmss(suppress.getText().toString());
+        final int newLapGap = parseMmss(lapGap.getText().toString());
+        // Only a real change marks the settings as ours to upload. Opening the
+        // screen and saving something else must not make this device start
+        // asserting timing settings it was merely told by the last sync.
+        if (newSuppress != prefs.suppressSecs() || newLapGap != prefs.lapGapSecs()) {
+            prefs.setTimingDirty(true);
+        }
         prefs.saveChipTiming(
                 chipIdBib.isChecked(),
                 intOf(chipsPerRacer.getText().toString(), 2),
-                // Keep whatever the last start-list sync wrote — these two are
-                // the server's, and saving the on-screen text would fight it.
-                prefs.suppressSecs(),
-                prefs.lapGapSecs(),
+                newSuppress,
+                newLapGap,
                 intOf(antennaPower.getText().toString(), 100),
                 beepUnknown.isChecked(),
                 rollCallOn.isChecked() ? parseMmss(rollCall.getText().toString()) : 0);

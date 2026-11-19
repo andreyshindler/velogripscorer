@@ -599,3 +599,69 @@ test('the reader protocol is taken from the app, and only known ones', async () 
   await send(shouty, { reader: 'LLRP' });
   assert.equal((await timing(shouty.id)).protocol, 'llrp');
 });
+
+// ---------------------------------------------------------------------------
+// Timing settings can come from the device, but only when it says so.
+// ---------------------------------------------------------------------------
+
+test('the device can set the timing numbers, and silence leaves them alone', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `ts-${Date.now()}@test.co`, password: 'password123', name: 'TS' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Timing', kind: 'race', sport: 'MTB — Cross-country (XCO)',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  const id = made.body.id, token = made.body.app_token;
+  const row = () => db.prepare('SELECT suppress_secs, min_lap_gap_secs, record_laps, leader_ends_race FROM contests WHERE id = ?').get(id);
+  const push = (body) => request(app).post('/api/ingest/lap-targets').set('X-Reader-Token', token).send(body);
+
+  // The organizer's settings, as the website would leave them.
+  await request(app).patch(`/api/contests/${id}/timing-settings`).set(auth)
+    .send({ suppress_secs: 45, min_lap_gap_secs: 90, record_laps: false, leader_ends_race: false });
+  assert.deepEqual(row(), { suppress_secs: 45, min_lap_gap_secs: 90, record_laps: 0, leader_ends_race: 0 });
+
+  // A device with nothing of its own to say must not disturb any of it. This is
+  // the regression that mattered: the app used to send record_laps on every run
+  // of its upload loop, so a tablet that had not re-synced pushed its stale copy
+  // over a change the organizer had just made.
+  await push({ lap_targets: { Elite: 4 } });
+  assert.deepEqual(row(), { suppress_secs: 45, min_lap_gap_secs: 90, record_laps: 0, leader_ends_race: 0 },
+    'a silent device changes nothing');
+  assert.deepEqual(JSON.parse(db.prepare('SELECT lap_targets FROM contests WHERE id = ?').get(id).lap_targets),
+    { Elite: 4 }, 'lap targets still merge-fill');
+
+  // Now the operator changed them at the mat.
+  await push({ suppress_secs: 20, min_lap_gap_secs: 60, record_laps: true, leader_ends_race: true });
+  assert.deepEqual(row(), { suppress_secs: 20, min_lap_gap_secs: 60, record_laps: 1, leader_ends_race: 1 });
+
+  // Each field stands alone: sending only one leaves the rest.
+  await push({ suppress_secs: 5 });
+  assert.deepEqual(row(), { suppress_secs: 5, min_lap_gap_secs: 60, record_laps: 1, leader_ends_race: 1 });
+});
+
+test('a nonsense timing value from a device is ignored, not stored', async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `tsx-${Date.now()}@test.co`, password: 'password123', name: 'TSX' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Bad timing', kind: 'race', sport: 'Running', start_at: iso(-60), end_at: iso(3600),
+  });
+  const id = made.body.id;
+  const before = db.prepare('SELECT suppress_secs, min_lap_gap_secs FROM contests WHERE id = ?').get(id);
+  for (const body of [
+    { suppress_secs: -1 }, { suppress_secs: 'soon' }, { suppress_secs: null },
+    { suppress_secs: '' }, { suppress_secs: [] }, { suppress_secs: {} },
+    { min_lap_gap_secs: 99999 }, { min_lap_gap_secs: NaN }, { min_lap_gap_secs: true },
+  ]) {
+    await request(app).post('/api/ingest/lap-targets').set('X-Reader-Token', made.body.app_token).send(body);
+  }
+  assert.deepEqual(db.prepare('SELECT suppress_secs, min_lap_gap_secs FROM contests WHERE id = ?').get(id), before,
+    'none of those reached the column');
+});

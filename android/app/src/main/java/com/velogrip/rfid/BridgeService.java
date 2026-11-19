@@ -572,8 +572,21 @@ public class BridgeService extends Service {
                 Thread.sleep(UPLOAD_INTERVAL_MS);
                 // The finish device publishes its lap counts once, so checkpoints
                 // can cap taps. A manual checkpoint has none of its own to send.
-                if (!manualOnly && !lapTargetsSynced) {
-                    if (uploader.uploadLapTargets(store.lapTargets(), prefs.recordLaps(), prefs.leaderEndsRace())) lapTargetsSynced = true;
+                // Settings the operator changed on this device ride along, and
+                // only then — see Prefs.timingDirty. Retried every pass until one
+                // upload lands, because the edit is usually made at the mat where
+                // this device is on the reader's network and the internet comes
+                // and goes; the flag is cleared only once the server has it.
+                boolean timingDirty = prefs.timingDirty();
+                if (!manualOnly && (!lapTargetsSynced || timingDirty)) {
+                    Uploader.TimingSettings timing = timingDirty
+                            ? new Uploader.TimingSettings(prefs.suppressSecs(), prefs.lapGapSecs(),
+                                    prefs.recordLaps(), prefs.leaderEndsRace())
+                            : null;
+                    if (uploader.uploadLapTargets(store.lapTargets(), timing)) {
+                        lapTargetsSynced = true;
+                        if (timingDirty) prefs.setTimingDirty(false);
+                    }
                 }
                 // "Live results: off" means the race is not published while it
                 // runs: hold the gun times and the passes on the phone until the

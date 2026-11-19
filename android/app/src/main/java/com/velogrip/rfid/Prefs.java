@@ -263,6 +263,27 @@ public final class Prefs {
                 .apply();
     }
 
+    /** The race title alone, for a sync that must not touch the timing numbers
+     *  because the operator has changed them here and the server has not been
+     *  told yet. */
+    public void saveContestTitle(String contestTitle) {
+        sp.edit().putString("contestTitle", contestTitle).apply();
+    }
+
+    /**
+     * The operator changed a timing setting on THIS device and the server does
+     * not know yet. Two things follow while it is set: a start-list download
+     * must not overwrite those settings with the server's older copy, and the
+     * upload loop keeps offering them until one upload succeeds.
+     *
+     * It is also what stops the tablet asserting settings it was merely told:
+     * the device sends them ONLY when this is set, so a tablet that has not
+     * re-synced can no longer push a stale copy over a change made on the
+     * website.
+     */
+    public boolean timingDirty() { return sp.getBoolean("timingDirty", false); }
+    public void setTimingDirty(boolean dirty) { sp.edit().putBoolean("timingDirty", dirty).apply(); }
+
     public boolean isConfigured() {
         boolean serverOk = !serverUrl().isEmpty() && !readerToken().isEmpty();
         boolean readerOk = PROTOCOL_DEMO.equals(protocol()) || !readerHost().isEmpty();

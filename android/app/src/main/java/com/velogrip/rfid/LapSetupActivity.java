@@ -38,13 +38,16 @@ public class LapSetupActivity extends BaseActivity {
 
         Switch laps = findViewById(R.id.swRecordLaps);
         laps.setChecked(prefs.recordLaps());
-        laps.setOnCheckedChangeListener((b, on) -> prefs.setRecordLaps(on));
+        // Marking it dirty is what gives this device the right to upload the
+        // switch: without it the upload loop stays silent, so a tablet that has
+        // not re-synced can no longer push a stale copy over the website.
+        laps.setOnCheckedChangeListener((b, on) -> { prefs.setRecordLaps(on); prefs.setTimingDirty(true); });
 
         // The leader-ends-race rule is MTB-XCO only — hide it for running / XCM / other.
         findViewById(R.id.rowLeaderEnds).setVisibility(prefs.isMtbXco() ? android.view.View.VISIBLE : android.view.View.GONE);
         Switch leader = findViewById(R.id.swLeaderEnds);
         leader.setChecked(prefs.leaderEndsRace());
-        leader.setOnCheckedChangeListener((b, on) -> prefs.setLeaderEndsRace(on));
+        leader.setOnCheckedChangeListener((b, on) -> { prefs.setLeaderEndsRace(on); prefs.setTimingDirty(true); });
 
         int[] unsupported = {R.id.swFixedRelay, R.id.swFlexibleRelay,
                 R.id.swExcludeLaps, R.id.swSkipLaps, R.id.swCustomLapNames};

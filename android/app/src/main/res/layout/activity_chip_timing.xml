@@ -95,9 +95,10 @@
                     android:digits="0123456789:" />
             </LinearLayout>
 
-            <!-- Both timers above are owned by the website: the start-list sync
-                 overwrites them here, and published results are scored with the
-                 server's copy. Shown read-only so the tablet can't disagree. -->
+            <!-- Both timers above sync with the website in BOTH directions: a
+                 download brings the organizer's values down, and an edit here is
+                 uploaded and survives the next sync until it has landed. They
+                 were read-only while only the download existed. -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

@@ -31,6 +31,19 @@ public final class Uploader {
     private final SimpleDateFormat iso;
     private String protocol = "";
 
+    /** The timing settings the operator can set on the device itself. Passed to
+     *  uploadLapTargets only when they changed them here. */
+    public static final class TimingSettings {
+        public final int suppressSecs, lapGapSecs;
+        public final boolean recordLaps, leaderEndsRace;
+        public TimingSettings(int suppressSecs, int lapGapSecs, boolean recordLaps, boolean leaderEndsRace) {
+            this.suppressSecs = Math.max(0, suppressSecs);
+            this.lapGapSecs = Math.max(0, lapGapSecs);
+            this.recordLaps = recordLaps;
+            this.leaderEndsRace = leaderEndsRace;
+        }
+    }
+
     /**
      * The reader protocol this device is bridging (Prefs.PROTOCOL_*), sent with
      * each upload. Only this side knows it: the website used to state
@@ -155,11 +168,26 @@ public final class Uploader {
         return ok;
     }
 
-    /** Publishes this device's per-distance lap counts + lap mode, so a checkpoint
-     *  can cap manual taps at how many times a rider passes. */
-    public boolean uploadLapTargets(java.util.Map<String, Integer> laps, boolean recordLaps, boolean leaderEndsRace) throws IOException {
-        StringBuilder json = new StringBuilder("{\"record_laps\":").append(recordLaps)
-                .append(",\"leader_ends_race\":").append(leaderEndsRace).append(",\"lap_targets\":{");
+    /**
+     * Publishes this device's per-distance lap counts, so a checkpoint can cap
+     * manual taps at how many times a rider passes. Lap targets are merge-filled
+     * server-side and never overwrite the organizer's, so they go every time.
+     *
+     * `timing` carries the four settings the operator can change HERE, and is
+     * null unless they actually did (Prefs.timingDirty). That distinction is the
+     * whole point: sending them unconditionally meant a tablet which had not
+     * re-synced pushed its stale copy over a change made on the website.
+     */
+    public boolean uploadLapTargets(java.util.Map<String, Integer> laps, TimingSettings timing) throws IOException {
+        StringBuilder json = new StringBuilder("{");
+        if (timing != null) {
+            json.append("\"record_laps\":").append(timing.recordLaps)
+                    .append(",\"leader_ends_race\":").append(timing.leaderEndsRace)
+                    .append(",\"suppress_secs\":").append(timing.suppressSecs)
+                    .append(",\"min_lap_gap_secs\":").append(timing.lapGapSecs)
+                    .append(',');
+        }
+        json.append("\"lap_targets\":{");
         boolean first = true;
         for (java.util.Map.Entry<String, Integer> e : laps.entrySet()) {
             if (e.getKey() == null || e.getKey().isEmpty()) continue;

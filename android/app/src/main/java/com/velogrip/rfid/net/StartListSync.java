@@ -22,14 +22,24 @@ public final class StartListSync {
     public static Result download(Prefs prefs, RaceStore store) throws Exception {
         String body = new Uploader(prefs.serverUrl(), prefs.readerToken()).downloadStartList();
         JSONObject json = new JSONObject(body);
-        prefs.saveTimingSettings(
-                json.optInt("suppress_secs", 10),
-                json.optInt("min_lap_gap_secs", 30),
-                json.getJSONObject("contest").optString("title", ""));
-        // Lap mode + race-wide + per-distance lap counts, so a checkpoint can cap
-        // manual taps at how many times a rider passes.
-        if (json.has("record_laps")) prefs.setRecordLaps(json.optInt("record_laps", 1) != 0);
-        if (json.has("leader_ends_race")) prefs.setLeaderEndsRace(json.optInt("leader_ends_race", 0) != 0);
+        String title = json.getJSONObject("contest").optString("title", "");
+        // A download used to overwrite the timing settings unconditionally, which
+        // is why editing them on the device never stuck. Now the device can set
+        // them too, so a pending local change wins until it has been uploaded —
+        // otherwise a sync would silently undo what the operator just typed at
+        // the mat. The title is not an operator setting and always updates.
+        if (prefs.timingDirty()) {
+            prefs.saveContestTitle(title);
+        } else {
+            prefs.saveTimingSettings(
+                    json.optInt("suppress_secs", 10),
+                    json.optInt("min_lap_gap_secs", 30),
+                    title);
+            // Lap mode + race-wide + per-distance lap counts, so a checkpoint can
+            // cap manual taps at how many times a rider passes.
+            if (json.has("record_laps")) prefs.setRecordLaps(json.optInt("record_laps", 1) != 0);
+            if (json.has("leader_ends_race")) prefs.setLeaderEndsRace(json.optInt("leader_ends_race", 0) != 0);
+        }
         if (json.has("sport") && !json.isNull("sport")) prefs.setSport(json.optString("sport", ""));
         prefs.setRaceLaps(json.isNull("race_laps") ? 0 : json.optInt("race_laps", 0));
         // Learn the device↔server clock offset while we're online, so checkpoint
