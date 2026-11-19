@@ -2011,12 +2011,6 @@ async function renderManage(box, c) {
   const marshals = marshalData.marshals || [];
   const lapTargets = lapData.lap_targets || {};
   const lapDistances = lapData.distances || [];
-  // "Leader ends race" needs something to end the race AT: the cutoff is the
-  // time the first rider completes the target laps, so with no target anywhere
-  // it stays Infinity and the rule is inert — the race falls back to "most laps
-  // wins". A per-distance target or a race-wide count will do.
-  const hasLapTarget = () => Number(lapData.race_laps) >= 1
-    || Object.values(lapTargets).some((v) => Number(v) >= 1);
   // A blank count is not "no cap" once laps are being recorded — it is a field
   // with no finish line: the server treats it as unlimited laps while the
   // tablet's resolveTarget returns MAX_VALUE, so those riders never finish on
@@ -2207,8 +2201,7 @@ async function renderManage(box, c) {
       <p class="muted" style="font-size:0.78rem">${t('waves_help')}</p>
       ${isTimeOnlySport(c.sport) ? `<p id="rl-warn" style="font-size:0.8rem;color:var(--danger);font-weight:600;margin:0 0 8px;
         ${c.record_laps === 0 ? 'display:none' : ''}">⚠️ ${t('record_laps_warn')}</p>` : ''}
-      ${isXcoSport(c.sport) ? `<p id="le-warn" style="font-size:0.8rem;color:var(--danger);font-weight:600;margin:0 0 8px;
-        ${c.leader_ends_race && !hasLapTarget() ? '' : 'display:none'}">⚠️ ${t('leader_no_laps_warn')}</p>` : ''}
+      <p id="lap-warn" style="font-size:0.8rem;color:var(--danger);font-weight:600;margin:0 0 8px;display:none"></p>
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
           <th>${t('wave')}</th><th>${t('racers_count')}</th><th>${t('started_at')}</th><th></th>
@@ -2518,14 +2511,38 @@ async function renderManage(box, c) {
   // step with both. Typing a count clears the warning immediately rather than
   // only after a save, because the lap-targets form does not re-render.
   const leBox = $('#timing-settings') && $('#timing-settings').leaderends;
-  const leWarn = $('#le-warn');
-  const syncLeaderWarn = () => {
-    if (!leWarn) return;
-    const typed = [...box.querySelectorAll('.lap-target-input')].some((inp) => Number(inp.value) >= 1);
-    const has = Number(lapData.race_laps) >= 1 || typed;
-    leWarn.style.display = leBox && leBox.checked && !has ? '' : 'none';
+  const lapWarn = $('#lap-warn');
+  // Two ways the lap setup can be wrong, told apart because the fixes differ.
+  //
+  // A distance with no count of its own, and no race-wide count to fall back
+  // on, has no target at all: the server scores it as unlimited laps while the
+  // tablet returns MAX_VALUE, so those riders never finish on either side. That
+  // is named per distance, because the organizer has to go and fill those in —
+  // and it is not XCO-only, it breaks any race that records laps.
+  //
+  // With no target ANYWHERE there is nothing to name, and if the leader rule is
+  // on it is also inert: the cutoff stays Infinity and the rule is skipped.
+  // That one needs its own sentence, since the fix may be the race-wide count.
+  //
+  // Both read the live inputs, so the warning follows what is typed rather than
+  // what was last saved.
+  const syncLapWarn = () => {
+    if (!lapWarn) return;
+    const lapsOn = rlBox ? rlBox.checked : c.record_laps !== 0;
+    const raceWide = Number(lapData.race_laps) >= 1;
+    const inputs = [...box.querySelectorAll('.lap-target-input')];
+    const filled = (inp) => Number(inp.value) >= 1;
+    const missing = raceWide ? [] : inputs.filter((inp) => !filled(inp)).map((inp) => inp.dataset.distance);
+    const leaderOn = leBox ? leBox.checked : !!c.leader_ends_race;
+
+    let msg = '';
+    if (lapsOn && missing.length) msg = t('laps_missing_warn', { list: missing.join(', ') });
+    else if (lapsOn && leaderOn && !raceWide && !inputs.some(filled)) msg = t('leader_no_laps_warn');
+    // textContent, not innerHTML: the distances are whatever the start list said.
+    lapWarn.textContent = msg ? `⚠️ ${msg}` : '';
+    lapWarn.style.display = msg ? '' : 'none';
   };
-  if (leWarn && leBox) leBox.addEventListener('change', syncLeaderWarn);
+  if (leBox) leBox.addEventListener('change', syncLapWarn);
   // The counts are required only while laps are being recorded, and that box is
   // in another card whose save does not re-render — so follow it live rather
   // than leaving a form that still demands a count for a race that has none.
@@ -2539,17 +2556,17 @@ async function renderManage(box, c) {
     const help = $('#laps-help');
     if (help) help.textContent = t(on ? 'laps_per_distance_help_required' : 'laps_per_distance_help');
   };
-  if (rlBox) rlBox.addEventListener('change', syncLapsRequired);
+  if (rlBox) rlBox.addEventListener('change', () => { syncLapsRequired(); syncLapWarn(); });
   box.querySelectorAll('.lap-target-input').forEach((inp) => {
     // The browser's own "please fill out this field" says nothing about which
     // field or why, and this form is a row of identical number boxes.
     inp.addEventListener('invalid', () => inp.setCustomValidity(t('laps_required_msg')));
     inp.addEventListener('input', () => {
       inp.setCustomValidity(''); // or the field stays invalid after it is fixed
-      syncLeaderWarn();
+      syncLapWarn();
     });
   });
-  syncLeaderWarn();
+  syncLapWarn();
   $('#timing-settings').onsubmit = async (e) => {
     e.preventDefault();
     try {
