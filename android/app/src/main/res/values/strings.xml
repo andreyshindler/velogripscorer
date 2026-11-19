@@ -6,6 +6,7 @@
     <string name="brand_velo">Velo</string>
     <string name="brand_grip">Grip</string>
     <string name="chip_timing_version">v%1$s Chip timing</string>
+    <string name="chip_timing_version_build">v%1$s (build %2$s) Chip timing</string>
     <string name="home_time_race">Time a race</string>
     <string name="home_race_with_list">Race with start list</string>
     <string name="home_race_no_list">Race without start list</string>

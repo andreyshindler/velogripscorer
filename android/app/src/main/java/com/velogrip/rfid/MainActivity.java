@@ -3,6 +3,7 @@ package com.velogrip.rfid;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,12 +21,24 @@ public class MainActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Version AND build number. versionName is hand-set and changes rarely,
+        // so on its own it cannot tell two APKs apart — and "which build is on
+        // this tablet?" is the first question whenever a device behaves unlike
+        // the others. versionCode is the repo's commit count (see build.gradle),
+        // so it rises with every build on its own.
         TextView version = findViewById(R.id.versionLabel);
         String name = "";
+        long build = 0;
         try {
-            name = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            name = info.versionName;
+            build = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                    ? info.getLongVersionCode()
+                    : info.versionCode; // deprecated from API 28, and minSdk is 26
         } catch (PackageManager.NameNotFoundException ignored) { }
-        version.setText(getString(R.string.chip_timing_version, name));
+        version.setText(build > 0
+                ? getString(R.string.chip_timing_version_build, name, String.valueOf(build))
+                : getString(R.string.chip_timing_version, name));
 
         findViewById(R.id.rowRaceWithList).setOnClickListener(v ->
                 startActivity(new Intent(this, SelectStartListActivity.class)));
