@@ -2011,6 +2011,12 @@ async function renderManage(box, c) {
   const marshals = marshalData.marshals || [];
   const lapTargets = lapData.lap_targets || {};
   const lapDistances = lapData.distances || [];
+  // "Leader ends race" needs something to end the race AT: the cutoff is the
+  // time the first rider completes the target laps, so with no target anywhere
+  // it stays Infinity and the rule is inert — the race falls back to "most laps
+  // wins". A per-distance target or a race-wide count will do.
+  const hasLapTarget = () => Number(lapData.race_laps) >= 1
+    || Object.values(lapTargets).some((v) => Number(v) >= 1);
   const $ = (sel) => box.querySelector(sel);
 
   box.innerHTML = `
@@ -2194,6 +2200,8 @@ async function renderManage(box, c) {
       <p class="muted" style="font-size:0.78rem">${t('waves_help')}</p>
       ${isTimeOnlySport(c.sport) ? `<p id="rl-warn" style="font-size:0.8rem;color:var(--danger);font-weight:600;margin:0 0 8px;
         ${c.record_laps === 0 ? 'display:none' : ''}">⚠️ ${t('record_laps_warn')}</p>` : ''}
+      ${isXcoSport(c.sport) ? `<p id="le-warn" style="font-size:0.8rem;color:var(--danger);font-weight:600;margin:0 0 8px;
+        ${c.leader_ends_race && !hasLapTarget() ? '' : 'display:none'}">⚠️ ${t('leader_no_laps_warn')}</p>` : ''}
       <div style="overflow-x:auto">
         <table class="board"><thead><tr>
           <th>${t('wave')}</th><th>${t('racers_count')}</th><th>${t('started_at')}</th><th></th>
@@ -2497,6 +2505,23 @@ async function renderManage(box, c) {
     rlBox.addEventListener('change', () => {
       rlWarn.style.display = rlBox.checked ? '' : 'none';
     });
+  }
+  // Same for the XCO pair, but it depends on two things in different cards —
+  // the leader checkbox here and the lap counts further down — so it is kept in
+  // step with both. Typing a count clears the warning immediately rather than
+  // only after a save, because the lap-targets form does not re-render.
+  const leBox = $('#timing-settings') && $('#timing-settings').leaderends;
+  const leWarn = $('#le-warn');
+  const syncLeaderWarn = () => {
+    if (!leWarn) return;
+    const typed = [...box.querySelectorAll('.lap-target-input')].some((inp) => Number(inp.value) >= 1);
+    const has = Number(lapData.race_laps) >= 1 || typed;
+    leWarn.style.display = leBox && leBox.checked && !has ? '' : 'none';
+  };
+  if (leWarn) {
+    if (leBox) leBox.addEventListener('change', syncLeaderWarn);
+    box.querySelectorAll('.lap-target-input').forEach((inp) => inp.addEventListener('input', syncLeaderWarn));
+    syncLeaderWarn();
   }
   $('#timing-settings').onsubmit = async (e) => {
     e.preventDefault();
