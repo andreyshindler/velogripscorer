@@ -447,15 +447,20 @@ public class BridgeService extends Service {
             // only has as many crossings to give as the race has laps, so stop
             // recording once it has given them: a lap race takes its lap count,
             // and a race without laps takes exactly one, the finish. Reads after
-            // that are still reported on the status strip, just not stored.
+            // that are dropped outright (see `retired` below).
             final long gapMs = prefs.lapGapSecs() * 1000L;
             boolean record = racerStarted;
+            // This chip has given every crossing it has to give. A read from it
+            // is a tag lying near the mat, not timing — see below, where it is
+            // dropped outright rather than merely left unstored.
+            boolean retired = false;
             Crossings cr = null;
             if (crossing) {
                 cr = crossingsFor(read.epc, crossingFrom, gapMs);
                 if (cr.count >= crossingCap(epcDistance.get(read.epc))) {
                     record = false;    // every lap already timed: this racer is done
                     crossing = false;
+                    retired = true;
                 } else if (cr.count > 0 && Math.abs(read.readAtMs - cr.last) < gapMs) {
                     // Absolute: a read either side of the last crossing by less
                     // than the lap gap is that same crossing read again. One
@@ -465,6 +470,18 @@ public class BridgeService extends Service {
                     crossing = false;
                 }
             }
+            // A racer who has finished every lap and stands by the gate is read
+            // for as long as they stand there. Those reads were stored by
+            // nobody and beeped at nobody, but they still went out as status
+            // broadcasts, and each one redrew the finish list — which is what
+            // kept throwing the operator back to the top of it once the race
+            // was over. Drop them here instead: nothing in the system sees one.
+            //
+            // Only a chip that is DONE is dropped. An unknown chip still lands
+            // as a No-Bib time, and a racer with laps left to give still counts
+            // — so a rider missing from the start list cannot be timed out by
+            // this, which is the one way it could cost somebody their result.
+            if (retired) continue;
             if (record || checkpoint) {
                 // A checkpoint stamps reads in server time now, so splits survive a later
                 // clock jump; the finish device keeps device time (reconciled server-side).
