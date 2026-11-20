@@ -517,6 +517,24 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
     if (!wave) return res.status(400).json({ error: 'unknown wave for this contest' });
     waveId = wave.id;
   }
+  // expect_new: this is meant to CREATE a racer, so an existing assignment on
+  // the chip is a collision, not something to overwrite. Without it the upsert
+  // below reassigns the row — and because the row IS the racer, the previous
+  // holder does not merely lose the chip, they disappear from the start list
+  // while the caller is told "added". Callers that legitimately re-save an
+  // existing racer (the web Manage tab, a CSV re-import, an edit) omit it.
+  if (req.body?.expect_new) {
+    for (const candidate of [epc, epc2].filter(Boolean)) {
+      const held = db.prepare('SELECT bib, participant FROM tag_assignments WHERE contest_id = ? AND epc = ?')
+        .get(contest.id, candidate);
+      if (held) {
+        return res.status(409).json({
+          error: 'chip already assigned', epc: candidate,
+          held_by_bib: held.bib, held_by: held.participant,
+        });
+      }
+    }
+  }
   const racerStatus = ['', 'DNS', 'DNF', 'DSQ'].includes(req.body?.racer_status) ? req.body.racer_status : '';
   const category = String(req.body?.category || '').trim();
   const distance = String(req.body?.distance || '').trim();

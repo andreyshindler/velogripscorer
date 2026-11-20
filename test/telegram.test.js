@@ -775,3 +775,53 @@ test('a sighting goes stale, and presenting the same chip again is seen afresh',
   await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token).send({ epcs: [epc] });
   assert.ok((await within(5)).includes(epc), 'seen afresh, so a retry binds');
 });
+
+// Reported from the field: adding a NEW racer with an existing racer's chip id
+// replaced that racer — and the bot still answered "✅ Added". /add does not go
+// through the chips endpoint, so the earlier chip-safety work did not cover it.
+test('/add refuses a chip that belongs to someone, instead of replacing them', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  await text(ALLOWED, `/use ${contestId}`);
+  await text(ALLOWED, `/add bib=950 name=Original Rider cat=M40 epc=${pad('D5')}`);
+
+  send.reset();
+  await text(ALLOWED, `/add bib=951 name=Impostor cat=M40 epc=${pad('D5')}`);
+  const msg = send.last('message').text;
+  assert.match(msg, /already on/i);
+  assert.ok(msg.includes('950') && /Original Rider/.test(msg), 'names who holds it');
+  assert.ok(!/Added/.test(msg), 'and does not claim success');
+
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  const held = tags.find((t) => (t.epcs || [t.epc]).includes(pad('D5')));
+  assert.equal(held.bib, '950', 'the chip stayed with its owner');
+  assert.equal(held.participant, 'Original Rider');
+  assert.ok(!tags.some((t) => String(t.bib) === '951'), 'and the impostor was not created');
+});
+
+// The same disappearance through another door, with no chip id involved: /add
+// with a bib that exists derives the SAME synthetic chip from it and collided.
+test('/add refuses a bib that already exists', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  await text(ALLOWED, '/add bib=960 name=First Holder cat=M40');
+  send.reset();
+  await text(ALLOWED, '/add bib=960 name=Second Person cat=M50');
+  const msg = send.last('message').text;
+  assert.match(msg, /already/i);
+  assert.ok(/First Holder/.test(msg), 'names who has the bib');
+
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  const row = tags.find((t) => String(t.bib) === '960');
+  assert.equal(row.participant, 'First Holder', 'the original is untouched');
+  assert.equal(tags.filter((t) => String(t.bib) === '960').length, 1);
+});
+
+// Re-saving an existing racer must still work — that is what the web Manage
+// tab and a corrected CSV re-import do, and expect_new is not set there.
+test('re-saving an existing assignment is still an update, not a collision', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const res = await request(app).post(`/api/contests/${contestId}/tags`).set(auth)
+    .send({ epc: pad('D5'), bib: '950', participant: 'Original Rider', category: 'M45' });
+  assert.ok(res.status < 300, `re-save should succeed, got ${res.status} ${JSON.stringify(res.body)}`);
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.equal(tags.find((t) => String(t.bib) === '950').category, 'M45', 'the edit landed');
+});

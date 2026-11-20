@@ -378,8 +378,11 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   const findRacer = (racers, bib) => racers.find((r) => String(r.bib) === String(bib));
 
   // Upsert a racer object (must carry epc, and epc2 for two-chip) via the API.
-  async function upsertRacer(contestId, r) {
+  async function upsertRacer(contestId, r, { expectNew = false } = {}) {
     const body = {
+      // Creating, not re-saving: the server must refuse a chip that already
+      // belongs to somebody rather than quietly hand it over.
+      ...(expectNew ? { expect_new: true } : {}),
       epc: (r.epcs && r.epcs[0]) || r.epc,
       epc2: (r.epcs && r.epcs[1]) || '',
       bib: r.bib || '', participant: r.participant || '',
@@ -679,7 +682,21 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       epc, bib, participant,
       category: f.category || '', distance: f.distance || '', team: f.team || '',
       gender: normGender(f.gender), racer_status: normStatus(f.racer_status), wave_id: waveId,
-    });
+    }, { expectNew: true });
+    if (res.status === 409 && res.json && res.json.held_by_bib !== undefined) {
+      const j = res.json;
+      // Two ways in, and they need different advice. Giving an existing chip id
+      // is a chip clash; giving an existing BIB with no chip clashes on the id
+      // derived from that bib, and the operator never mentioned a chip at all.
+      const bibClash = String(j.held_by_bib) === bib;
+      await send.message(chatId, bibClash
+        ? `⚠️ Bib #${esc(bib)} is already <b>${esc(j.held_by)}</b>. Nothing was changed.\n`
+          + `Use another bib, or <code>/edit ${esc(bib)}</code> to change that racer.`
+        : `⚠️ Chip <code>${esc(j.epc || epc)}</code> is already on `
+          + `#${esc(j.held_by_bib)} <b>${esc(j.held_by)}</b>. Nothing was changed.\n`
+          + `Use a different chip, or free it with <code>/chip ${esc(j.held_by_bib)}</code>.`);
+      return;
+    }
     if (res.status >= 400) { await send.message(chatId, `⚠️ ${esc((res.json && res.json.error) || 'could not add racer')}`); return; }
     const extra = [waveId ? `🚩${esc(waveName)}` : '', `chip ${esc(epc)}`].filter(Boolean).join(', ');
     await send.message(chatId, `✅ Added #${esc(bib)} ${esc(participant)}${extra ? ` (${extra})` : ''}.`);
