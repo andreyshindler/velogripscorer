@@ -547,6 +547,78 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
 
 // Deletes the RACER the chip belongs to: for a two-chip racer (same bib) both
 // assignments go, so the start list never keeps an orphaned second chip.
+/**
+ * Swap or add ONE chip on a racer, picked out by bib. Built for the field,
+ * where the alternative was the bot deleting the old assignment and then
+ * upserting a new one — two calls with three faults between them:
+ *
+ *  - Not atomic, and the DELETE went first unconditionally. A failed upsert
+ *    after it (an unknown wave, or just a dropped connection) left the racer
+ *    with no chip and out of the start list, reported only as "update failed".
+ *  - No duplicate check. POST /tags upserts ON CONFLICT (contest_id, epc) DO
+ *    UPDATE SET bib = excluded.bib, so handing out a chip already in the list
+ *    silently moved it to the new racer and deleted the old one.
+ *  - It refused a racer carrying two chips outright, because DELETE by epc
+ *    removes every row sharing the bib and would have taken both.
+ *
+ * One transaction here answers all three: the chip is checked free first, the
+ * old row is removed and the new one written together or not at all, and a
+ * second chip is left alone (mode 'replace') or created (mode 'add').
+ */
+router.post('/contests/:id/chips', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const bib = String(req.body?.bib || '').trim();
+  const epc = String(req.body?.epc || '').toUpperCase().trim();
+  const mode = req.body?.mode === 'add' ? 'add' : 'replace';
+  if (!bib) return res.status(400).json({ error: 'bib required' });
+  if (!EPC_RE.test(epc)) return res.status(400).json({ error: 'epc must be a 4-64 char hex string' });
+
+  const rows = db.prepare(
+    'SELECT epc, bib, participant FROM tag_assignments WHERE contest_id = ? AND bib = ? ORDER BY epc'
+  ).all(contest.id, bib);
+  if (!rows.length) return res.status(404).json({ error: `no racer with bib ${bib}` });
+
+  // Already this racer's chip: nothing to do, and saying so beats a no-op that
+  // looks like a failure to whoever is standing at the mat.
+  if (rows.some((r) => r.epc === epc)) {
+    return res.json({ ok: true, unchanged: true, bib, epc, participant: rows[0].participant });
+  }
+  // Held by somebody else — the case that used to steal it in silence.
+  const taken = db.prepare(
+    'SELECT bib, participant FROM tag_assignments WHERE contest_id = ? AND epc = ?'
+  ).get(contest.id, epc);
+  if (taken) {
+    return res.status(409).json({
+      error: 'chip already assigned', held_by_bib: taken.bib, held_by: taken.participant,
+    });
+  }
+  if (mode === 'add' && rows.length >= 2) {
+    return res.status(409).json({ error: 'racer already carries two chips', epcs: rows.map((r) => r.epc) });
+  }
+
+  const base = rows[0];
+  const full = db.prepare('SELECT * FROM tag_assignments WHERE contest_id = ? AND epc = ?')
+    .get(contest.id, base.epc);
+  db.transaction(() => {
+    // Delete by EPC, not by bib: the bib-wide delete would take the racer's
+    // other chip with it, which is exactly why two-chip racers were refused.
+    if (mode === 'replace') {
+      db.prepare('DELETE FROM tag_assignments WHERE contest_id = ? AND epc = ?').run(contest.id, base.epc);
+    }
+    db.prepare(
+      `INSERT INTO tag_assignments (contest_id, epc, bib, participant, user_id, wave_id,
+         category, distance, team, gender, racer_status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(contest.id, epc, full.bib, full.participant, full.user_id, full.wave_id,
+      full.category, full.distance, full.team, full.gender, full.racer_status);
+  })();
+  auditLog(req.user.id, `chip.${mode}`, 'contest', contest.id, `bib ${bib}: ${epc}`);
+  const epcs = db.prepare('SELECT epc FROM tag_assignments WHERE contest_id = ? AND bib = ? ORDER BY epc')
+    .all(contest.id, bib).map((r) => r.epc);
+  res.json({ ok: true, mode, bib, epc, participant: full.participant, epcs });
+});
+
 router.delete('/contests/:id/tags/:epc', requireAuth, (req, res) => {
   const contest = organizerContest(req, res);
   if (!contest) return;

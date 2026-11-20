@@ -317,6 +317,8 @@ const HELP = [
   '   <code>/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=E28011</code>',
   '/edit &lt;bib&gt; — edit a racer (buttons: name, bib, category, distance, team, gender, wave, chip, status), or:',
   '   <code>/edit 101 name=New Name cat=M45 wave=Sport epc=E280A1</code>',
+  '/chip &lt;bib&gt; &lt;chip&gt; — swap a racer\'s chip (lost or broken)',
+  '/chip2 &lt;bib&gt; &lt;chip&gt; — give a racer a SECOND chip; either read counts',
   '/del &lt;bib&gt; — remove a racer',
   '/laps — number of laps per distance (checkpoints cap taps by it):',
   '   <code>/laps 3</code> (all distances) · <code>/laps MTB 4</code> (one) · <code>/laps 0</code> (clear)',
@@ -380,6 +382,35 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       racer_status: r.racer_status || '', wave_id: r.wave_id || null,
     };
     return A('POST', `/contests/${contestId}/tags`, body);
+  }
+
+  /**
+   * Swap or add one chip on a racer. Returns true when the chip is bound.
+   * The server does it in a transaction and refuses a chip somebody else holds;
+   * this reports either outcome in the terms the operator is standing in — who
+   * has the chip, and what to do about it.
+   */
+  async function applyChip(chatId, contestId, bib, epc, mode) {
+    const res = await A('POST', `/contests/${contestId}/chips`, { bib, epc, mode });
+    const j = res.json || {};
+    if (res.status === 409 && j.held_by_bib) {
+      await send.message(chatId, `⚠️ Chip <code>${esc(epc)}</code> is already on `
+        + `#${esc(j.held_by_bib)} ${esc(j.held_by || '')}.\n`
+        + `Free it first: <code>/chip ${esc(j.held_by_bib)}</code> with a different chip, or /del that racer.`);
+      return false;
+    }
+    if (res.status >= 400) {
+      await send.message(chatId, `⚠️ ${esc(j.error || 'chip change failed')}`);
+      return false;
+    }
+    if (j.unchanged) {
+      await send.message(chatId, `ℹ️ #${esc(bib)} ${esc(j.participant || '')} already carries that chip.`);
+      return true;
+    }
+    const all = (j.epcs || []).map((e) => `<code>${esc(e)}</code>`).join(' + ');
+    await send.message(chatId, `✅ #${esc(bib)} ${esc(j.participant || '')} — `
+      + `${mode === 'add' ? 'chip added' : 'chip replaced'}: ${all}`);
+    return true;
   }
 
   // ---- commands ----
@@ -695,15 +726,19 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const primaryEpc = (racer.epcs && racer.epcs[0]) || racer.epc;
     const twoChip = !!(racer.epcs && racer.epcs[1]);
 
-    // Explicit chip-id change: re-key the row (single-chip racers only). The bib
-    // is unchanged, so the old chip must go first — deleting by epc removes every
-    // row sharing the bib, which would otherwise take the new row with it.
+    // Explicit chip-id change goes through the chips endpoint, which swaps the
+    // one row inside a transaction. Doing it here as DELETE-then-upsert could
+    // leave the racer with no chip at all if the second call failed, silently
+    // took a chip that belonged to someone else, and had to refuse a racer with
+    // two chips because the delete was bib-wide.
     if (newEpc && newEpc !== primaryEpc) {
       if (!EPC_RE.test(newEpc)) { await send.message(chatId, '⚠️ Chip EPC must be 4–64 hex chars.'); return; }
-      if (twoChip) { await send.message(chatId, '⚠️ This racer has two chips — edit chips from the web Manage tab.'); return; }
-      await A('DELETE', `/contests/${contestId}/tags/${primaryEpc}`);
-      const res = await upsertRacer(contestId, { ...merged, epcs: undefined, epc: newEpc });
-      await report(chatId, res, merged);
+      if (!await applyChip(chatId, contestId, oldBib, newEpc, 'replace')) return;
+      // Any other fields in the same command still need saving, and the row is
+      // now keyed by the new chip.
+      const rest = { ...merged, epcs: undefined, epc: newEpc };
+      const res = await upsertRacer(contestId, rest);
+      await report(chatId, res, rest);
       return;
     }
     // Synthetic-EPC bib rename regenerates the derived chip id, then drops the old row.
@@ -720,6 +755,31 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   async function report(chatId, res, r) {
     if (res.status >= 400) { await send.message(chatId, `⚠️ ${esc((res.json && res.json.error) || 'update failed')}`); return; }
     await send.message(chatId, `✅ Saved ${racerLine(r)}`);
+  }
+
+  /**
+   * /chip <bib> <epc>  — swap the racer's chip for this one
+   * /chip2 <bib> <epc> — give them a second chip; either read counts
+   *
+   * Shorter to type than "/edit 101 epc=…" and, unlike it, safe on a racer who
+   * already carries two chips.
+   */
+  async function cmdChip(chatId, rest, mode) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const parts = String(rest || '').trim().split(/\s+/).filter(Boolean);
+    const bib = parts[0];
+    const cmd = mode === 'add' ? '/chip2' : '/chip';
+    if (!bib) { await send.message(chatId, `Usage: <code>${cmd} &lt;bib&gt; &lt;chip&gt;</code>`); return; }
+    const r = findRacer(await listRacers(c.id), bib);
+    if (!r) { await send.message(chatId, `No racer with bib #${esc(bib)}.`); return; }
+    if (!parts[1]) {
+      const have = (r.epcs || [r.epc]).map((e) => `<code>${esc(e)}</code>`).join(' + ');
+      await send.message(chatId, `#${esc(bib)} ${esc(r.participant || '')} carries ${have}.\n`
+        + `Send the chip id: <code>${cmd} ${esc(bib)} &lt;chip&gt;</code>`);
+      return;
+    }
+    await applyChip(chatId, c.id, bib, padEpc(parts[1]), mode);
   }
 
   async function cmdDel(chatId, rest) {
@@ -1056,6 +1116,8 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       case '/list': return cmdList(chatId, rest);
       case '/add': return cmdAdd(chatId, rest);
       case '/edit': return cmdEdit(chatId, rest);
+      case '/chip': return cmdChip(chatId, rest, 'replace');
+      case '/chip2': return cmdChip(chatId, rest, 'add');
       case '/del':
       case '/delete': return cmdDel(chatId, rest);
       case '/laps': return cmdLaps(chatId, rest);

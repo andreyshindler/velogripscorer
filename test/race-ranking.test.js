@@ -665,3 +665,95 @@ test('a nonsense timing value from a device is ignored, not stored', async () =>
   assert.deepEqual(db.prepare('SELECT suppress_secs, min_lap_gap_secs FROM contests WHERE id = ?').get(id), before,
     'none of those reached the column');
 });
+
+// ---------------------------------------------------------------------------
+// Swapping a chip in the field: atomic, and it will not take someone else's.
+// ---------------------------------------------------------------------------
+
+const chipSetup = async () => {
+  const request = require('supertest');
+  process.env.OPEN_REGISTRATION = '1';
+  const { app } = require('../server/index');
+  const reg = await request(app).post('/api/auth/register')
+    .send({ email: `chp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@test.co`,
+            password: 'password123', name: 'Chp' });
+  const auth = { Authorization: `Bearer ${reg.body.token}` };
+  const made = await request(app).post('/api/contests').set(auth).send({
+    title: 'Chips', kind: 'race', sport: 'MTB — Cross-country (XCO)',
+    start_at: iso(-60), end_at: iso(3600),
+  });
+  const id = made.body.id;
+  const add = (epc, bib, name) => request(app).post(`/api/contests/${id}/tags`).set(auth)
+    .send({ epc, bib, participant: name, category: '43-45', distance: 'Elite', team: 'Aces' });
+  await add('AAAA0001', '101', 'Yossi');
+  await add('AAAA0002', '205', 'Dana');
+  const chips = (bib) => db.prepare(
+    'SELECT epc FROM tag_assignments WHERE contest_id = ? AND bib = ? ORDER BY epc').all(id, bib).map((r) => r.epc);
+  return { request, app, auth, id, chips };
+};
+
+test('a chip swap keeps the racer and carries their details over', async () => {
+  const { request, app, auth, id, chips } = await chipSetup();
+  const res = await request(app).post(`/api/contests/${id}/chips`).set(auth)
+    .send({ bib: '101', epc: 'BBBB0001' });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.deepEqual(chips('101'), ['BBBB0001'], 'old chip gone, new one in');
+  const row = db.prepare('SELECT * FROM tag_assignments WHERE contest_id = ? AND epc = ?').get(id, 'BBBB0001');
+  assert.equal(row.participant, 'Yossi');
+  assert.equal(row.category, '43-45', 'details follow the racer to the new chip');
+  assert.equal(row.team, 'Aces');
+});
+
+// The old path upserted ON CONFLICT DO UPDATE SET bib = excluded.bib, so a chip
+// out of the spares box that was already in the list moved to the new racer and
+// deleted the old one, without a word.
+test('a chip that belongs to another racer is refused, not taken', async () => {
+  const { request, app, auth, id, chips } = await chipSetup();
+  const res = await request(app).post(`/api/contests/${id}/chips`).set(auth)
+    .send({ bib: '101', epc: 'AAAA0002' }); // Dana's chip
+  assert.equal(res.status, 409);
+  assert.equal(res.body.held_by_bib, '205');
+  assert.equal(res.body.held_by, 'Dana');
+  assert.deepEqual(chips('101'), ['AAAA0001'], 'Yossi keeps his chip');
+  assert.deepEqual(chips('205'), ['AAAA0002'], 'and Dana still exists');
+});
+
+test('a second chip is added without disturbing the first', async () => {
+  const { request, app, auth, id, chips } = await chipSetup();
+  const res = await request(app).post(`/api/contests/${id}/chips`).set(auth)
+    .send({ bib: '101', epc: 'BBBB0002', mode: 'add' });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.deepEqual(chips('101'), ['AAAA0001', 'BBBB0002'], 'either read now counts');
+
+  // Replacing on a two-chip racer used to be refused outright, because the
+  // delete was bib-wide and would have taken both rows.
+  const swap = await request(app).post(`/api/contests/${id}/chips`).set(auth)
+    .send({ bib: '101', epc: 'CCCC0003' });
+  assert.equal(swap.status, 200, JSON.stringify(swap.body));
+  assert.deepEqual(chips('101'), ['BBBB0002', 'CCCC0003'], 'only the primary was swapped');
+
+  const third = await request(app).post(`/api/contests/${id}/chips`).set(auth)
+    .send({ bib: '101', epc: 'DDDD0004', mode: 'add' });
+  assert.equal(third.status, 409, 'a third chip is refused');
+});
+
+test('a chip swap is rejected whole when anything about it is wrong', async () => {
+  const { request, app, auth, id, chips } = await chipSetup();
+  for (const [body, code] of [
+    [{ bib: '999', epc: 'BBBB0009' }, 404],   // no such racer
+    [{ bib: '101', epc: 'nothex!' }, 400],    // not an EPC
+    [{ bib: '', epc: 'BBBB0009' }, 400],      // no bib
+  ]) {
+    const res = await request(app).post(`/api/contests/${id}/chips`).set(auth).send(body);
+    assert.equal(res.status, code, JSON.stringify(body));
+  }
+  assert.deepEqual(chips('101'), ['AAAA0001'], 'the racer still has exactly their chip');
+
+  // Re-sending the chip they already hold is a no-op, not a failure: at the mat
+  // a second tap must not look like something went wrong.
+  const same = await request(app).post(`/api/contests/${id}/chips`).set(auth)
+    .send({ bib: '101', epc: 'AAAA0001' });
+  assert.equal(same.status, 200);
+  assert.equal(same.body.unchanged, true);
+  assert.deepEqual(chips('101'), ['AAAA0001']);
+});
