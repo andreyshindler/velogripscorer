@@ -724,8 +724,27 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       return;
     }
     if (res.status >= 400) { await send.message(chatId, `⚠️ ${esc((res.json && res.json.error) || 'could not add racer')}`); return; }
-    const extra = [waveId ? `🚩${esc(waveName)}` : '', `chip ${esc(epc)}`].filter(Boolean).join(', ');
-    await send.message(chatId, `✅ Added #${esc(bib)} ${esc(participant)}${extra ? ` (${extra})` : ''}.`);
+    // Spell out what was stored. The old line named only the chip, so a field
+    // left empty — a skipped distance above all — was invisible until someone
+    // opened the start list and noticed a blank cell.
+    const distance = String(f.distance || '').trim();
+    const parts = [
+      f.category && `<i>${esc(f.category)}</i>`,
+      distance && esc(distance),
+      waveId && `🚩${esc(waveName)}`,
+      `🏷 ${esc(shortEpc(epc))}`,
+    ].filter(Boolean);
+    await send.message(chatId, `✅ Added <b>#${esc(bib)}</b> ${esc(participant)} — ${parts.join(' · ')}`);
+    // A racer with no distance has no lap target, and the leader-ends-race
+    // rule is keyed by distance — so in an XCO race this one cannot be scored.
+    if (!distance) {
+      const known = await raceDistances(contestId);
+      if (known.length) {
+        await send.message(chatId, `⚠️ #${esc(bib)} has <b>no distance</b>, so no lap target applies `
+          + `to them. This race uses: ${known.map((d) => `<code>${esc(d)}</code>`).join(', ')}.\n`
+          + `Set it with <code>/edit ${esc(bib)}</code> → Distance.`);
+      }
+    }
   }
 
   async function cmdAdd(chatId, rest) {
@@ -1256,6 +1275,17 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     return w ? w.name : '';
   }
 
+  /**
+   * The distances this race knows about: the ones already on the start list,
+   * plus any that only have a lap target so far. A race defines its distances
+   * by using them, so there is no list to read anywhere else.
+   */
+  async function raceDistances(contestId) {
+    const j = (await A('GET', `/contests/${contestId}/lap-targets`)).json || {};
+    const all = new Set([...(j.distances || []), ...Object.keys(j.lap_targets || {})]);
+    return [...all].map((d) => String(d).trim()).filter(Boolean).sort();
+  }
+
   async function promptStep(chatId, st, step) {
     if (step === 'gender') {
       return send.message(chatId, 'Gender?', {
@@ -1266,6 +1296,20 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       const rows = await waveButtons(chatId, (w) => `addw:${w.id}`);
       rows.push([btn('Skip', 'addw:')]);
       return send.message(chatId, 'Wave? Tap one, type a new name, or /skip.', { reply_markup: kb(rows) });
+    }
+    if (step === 'distance') {
+      const c = await activeContest(chatId);
+      const dists = c ? await raceDistances(c.id) : [];
+      if (!dists.length) return send.message(chatId, ADD_PROMPT.distance);
+      // The offered list is kept on the wizard state and the button carries
+      // its index: a distance is free text, and free text in callback_data is
+      // what broke the wave picker (64 bytes, two per Hebrew character).
+      st.dists = dists;
+      setState(chatId, st);
+      const rows = dists.slice(0, 12).map((d, i) => [btn(d.slice(0, 40), `addd:${i}`)]);
+      rows.push([btn('Skip', 'addd:')]);
+      return send.message(chatId, 'Distance? Tap one, type a new one, or /skip.',
+        { reply_markup: kb(rows) });
     }
     return send.message(chatId, ADD_PROMPT[step]);
   }
@@ -1520,6 +1564,15 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'addg') { // gender chosen during the add wizard
       const st = getState(chatId);
       if (st && st.flow === 'add' && st.step === 'gender') { st.data.gender = a || ''; return wizardStep(chatId, st, a || ''); }
+      return undefined;
+    }
+    if (tag === 'addd') { // distance chosen during the add wizard
+      const st = getState(chatId);
+      if (st && st.flow === 'add' && st.step === 'distance') {
+        const i = Number(a);
+        const picked = a !== '' && Number.isInteger(i) ? (st.dists || [])[i] || '' : '';
+        return wizardStep(chatId, st, picked);
+      }
       return undefined;
     }
     if (tag === 'addw') { // wave chosen during the add wizard

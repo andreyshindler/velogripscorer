@@ -1044,3 +1044,63 @@ test('a scan that saw the racer\'s own chip says so instead of blaming the reade
   assert.match(msg, /already this racer's own chip/, 'it recognises the tag in hand');
   assert.doesNotMatch(msg, /No reader has joined/);
 });
+
+test('the add wizard offers the race\'s distances, and the button is an index', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const made = await request(app).post('/api/contests').set(auth)
+    .send({ kind: 'race', title: 'Distance race', start_at: past, end_at: future });
+  assert.equal(made.status, 201);
+  const c = made.body;
+  // A race knows its distances by using them. Hebrew on purpose: a name in
+  // callback_data is two bytes a character and is what broke the wave picker.
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth)
+    .send({ epc: pad('5001'), bib: '500', participant: 'Seed', distance: 'מקצה אופני הרים ארוך' });
+  await text(ALLOWED, `/use ${c.id}`);
+
+  await text(ALLOWED, '/add');
+  await text(ALLOWED, '501');            // bib
+  await text(ALLOWED, 'Noa Bar');        // name
+  send.reset();
+  await text(ALLOWED, 'M40');            // category -> the distance step
+  const rows = send.last('message').extra.reply_markup.inline_keyboard;
+  const data = rows.flat().map((b) => b.callback_data);
+  assert.ok(data.includes('addd:0'), 'the known distance is offered by index');
+  assert.ok(!data.some((d) => /מקצה/.test(d)), 'never the name itself');
+  assert.match(send.last('message').text, /Tap one, type a new one/);
+
+  send.reset();
+  await tap(ALLOWED, 'addd:0');
+  await tap(ALLOWED, 'addg:');           // gender skip
+  await text(ALLOWED, '/skip');          // team
+  await tap(ALLOWED, 'addw:');           // wave skip
+  await text(ALLOWED, '/skip');          // chip -> derived from the bib
+
+  const added = send.last('message').text;
+  assert.match(added, /✅ Added/);
+  assert.match(added, /מקצה אופני הרים ארוך/, 'the picked distance is confirmed back');
+  assert.doesNotMatch(added, /no distance/, 'and no warning, since it has one');
+
+  const tags = (await request(app).get(`/api/contests/${c.id}/tags`).set(auth)).body.tags;
+  assert.equal(tags.find((t) => String(t.bib) === '501').distance, 'מקצה אופני הרים ארוך');
+});
+
+test('a racer saved with no distance is flagged, because no lap target can apply', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  send.reset();
+  await text(ALLOWED, '/add');
+  await text(ALLOWED, '502');
+  await text(ALLOWED, 'Blank Distance');
+  await text(ALLOWED, '/skip');          // category
+  await tap(ALLOWED, 'addd:');           // distance: Skip
+  await tap(ALLOWED, 'addg:');
+  await text(ALLOWED, '/skip');          // team
+  await tap(ALLOWED, 'addw:');
+  await text(ALLOWED, '/skip');          // chip
+
+  const msgs = send.calls.filter((m) => m.type === 'message').map((m) => m.text);
+  assert.ok(msgs.some((t) => /✅ Added/.test(t)), 'it still saved — this is a warning, not a refusal');
+  const warn = msgs.find((t) => /no distance/.test(t));
+  assert.ok(warn, 'the blank is called out at once, not left for the start list');
+  assert.match(warn, /no lap target applies/);
+  assert.match(warn, /מקצה אופני הרים ארוך/, 'and it lists what the race uses');
+});
