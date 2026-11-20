@@ -757,12 +757,25 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     await send.message(chatId, `✅ Saved ${racerLine(r)}`);
   }
 
+  // How long /chip waits at the mat for a chip to be waved, and how often it
+  // looks. Long enough to walk the racer to the reader, short enough that a
+  // forgotten one does not sit armed into the race.
+  const SCAN_WINDOW_MS = 45_000;
+  const SCAN_POLL_MS = 1500;
+
   /**
-   * /chip <bib> <epc>  — swap the racer's chip for this one
-   * /chip2 <bib> <epc> — give them a second chip; either read counts
+   * /chip <bib>  — wave the new chip at the reader and it is bound
+   * /chip <bib> <epc>  — or give the id outright
+   * /chip2 … — same, but ADDS a second chip instead of replacing
    *
-   * Shorter to type than "/edit 101 epc=…" and, unlike it, safe on a racer who
-   * already carries two chips.
+   * Typing 24 hex characters on a phone, outdoors, is the thing that made a
+   * chip swap slow. The reader is already on the mat, so the chip can identify
+   * itself: this watches the race's own read feed for an EPC that belongs to
+   * nobody and binds that one.
+   *
+   * It reads the existing feed rather than hooking the ingest path, so nothing
+   * new runs between a chip and a recorded crossing. The cost is a stray
+   * unassigned read in the log, which belongs to no racer and scores nothing.
    */
   async function cmdChip(chatId, rest, mode) {
     const c = await needRace(chatId);
@@ -770,16 +783,45 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const parts = String(rest || '').trim().split(/\s+/).filter(Boolean);
     const bib = parts[0];
     const cmd = mode === 'add' ? '/chip2' : '/chip';
-    if (!bib) { await send.message(chatId, `Usage: <code>${cmd} &lt;bib&gt; &lt;chip&gt;</code>`); return; }
+    if (!bib) { await send.message(chatId, `Usage: <code>${cmd} &lt;bib&gt;</code> then wave the chip, or <code>${cmd} &lt;bib&gt; &lt;chip&gt;</code>`); return; }
     const r = findRacer(await listRacers(c.id), bib);
     if (!r) { await send.message(chatId, `No racer with bib #${esc(bib)}.`); return; }
-    if (!parts[1]) {
-      const have = (r.epcs || [r.epc]).map((e) => `<code>${esc(e)}</code>`).join(' + ');
-      await send.message(chatId, `#${esc(bib)} ${esc(r.participant || '')} carries ${have}.\n`
-        + `Send the chip id: <code>${cmd} ${esc(bib)} &lt;chip&gt;</code>`);
-      return;
+    if (parts[1]) { await applyChip(chatId, c.id, bib, padEpc(parts[1]), mode); return; }
+
+    const have = (r.epcs || [r.epc]).map((e) => `<code>${esc(e)}</code>`).join(' + ');
+    await send.message(chatId, `📡 #${esc(bib)} ${esc(r.participant || '')} carries ${have}.\n`
+      + `<b>Hold the new chip to the reader now.</b> Waiting ${SCAN_WINDOW_MS / 1000}s…`);
+    // Detached on purpose: the operator gets the prompt at once and the answer
+    // when it happens, instead of this chat going quiet for most of a minute.
+    scanForChip(chatId, c.id, bib, mode).catch(() => {});
+  }
+
+  /** Watch the race's reads for a chip assigned to nobody, then bind it. */
+  async function scanForChip(chatId, contestId, bib, mode) {
+    // Everything already read before the prompt is ignored, so a chip lying on
+    // the mat from earlier cannot be mistaken for the one being presented.
+    const since = await latestReadId(contestId);
+    const deadline = Date.now() + SCAN_WINDOW_MS;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, SCAN_POLL_MS));
+      const res = await A('GET', `/contests/${contestId}/reads?limit=50`);
+      const reads = (res.json && res.json.reads) || [];
+      // Oldest first among the new ones: bind the chip presented first, not
+      // whichever happened to land last in a burst.
+      const fresh = reads.filter((x) => x.id > since).sort((a, b) => a.id - b.id);
+      // A racer already in the list has a bib here; only an unknown chip is a
+      // candidate, which is also why a race running past the mat cannot trip it.
+      const hit = fresh.find((x) => !x.bib);
+      if (hit) { await applyChip(chatId, contestId, bib, String(hit.epc).toUpperCase(), mode); return; }
     }
-    await applyChip(chatId, c.id, bib, padEpc(parts[1]), mode);
+    await send.message(chatId, `⌛ No new chip seen for #${esc(bib)}.\n`
+      + `Try again, or give the id: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} &lt;chip&gt;</code>`);
+  }
+
+  async function latestReadId(contestId) {
+    const res = await A('GET', `/contests/${contestId}/reads?limit=1`);
+    const reads = (res.json && res.json.reads) || [];
+    return reads.length ? reads[0].id : 0;
   }
 
   async function cmdDel(chatId, rest) {

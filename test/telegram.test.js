@@ -557,3 +557,78 @@ test('/list paginates a big roster 20 per page, showing category, with working n
   const nav2 = JSON.stringify(e.extra.reply_markup);
   assert.ok(nav2.includes('lp:0') && nav2.includes('lp:2'), 'Prev + Next on a middle page');
 });
+
+// ---------------------------------------------------------------------------
+// /chip — swapping a chip in the field
+// ---------------------------------------------------------------------------
+
+const tagsOf = async () => (await request(app).get(`/api/contests/${contestId}/tags`)
+  .set({ Authorization: `Bearer ${organizer.token}` })).body.tags;
+const chipsOfBib = async (bib) => {
+  const r = (await tagsOf()).find((x) => String(x.bib) === String(bib));
+  return r ? (r.epcs || [r.epc]) : null;
+};
+
+test('/chip with an id swaps the chip and keeps the racer', async () => {
+  // Earlier tests leave their own race selected; pin ours so these stand alone.
+  await text(ALLOWED, `/use ${contestId}`);
+  await text(ALLOWED, `/add bib=701 name=Swap Target cat=M40 epc=${pad('A1')}`);
+  send.reset();
+  await text(ALLOWED, `/chip 701 ${pad('B1')}`);
+  assert.match(send.last('message').text, /chip replaced/i);
+  assert.deepEqual(await chipsOfBib('701'), [pad('B1')]);
+});
+
+// The old path upserted the chip onto the new racer, which silently removed
+// whoever held it — they simply vanished from the start list.
+test('/chip refuses a chip another racer holds, and names them', async () => {
+  await text(ALLOWED, `/add bib=702 name=Chip Holder cat=M40 epc=${pad('C1')}`);
+  send.reset();
+  await text(ALLOWED, `/chip 701 ${pad('C1')}`);
+  const msg = send.last('message').text;
+  assert.match(msg, /already on/i);
+  assert.ok(msg.includes('702') && /Chip Holder/.test(msg), 'says who has it');
+  assert.deepEqual(await chipsOfBib('701'), [pad('B1')], 'the swap did not happen');
+  assert.deepEqual(await chipsOfBib('702'), [pad('C1')], 'and the holder is untouched');
+});
+
+test('/chip2 adds a second chip; either read counts', async () => {
+  send.reset();
+  await text(ALLOWED, `/chip2 701 ${pad('B2')}`);
+  assert.match(send.last('message').text, /chip added/i);
+  assert.deepEqual((await chipsOfBib('701')).sort(), [pad('B1'), pad('B2')].sort());
+});
+
+// The point of the feature: no 24-character id typed on a phone. The operator
+// sends /chip <bib>, waves the chip at the mat, and the read binds itself.
+test('/chip with no id binds the next unknown chip seen by the reader', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const reader = (await request(app).post(`/api/contests/${contestId}/readers`).set(auth)
+    .send({ name: 'Mat' })).body;
+  await text(ALLOWED, `/add bib=703 name=Scan Me cat=M40 epc=${pad('D1')}`);
+
+  // A read BEFORE the prompt must be ignored, or a chip left lying on the mat
+  // would be bound instead of the one being presented.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token)
+    .send({ reads: [{ epc: pad('EE'), read_at: new Date().toISOString() }] });
+
+  send.reset();
+  await text(ALLOWED, '/chip 703');
+  assert.match(send.last('message').text, /Hold the new chip/i);
+
+  // Now the mat sees a racer already in the list (must be ignored) and then the
+  // new chip being presented.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token)
+    .send({ reads: [{ epc: pad('C1'), read_at: new Date().toISOString() }] }); // bib 702, assigned
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token)
+    .send({ reads: [{ epc: pad('F9'), read_at: new Date().toISOString() }] }); // unknown
+
+  // The scan runs detached; give it a couple of poll cycles.
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline && !/chip replaced/i.test(send.last('message').text || '')) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  assert.match(send.last('message').text, /chip replaced/i);
+  assert.deepEqual(await chipsOfBib('703'), [pad('F9')], 'bound the new chip, not the stale or assigned one');
+  assert.deepEqual(await chipsOfBib('702'), [pad('C1')], 'the assigned racer was left alone');
+});
