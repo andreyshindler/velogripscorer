@@ -548,6 +548,71 @@ router.post('/contests/:id/tags', requireAuth, (req, res) => {
 // Deletes the RACER the chip belongs to: for a two-chip racer (same bib) both
 // assignments go, so the start list never keeps an orphaned second chip.
 /**
+ * The timing device reports chips it has seen that match no racer it knows, so
+ * /chip can bind one by scanning instead of the operator typing 24 hex
+ * characters on a phone at the mat.
+ *
+ * Separate from /ingest/reads on purpose, and never written to tag_reads. A
+ * sighting is not a crossing: it scores nothing, publishes nothing, and so can
+ * be sent even while "Live results" is off — that setting exists to keep
+ * RESULTS off the website during a race, and a chip belonging to nobody is not
+ * a result. Without this, the one timing mode that holds everything back was
+ * also the one where binding by scan could never work.
+ */
+router.post('/ingest/seen', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  const list = Array.isArray(req.body?.epcs) ? req.body.epcs.slice(0, 50) : [];
+  const stmt = db.prepare(
+    `INSERT INTO chip_sightings (contest_id, epc, seen_at) VALUES (?,?,datetime('now'))
+     ON CONFLICT (contest_id, epc) DO UPDATE SET seen_at = excluded.seen_at`
+  );
+  let seen = 0;
+  db.transaction(() => {
+    for (const raw of list) {
+      const epc = String(raw || '').toUpperCase().trim();
+      if (!EPC_RE.test(epc)) continue;
+      // A chip already on the start list is a racer, not something to bind.
+      const known = db.prepare('SELECT 1 FROM tag_assignments WHERE contest_id = ? AND epc = ?')
+        .get(reader.contest_id, epc);
+      if (known) continue;
+      stmt.run(reader.contest_id, epc);
+      seen++;
+    }
+    // Keep it to the recent past: this is a live scratchpad, not a log.
+    db.prepare("DELETE FROM chip_sightings WHERE contest_id = ? AND seen_at < datetime('now', '-1 hour')")
+      .run(reader.contest_id);
+  })();
+  res.json({ ok: true, seen });
+});
+
+/**
+ * Unassigned chips the reader saw recently, newest first — what /chip scans.
+ *
+ * `within` seconds filters to chips seen in that window, which is how a chip
+ * being presented NOW is told from one seen earlier. Comparing sets of chips
+ * instead would break the retry: after a scan times out the chip is already
+ * known, so presenting the same one again would be ignored — exactly when the
+ * operator is trying hardest. seen_at is refreshed on every sighting, so a
+ * chip held to the mat is always inside the window. Filtered in SQL against
+ * the database's own clock, so no two clocks have to agree.
+ */
+router.get('/contests/:id/chip-sightings', requireAuth, (req, res) => {
+  const contest = organizerContest(req, res);
+  if (!contest) return;
+  const within = Math.min(Math.max(Number(req.query.within) || 3600, 1), 3600);
+  const rows = db.prepare(
+    `SELECT s.epc, s.seen_at FROM chip_sightings s
+      WHERE s.contest_id = ?
+        AND s.seen_at >= datetime('now', ?)
+        AND NOT EXISTS (SELECT 1 FROM tag_assignments a
+                         WHERE a.contest_id = s.contest_id AND a.epc = s.epc)
+      ORDER BY s.seen_at DESC, s.epc LIMIT 50`
+  ).all(contest.id, `-${within} seconds`);
+  res.json({ sightings: rows });
+});
+
+/**
  * Swap or add ONE chip on a racer, picked out by bib. Built for the field,
  * where the alternative was the bot deleting the old assignment and then
  * upserting a new one — two calls with three faults between them:

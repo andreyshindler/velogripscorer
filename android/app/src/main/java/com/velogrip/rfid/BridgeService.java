@@ -82,6 +82,10 @@ public class BridgeService extends Service {
     private final AtomicLong uploadedTotal = new AtomicLong(0);
     private final Map<String, Long> lastSeen = new HashMap<>();
     private volatile java.util.Set<String> registeredEpcs = java.util.Collections.emptySet();
+    // Chips seen that match no racer. Reported so the organizer can bind one
+    // from the bot by waving it at the mat, instead of typing 24 hex characters.
+    // Bounded, because a neighbouring event's chips could otherwise fill it.
+    private final java.util.Set<String> unknownSeen = new java.util.LinkedHashSet<>();
     private volatile java.util.Map<String, String> epcRacer = java.util.Collections.emptyMap();
     private volatile java.util.Map<String, String> epcWave = java.util.Collections.emptyMap();
     private volatile java.util.Map<String, String> epcDistance = java.util.Collections.emptyMap();
@@ -393,7 +397,15 @@ public class BridgeService extends Service {
         final java.util.Map<String, Long> gunByWave = new java.util.HashMap<>();
         for (RaceStore.Wave w : store.waves()) gunByWave.put(w.name, w.startedAtMs);
         for (TagRead read : reads) {
-            if (!registered(read.epc)) continue;               // ignore tags not on the start list
+            if (!registered(read.epc)) {
+                // Not a racer, so it is not a time — but it may well be the chip an
+                // operator is binding with /chip right now. Remembered for the
+                // upload loop to report; see unknownSeen.
+                synchronized (unknownSeen) {
+                    if (unknownSeen.size() < 200) unknownSeen.add(read.epc);
+                }
+                continue;                                    // ignore tags not on the start list
+            }
             Long prev = lastSeen.get(read.epc);
             // Against the read's own time, not the batch's. A burst that flushes
             // after an outage spans real seconds; measuring it against a single
@@ -587,6 +599,21 @@ public class BridgeService extends Service {
                         lapTargetsSynced = true;
                         if (timingDirty) prefs.setTimingDirty(false);
                     }
+                }
+                // Chips belonging to nobody go up whatever "Live results" says: a
+                // sighting is not a result, it scores and publishes nothing, and
+                // without it binding a chip by scanning could never work in the
+                // one mode that holds everything back — which is the mode this
+                // race is being timed in.
+                java.util.List<String> unknown;
+                synchronized (unknownSeen) {
+                    unknown = new java.util.ArrayList<>(unknownSeen);
+                    unknownSeen.clear();
+                }
+                if (!unknown.isEmpty() && !uploader.uploadSeen(unknown)) {
+                    // Put them back for the next pass rather than lose the one the
+                    // operator is waiting on.
+                    synchronized (unknownSeen) { unknownSeen.addAll(unknown); }
                 }
                 // "Live results: off" means the race is not published while it
                 // runs: hold the gun times and the passes on the phone until the

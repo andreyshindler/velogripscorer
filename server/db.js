@@ -381,6 +381,18 @@ for (const stmt of [
   // connection, not of each read, so it lives on the reader. NULL while nothing
   // has said (an older app build, or a reader that has never reported).
   `ALTER TABLE readers ADD COLUMN protocol TEXT`,
+  // Chips the reader has seen that belong to NO racer in the start list, so
+  // /chip can bind one by scanning. Deliberately NOT tag_reads: a sighting is
+  // not a crossing and must never reach scoring, which is what lets the timing
+  // app report these even while "Live results" is off. That setting holds back
+  // RESULTS; an unassigned chip is not one, and the operator is standing at the
+  // mat waiting for it. One row per chip per race, refreshed on each sighting.
+  `CREATE TABLE IF NOT EXISTS chip_sightings (
+     contest_id INTEGER NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+     epc        TEXT NOT NULL,
+     seen_at    TEXT NOT NULL DEFAULT (datetime('now')),
+     PRIMARY KEY (contest_id, epc)
+   )`,
 ]) {
   try {
     db.exec(stmt);

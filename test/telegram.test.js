@@ -694,3 +694,84 @@ test('a long Hebrew wave name does not break /edit wave either', async () => {
   const prompt = send.last('message');
   assert.match(prompt.text, /Pick a wave/);
 });
+
+// Races here are timed with "Live results" OFF, which holds every read on the
+// tablet until the operator posts results — so the server sees no reads at all
+// and scanning could never work in exactly the mode being used. A sighting is
+// not a result, so the device reports those regardless, and /chip binds from
+// them.
+test('/chip binds by scanning even when no reads are published', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const reader = (await request(app).post(`/api/contests/${contestId}/readers`).set(auth)
+    .send({ name: 'Mat2' })).body;
+  await text(ALLOWED, `/use ${contestId}`);
+  await text(ALLOWED, `/add bib=901 name=No Live cat=M40 epc=${pad('91')}`);
+
+  const readsBefore = (await request(app).get(`/api/contests/${contestId}/reads?limit=1`).set(auth)).body.reads.length;
+
+  send.reset();
+  await text(ALLOWED, '/chip 901');
+  assert.match(send.last('message').text, /Hold the new chip/i);
+
+  // The device reports what it saw. Note this is NOT /ingest/reads.
+  const seen = await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token)
+    .send({ epcs: [pad('FA')] });
+  assert.equal(seen.status, 200);
+  assert.equal(seen.body.seen, 1);
+
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline && !/chip replaced/i.test(send.last('message').text || '')) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  assert.match(send.last('message').text, /chip replaced/i);
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '901').epcs, [pad('FA')]);
+
+  // And nothing was published: a sighting must never become a crossing.
+  const readsAfter = (await request(app).get(`/api/contests/${contestId}/reads?limit=200`).set(auth)).body.reads;
+  assert.ok(!readsAfter.some((x) => x.epc === pad('FA')), 'the sighting did not enter the read log');
+  assert.ok(readsAfter.length >= readsBefore, 'and no results were invented');
+});
+
+test('a chip already on the start list is not offered as a sighting', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const reader = (await request(app).post(`/api/contests/${contestId}/readers`).set(auth)
+    .send({ name: 'Mat3' })).body;
+  // pad('FA') now belongs to bib 901 from the previous test.
+  const res = await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token)
+    .send({ epcs: [pad('FA'), 'nothex!', pad('FB')] });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.seen, 1, 'only the unknown, well-formed chip counted');
+  const list = (await request(app).get(`/api/contests/${contestId}/chip-sightings`).set(auth)).body.sightings;
+  // (no `within` -> the full hour, so both would show if they qualified)
+  const epcs = list.map((s) => s.epc);
+  assert.ok(epcs.includes(pad('FB')));
+  assert.ok(!epcs.includes(pad('FA')), 'an assigned chip is never a candidate');
+});
+
+// Freshness, not a set of chips already seen. With a set, the retry after a
+// timed-out scan could never work: the chip is known by then, so presenting the
+// same one again would be ignored — exactly when the operator is trying hardest.
+test('a sighting goes stale, and presenting the same chip again is seen afresh', async () => {
+  const { db } = require('../server/db');
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const reader = (await request(app).post(`/api/contests/${contestId}/readers`).set(auth)
+    .send({ name: 'Mat4' })).body;
+  const epc = pad('AC');
+  const within = async (secs) => (await request(app)
+    .get(`/api/contests/${contestId}/chip-sightings?within=${secs}`).set(auth))
+    .body.sightings.map((s) => s.epc);
+
+  await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token).send({ epcs: [epc] });
+  assert.ok((await within(5)).includes(epc), 'just presented');
+
+  // Age it past the window, as it would be a minute after a failed attempt.
+  db.prepare("UPDATE chip_sightings SET seen_at = datetime('now','-30 seconds') WHERE contest_id = ? AND epc = ?")
+    .run(contestId, epc);
+  assert.ok(!(await within(5)).includes(epc), 'no longer counts as being presented');
+  assert.ok((await within(3600)).includes(epc), 'but the row is still there');
+
+  // The retry: the same chip, waved again.
+  await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token).send({ epcs: [epc] });
+  assert.ok((await within(5)).includes(epc), 'seen afresh, so a retry binds');
+});

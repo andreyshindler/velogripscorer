@@ -768,6 +768,9 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   // forgotten one does not sit armed into the race.
   const SCAN_WINDOW_MS = 45_000;
   const SCAN_POLL_MS = 1500;
+  // A chip counts as "being presented now" if the reader saw it this recently.
+  // Comfortably more than one poll, so a sighting cannot fall between two.
+  const SCAN_FRESH_SECS = 5;
 
   /**
    * /chip <bib>  — wave the new chip at the reader and it is bound
@@ -802,26 +805,44 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     scanForChip(chatId, c.id, bib, mode).catch(() => {});
   }
 
-  /** Watch the race's reads for a chip assigned to nobody, then bind it. */
+  /** Watch for a chip that belongs to nobody, then bind it. */
   async function scanForChip(chatId, contestId, bib, mode) {
-    // Everything already read before the prompt is ignored, so a chip lying on
-    // the mat from earlier cannot be mistaken for the one being presented.
+    // Two channels, because the race may be timed either way:
+    //  - sightings, which the device reports whatever the "Live results"
+    //    setting says, since an unassigned chip is not a result;
+    //  - reads, which only arrive with live results on, and cover devices
+    //    built before sightings existed.
+    // Reads are append-only, so a high-water mark tells new from old. Sightings
+    // are not: one row per chip, its time refreshed on each sighting, so
+    // freshness is the test. A window rather than a snapshot also keeps the
+    // retry working — a chip presented again after a timeout is seen again.
     const since = await latestReadId(contestId);
     const deadline = Date.now() + SCAN_WINDOW_MS;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, SCAN_POLL_MS));
+
+      const fresh = await sightedChips(contestId, SCAN_FRESH_SECS);
+      if (fresh.length) { await applyChip(chatId, contestId, bib, fresh[0], mode); return; }
+
       const res = await A('GET', `/contests/${contestId}/reads?limit=50`);
       const reads = (res.json && res.json.reads) || [];
       // Oldest first among the new ones: bind the chip presented first, not
       // whichever happened to land last in a burst.
-      const fresh = reads.filter((x) => x.id > since).sort((a, b) => a.id - b.id);
+      const newer = reads.filter((x) => x.id > since).sort((a, b) => a.id - b.id);
       // A racer already in the list has a bib here; only an unknown chip is a
       // candidate, which is also why a race running past the mat cannot trip it.
-      const hit = fresh.find((x) => !x.bib);
+      const hit = newer.find((x) => !x.bib);
       if (hit) { await applyChip(chatId, contestId, bib, String(hit.epc).toUpperCase(), mode); return; }
     }
     await send.message(chatId, `⌛ No new chip seen for #${esc(bib)}.\n`
-      + `Try again, or give the id: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} &lt;chip&gt;</code>`);
+      + `Check the timing app is on this race and the reader is connected, `
+      + `or give the id: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} &lt;chip&gt;</code>`);
+  }
+
+  /** Unassigned chips the reader reported in the last `secs` seconds. */
+  async function sightedChips(contestId, secs) {
+    const res = await A('GET', `/contests/${contestId}/chip-sightings?within=${secs}`);
+    return (((res.json || {}).sightings) || []).map((s) => String(s.epc).toUpperCase());
   }
 
   async function latestReadId(contestId) {

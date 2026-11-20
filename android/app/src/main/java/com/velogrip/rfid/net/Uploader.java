@@ -200,6 +200,24 @@ public final class Uploader {
         return code >= 200 && code < 300;
     }
 
+    /**
+     * Reports chips seen that match no racer, so the organizer can bind one from
+     * the bot by waving it at the mat. These are NOT reads: they are never
+     * scored or published, which is what lets them go up even while "Live
+     * results" is off.
+     */
+    public boolean uploadSeen(java.util.List<String> epcs) throws IOException {
+        if (epcs == null || epcs.isEmpty()) return true;
+        StringBuilder json = new StringBuilder("{\"epcs\":[");
+        for (int i = 0; i < epcs.size(); i++) {
+            if (i > 0) json.append(',');
+            json.append(jsonString(epcs.get(i)));
+        }
+        json.append("]}");
+        int code = post("/api/ingest/seen", json.toString());
+        return code >= 200 && code < 300;
+    }
+
     /** Clears every read this checkpoint recorded on the server (fresh count). */
     public boolean clearReads() throws IOException {
         int code = post("/api/ingest/clear-reads", "{}");
