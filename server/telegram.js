@@ -196,6 +196,12 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 function kb(rows) { return { inline_keyboard: rows }; }
+// Telegram caps callback_data at 64 BYTES and rejects the whole message with
+// BUTTON_DATA_INVALID above it — which surfaced to the operator as nothing more
+// than "⚠️ Something went wrong." Hebrew costs two bytes a character, so a wave
+// name of about thirty characters was enough. Never put free text in here: use
+// an id and look the text up. TG_CALLBACK_LIMIT is asserted in the tests.
+const TG_CALLBACK_LIMIT = 64;
 function btn(text, data) { return { text, callback_data: data }; }
 
 // Group labels. These are no longer ON the keyboard, but a phone that still
@@ -1030,6 +1036,33 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     team: 'Team? (or /skip)', epc: 'Chip EPC? (or /skip to derive it from the bib)',
   };
   const BUTTON_STEPS = new Set(['gender']); // gender is chosen from a button, never typed
+  /**
+   * Wave buttons carrying the wave's ID. The name used to be the payload, which
+   * broke the moment it was long: callback_data is capped at 64 BYTES and
+   * Hebrew costs two per character, so a wave named "מקצה אליט גברים ונשים
+   * אליפות הנגב 2027" came to 71 and Telegram rejected the whole message. The
+   * operator saw only "Something went wrong", mid-wizard, with the racer lost.
+   */
+  async function waveButtons(chatId, makeData) {
+    const c = await activeContest(chatId);
+    const waves = c ? (((await A('GET', `/contests/${c.id}/waves`)).json || {}).waves || []) : [];
+    const rows = [];
+    for (let i = 0; i < waves.length; i += 2) {
+      rows.push(waves.slice(i, i + 2).map((w) => btn(w.name.slice(0, 40), makeData(w))));
+    }
+    return rows;
+  }
+  /** A wave button's payload back to its name. Only buttons produce these, so
+   *  the payload is always an id (or empty, meaning skip/clear). */
+  async function waveName(chatId, id) {
+    if (!id) return '';
+    const c = await activeContest(chatId);
+    if (!c) return '';
+    const waves = ((await A('GET', `/contests/${c.id}/waves`)).json || {}).waves || [];
+    const w = waves.find((x) => String(x.id) === String(id));
+    return w ? w.name : '';
+  }
+
   async function promptStep(chatId, st, step) {
     if (step === 'gender') {
       return send.message(chatId, 'Gender?', {
@@ -1037,10 +1070,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       });
     }
     if (step === 'wave') {
-      const c = await activeContest(chatId);
-      const waves = c ? (((await A('GET', `/contests/${c.id}/waves`)).json || {}).waves || []) : [];
-      const rows = [];
-      for (let i = 0; i < waves.length; i += 2) rows.push(waves.slice(i, i + 2).map((w) => btn(w.name.slice(0, 40), `addw:${w.name}`)));
+      const rows = await waveButtons(chatId, (w) => `addw:${w.id}`);
       rows.push([btn('Skip', 'addw:')]);
       return send.message(chatId, 'Wave? Tap one, type a new name, or /skip.', { reply_markup: kb(rows) });
     }
@@ -1222,8 +1252,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       if (field === 'wave') {
         const c = await activeContest(chatId);
         const waves = c ? (((await A('GET', `/contests/${c.id}/waves`)).json || {}).waves || []) : [];
-        const rows = [];
-        for (let i = 0; i < waves.length; i += 2) rows.push(waves.slice(i, i + 2).map((w) => btn(w.name.slice(0, 40), `ev:${bib}:wave:${w.name}`)));
+        const rows = await waveButtons(chatId, (w) => `ev:${bib}:wave:${w.id}`);
         rows.push([btn('Clear', `ev:${bib}:wave:`)]);
         return send.message(chatId, waves.length
           ? `Pick a wave (or type a new one: <code>/edit ${esc(bib)} wave=NAME</code>):`
@@ -1234,11 +1263,13 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       return send.message(chatId, `Send the new ${FIELD_LABELS[field] || field} for #${esc(bib)}:`);
     }
     if (tag === 'ev') { // field value chosen from buttons
-      const bib = a; const field = b; const value = data.split(':').slice(3).join(':');
+      const bib = a; const field = b; let value = data.split(':').slice(3).join(':');
       const c = await activeContest(chatId);
       if (!c) return send.message(chatId, 'Race no longer selected.');
       const r = findRacer(await listRacers(c.id), bib);
       if (!r) return send.message(chatId, `No racer with bib #${esc(bib)}.`);
+      // The wave button carries an id, for the same byte limit as above.
+      if (field === 'wave') value = await waveName(chatId, value);
       return applyEdit(chatId, c.id, r, { [field]: value });
     }
     if (tag === 'addg') { // gender chosen during the add wizard
@@ -1248,7 +1279,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     }
     if (tag === 'addw') { // wave chosen during the add wizard
       const st = getState(chatId);
-      if (st && st.flow === 'add' && st.step === 'wave') return wizardStep(chatId, st, data.split(':').slice(1).join(':'));
+      if (st && st.flow === 'add' && st.step === 'wave') return wizardStep(chatId, st, await waveName(chatId, data.split(':').slice(1).join(':')));
       return undefined;
     }
     return undefined;

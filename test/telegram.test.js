@@ -43,11 +43,25 @@ const api = async (method, p, { token, body } = {}) => {
 
 // collecting fake Telegram transport
 function makeSend() {
+  // Telegram rejects callback_data over 64 BYTES with BUTTON_DATA_INVALID and
+  // drops the whole message. The fake transport used to accept anything, so a
+  // wave name long enough in Hebrew (two bytes a character) sailed through here
+  // and failed only in the operator's hands, as "Something went wrong".
+  const checkButtons = (extra) => {
+    const rm = extra && extra.reply_markup;
+    for (const row of (rm && (rm.inline_keyboard || rm.keyboard)) || []) {
+      for (const b of row) {
+        if (!b || b.callback_data === undefined) continue;
+        const n = Buffer.byteLength(String(b.callback_data), 'utf8');
+        if (n > 64) throw new Error(`callback_data is ${n} bytes > 64: ${b.callback_data}`);
+      }
+    }
+  };
   return {
     calls: [],
     reset() { this.calls.length = 0; },
     last(type) { return [...this.calls].reverse().find((c) => c.type === type); },
-    async message(chatId, text, extra) { this.calls.push({ type: 'message', chatId, text, extra }); },
+    async message(chatId, text, extra) { checkButtons(extra); this.calls.push({ type: 'message', chatId, text, extra }); },
     async editMessage(chatId, messageId, text, extra) { this.calls.push({ type: 'edit', chatId, messageId, text, extra }); },
     async answerCallback(id) { this.calls.push({ type: 'answer', id }); },
     async document(chatId, filename, content, caption) { this.calls.push({ type: 'document', chatId, filename, content, caption }); },
@@ -171,7 +185,9 @@ test('/add guided wizard walks through the steps incl. wave + chip', async () =>
   await text(ALLOWED, '5k');           // distance
   await tap(ALLOWED, 'addg:Male');     // gender button
   await text(ALLOWED, 'Solo');         // team
-  await tap(ALLOWED, 'addw:Sprint');   // wave button (creates the wave)
+  // Typing is how a NEW wave is created; the buttons only ever offer waves
+  // that already exist, and now carry their id rather than their name.
+  await text(ALLOWED, 'Sprint');       // wave (created on the fly)
   await text(ALLOWED, '/skip');        // chip -> derived from bib -> creates
 
   const { body } = await request(app).get(`/api/contests/${contestId}/tags`).set({ Authorization: `Bearer ${organizer.token}` });
@@ -631,4 +647,50 @@ test('/chip with no id binds the next unknown chip seen by the reader', async ()
   assert.match(send.last('message').text, /chip replaced/i);
   assert.deepEqual(await chipsOfBib('703'), [pad('F9')], 'bound the new chip, not the stale or assigned one');
   assert.deepEqual(await chipsOfBib('702'), [pad('C1')], 'the assigned racer was left alone');
+});
+
+// A real race names its waves in Hebrew, and Hebrew costs two bytes a
+// character. "מקצה אליט גברים ונשים אליפות הנגב 2027" as callback_data came to
+// 71 bytes, over Telegram's 64, so the API rejected the message carrying the
+// wave buttons and the operator saw "⚠️ Something went wrong" in the middle of
+// adding a racer — reported from the field.
+test('a long Hebrew wave name does not break the add wizard', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const longWave = 'מקצה אליט גברים ונשים אליפות הנגב 2027';
+  assert.ok(Buffer.byteLength(`addw:${longWave}`, 'utf8') > 64, 'the name really is over the limit');
+  await request(app).post(`/api/contests/${contestId}/waves`).set(auth).send({ name: longWave });
+
+  await text(ALLOWED, `/use ${contestId}`);
+  send.reset();
+  await text(ALLOWED, '/add');
+  await text(ALLOWED, '801');
+  await text(ALLOWED, 'Wave Tester');
+  await text(ALLOWED, '/skip');            // category
+  await text(ALLOWED, '/skip');            // distance
+  await tap(ALLOWED, 'addg:Male');
+  await text(ALLOWED, 'AudioCodes');       // team -> the wave prompt comes next
+  const prompt = send.last('message');
+  assert.match(prompt.text, /Wave\?/, 'the wizard reached the wave step instead of failing');
+
+  // Tapping it still has to produce the right wave, now that the button carries
+  // an id rather than the name.
+  const row = JSON.parse(JSON.stringify(prompt.extra.reply_markup)).inline_keyboard
+    .flat().find((b) => b.text.startsWith('מקצה אליט'));
+  assert.ok(row, 'the long wave is offered');
+  send.reset();
+  await tap(ALLOWED, row.callback_data);
+  await text(ALLOWED, '/skip');            // chip -> finish
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  const made = tags.find((t) => String(t.bib) === '801');
+  assert.ok(made, 'the racer was created');
+  assert.equal(made.wave_name, longWave, 'and landed in the wave that was tapped');
+});
+
+// The edit flow builds the same buttons with an even longer prefix.
+test('a long Hebrew wave name does not break /edit wave either', async () => {
+  send.reset();
+  await text(ALLOWED, '/edit 801');
+  await tap(ALLOWED, 'ef:801:wave');
+  const prompt = send.last('message');
+  assert.match(prompt.text, /Pick a wave/);
 });
