@@ -111,8 +111,42 @@ public class RaceStartActivity extends BaseActivity {
                 h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 400), 700);
                 h.postDelayed(tg::release, 1400);
             }
+            // Spoken confirmation, AFTER the tone has finished — never instead of
+            // it. startRace() stamps the gun the instant this method is called,
+            // i.e. at the tone's onset, so the riders' instant stays a sharp
+            // attack they can react to. A sentence has no such instant: whoever
+            // waited to understand the words would be leaving a second late with
+            // the clock already running. Arriving afterwards also makes its past
+            // tense true — by then the race really has started.
+            h.postDelayed(this::sayRaceStarted, prefs.startBeepLong() ? 1800 : 1500);
         } catch (RuntimeException ignored) {
             // some devices refuse the audio resource; the race still starts
+        }
+    }
+
+    /** "המירוץ התחיל" for the operator. Confirmation only: nothing is timed off
+     *  it, so its latency does not matter and a failure is silent. */
+    private void sayRaceStarted() {
+        try {
+            // Looked up by name rather than as R.raw.race_started, so the app
+            // builds and runs with no clip present and simply stays quiet. The
+            // recording is content, not code: dropping res/raw/race_started.*
+            // in turns this on with nothing to recompile, and removing it turns
+            // it off again rather than breaking the build.
+            int clip = getResources().getIdentifier("race_started", "raw", getPackageName());
+            if (clip == 0) return; // no recording installed yet
+            // Application context, not this Activity: startRace() has already
+            // moved on to the timing console by the time this fires, and a
+            // player scoped to a destroyed Activity would be torn down with it.
+            android.media.MediaPlayer mp =
+                    android.media.MediaPlayer.create(getApplicationContext(), clip);
+            if (mp == null) return; // device could not open the clip
+            float v = Math.max(0f, Math.min(1f, prefs.beepVolume() / 100f));
+            mp.setVolume(v, v);
+            mp.setOnCompletionListener(android.media.MediaPlayer::release);
+            mp.start();
+        } catch (RuntimeException ignored) {
+            // the race is already running; a missing confirmation changes nothing
         }
     }
 
