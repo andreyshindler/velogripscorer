@@ -61,6 +61,12 @@ public class BridgeService extends Service {
     public static final String EXTRA_MANUAL_ONLY = "manualOnly";
     public static final String EXTRA_CHECKPOINT = "checkpoint"; // stamp+upload reads in server time
     public static final String EXTRA_LAST_EPC = "lastEpc";
+    /** False when this broadcast carries nothing the results depend on — a read
+     *  that was not stored. Absent means true, so every other broadcast keeps
+     *  redrawing as before. A racer who has given all their laps and stands by
+     *  the gate is read for as long as they stand there, and each of those
+     *  reads used to rebuild the whole finish list for no change at all. */
+    public static final String EXTRA_STORE_CHANGED = "storeChanged";
     public static final String EXTRA_TEST_EPC = "testEpc"; // a tag seen during a reader test
     public static final String EXTRA_LOG = "log";
 
@@ -483,6 +489,7 @@ public class BridgeService extends Service {
             Intent status = statusIntent(null);
             status.putExtra(EXTRA_LAST_EPC, read.epc
                     + (read.rssi != null ? String.format(Locale.US, " (%.0f dBm)", read.rssi) : ""));
+            status.putExtra(EXTRA_STORE_CHANGED, record || checkpoint);
             sendBroadcast(status);
         }
         if (lastSeen.size() > 5000) lastSeen.clear(); // bounded memory at big events

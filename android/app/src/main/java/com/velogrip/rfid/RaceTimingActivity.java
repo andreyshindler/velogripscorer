@@ -127,7 +127,12 @@ public class RaceTimingActivity extends BaseActivity {
             // operator cannot act on a reason they are never shown.
             if (readerUp) lastReaderError = null;
             else if (fromReader && log != null && !log.isEmpty()) lastReaderError = log;
-            scheduleRender(); // a new crossing (or status change) landed in the store
+            // A read that stored nothing changes no result, so the strips are
+            // refreshed and the finish list is left exactly as it is — see
+            // renderResults, which cannot rebuild without losing the operator's
+            // place in the list.
+            if (i.getBooleanExtra(BridgeService.EXTRA_STORE_CHANGED, true)) scheduleRender();
+            else updateSyncStatus();
         }
     };
 
@@ -904,6 +909,13 @@ public class RaceTimingActivity extends BaseActivity {
     }
 
     private void renderResults(List<RaceEngine.Result> results, List<RaceStore.Pending> pendingEntries) {
+        // Every row is destroyed and rebuilt below, and a ScrollView whose
+        // content is replaced lands back at the top — which, in a list ordered
+        // by elapsed time, is the first finisher. That is what threw the list
+        // to the top whenever anything redrew it. Remember where the operator
+        // was, and put them back unless we mean to move them.
+        final ScrollView keepSv = findViewById(R.id.resultsScroll);
+        final int keepY = keepSv == null ? 0 : keepSv.getScrollY();
         resultsBox.removeAllViews();
         int decimals = prefs.timingDecimals();
         final Long gun = gunTime();
@@ -1087,6 +1099,11 @@ public class RaceTimingActivity extends BaseActivity {
             final View target = scrollTarget;
             final ScrollView sv = findViewById(R.id.resultsScroll);
             sv.post(() -> sv.smoothScrollTo(0, Math.max(0, target.getTop())));
+        } else if (keepSv != null && keepY > 0) {
+            // Not moving anywhere on purpose: stay where the operator left off.
+            // Posted so it runs after the new rows are laid out, and clamped by
+            // the ScrollView itself if the list is now shorter.
+            keepSv.post(() -> keepSv.scrollTo(0, keepY));
         }
         scrollToBib = null;
     }
