@@ -255,8 +255,8 @@
     <string name="rc_rollcall_sub">סמן כעת כ-DNS את מי שלא נראה בזינוק</string>
     <string name="rollcall_closed">מפקד הנוכחות נסגר — מי שלא נראה סומן DNS</string>
     <string name="rollcall_window">סמן DNS אוטומטית למי שלא הגיע, אחרי הזינוק בתוך:</string>
-    <string name="rollcall_window_hint">הזמן אחרי היריה שאחריו מתחרים שלא נקראו מסומנים DNS (0 = כבוי)</string>
-    <string name="rollcall_suppress_note">מבוסס על קריאות בזינוק — שים לב לחלון ״אל תזהה…״ שמעל.</string>
+    <string name="rollcall_window_hint">הזמן אחרי היריה, שאחריו כל מי שלא נקרא מאז היריה מסומן DNS (0 = כבוי)</string>
+    <string name="rollcall_suppress_note">הנוכחות נקבעת לפי קריאה במזרן הזינוק, ולכן נדרש קורא שמכסה את הזינוק. חלון ״אל תזהה…״ שמעל לא מסתיר את הקריאות האלה.</string>
     <string name="restart_save_sub">שמירת הזמנים שנרשמו</string>
     <string name="restart_discard_sub">מחיקת כל הזמנים והתחלה מחדש</string>
     <string name="reset_not_synced">המרוץ אותחל במכשיר, אך האתר לא עודכן: %1$s. ייתכן שהאתר עדיין מציג את המרוץ כפעיל.</string>
