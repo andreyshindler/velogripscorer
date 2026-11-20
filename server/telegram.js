@@ -917,6 +917,10 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     // freshness is the test. A window rather than a snapshot also keeps the
     // retry working — a chip presented again after a timeout is seen again.
     const since = await latestReadId(contestId);
+    // Chips that DID come past but already belong to someone. Holding a tag
+    // that is already assigned is the most likely way to get nothing, and
+    // without this the timeout could not tell that apart from a dead reader.
+    const assigned = new Map();
     const deadline = Date.now() + SCAN_WINDOW_MS;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, SCAN_POLL_MS));
@@ -934,13 +938,77 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       // candidate, which is also why a race running past the mat cannot trip it.
       const hit = newer.find((x) => !x.bib);
       if (hit) { await applyChip(chatId, contestId, bib, String(hit.epc).toUpperCase(), mode); return; }
+      for (const x of newer) {
+        if (x.bib) assigned.set(String(x.epc).toUpperCase(), { bib: x.bib, participant: x.participant });
+      }
     }
     if (!scanIsCurrent(chatId, gen)) return;
     const st = getState(chatId);
     if (st && st.flow === 'chip' && String(st.bib) === String(bib)) setState(chatId, null);
-    await send.message(chatId, `⌛ No new chip seen for #${esc(bib)}.\n`
-      + `Check the timing app is on this race and the reader is connected, `
-      + `or send it directly: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} 9866</code>`);
+    const why = await scanDiagnosis(contestId, bib, assigned);
+    await send.message(chatId, `⌛ No new chip bound to #${esc(bib)}.\n${why}\n`
+      + `Or send the number: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} 9866</code>`);
+  }
+
+  // A reader that reported within this long is taken to be alive.
+  const READER_ALIVE_MS = 120_000;
+  // SQLite's datetime('now') is UTC and carries no zone marker, so saying so
+  // is what stops it being read as local time two hours out.
+  const readerSeenAt = (ts) => {
+    if (!ts) return NaN;
+    return Date.parse(/[Zz]|[+-]\d\d:?\d\d$/.test(ts) ? ts : `${String(ts).replace(' ', 'T')}Z`);
+  };
+  const seenRecently = (ts) => {
+    const t = readerSeenAt(ts);
+    return Number.isFinite(t) && Date.now() - t < READER_ALIVE_MS;
+  };
+  const agoText = (ts) => {
+    const t = readerSeenAt(ts);
+    if (!Number.isFinite(t)) return '';
+    const mins = Math.round((Date.now() - t) / 60000);
+    if (mins < 1) return 'moments ago';
+    if (mins < 60) return `${mins} min ago`;
+    return `${Math.round(mins / 60)} h ago`;
+  };
+
+  /**
+   * Why a scan ended with nothing. Three very different faults used to share
+   * one line — a tag that is already someone's, a reader that never joined,
+   * and an app too old to report chips while "Live results" is off — which
+   * left the operator with advice that did not fit what had happened.
+   */
+  async function scanDiagnosis(contestId, bib, assigned) {
+    // One or two known chips came past: that is a tag being held up, not a
+    // field crossing the mat, so it is almost certainly the one in hand.
+    if (assigned.size && assigned.size <= 2) {
+      const [epc, who] = [...assigned.entries()][0];
+      if (String(who.bib) === String(bib)) {
+        return `<code>${esc(shortEpc(epc))}</code> is already this racer's own chip — nothing to change.`;
+      }
+      return `The chip I saw (<code>${esc(shortEpc(epc))}</code>) is already on `
+        + `#${esc(who.bib)} ${esc(who.participant || '')}. A chip can only be on one racer, so `
+        + `free it first: <code>/chip ${esc(who.bib)}</code> with a different chip.`;
+    }
+    if (assigned.size) {
+      return `Only chips belonging to nobody can be bound, and every chip past the reader `
+        + `(${assigned.size}) is already on a racer.`;
+    }
+    const readers = (((await A('GET', `/contests/${contestId}/readers`)).json || {}).readers) || [];
+    // Every race carries a "Timing app" reader row from the moment it is
+    // listed, so the row existing proves nothing. last_seen is what says
+    // whether anything ever actually reported to this race.
+    const connected = readers.filter((r) => r.last_seen);
+    if (!connected.length) {
+      return 'The timing app has <b>never</b> reported to this race — open it and check '
+        + 'it is on THIS race, not another one.';
+    }
+    if (!connected.some((r) => seenRecently(r.last_seen))) {
+      const last = connected.map((r) => r.last_seen).sort().pop();
+      return `The timing app has gone quiet (last heard ${esc(agoText(last))}) — check it is open `
+        + 'and still on this race.';
+    }
+    return 'The reader is connected but reported no chip. With <b>Live results</b> off, only an app '
+      + 'built after the sightings update reports chips — install the latest APK.';
   }
 
   /** Unassigned chips the reader reported in the last `secs` seconds. */

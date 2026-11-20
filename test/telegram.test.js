@@ -1001,3 +1001,46 @@ test('the Chip button hands over to /chip instead of asking for 24 characters', 
     .set({ Authorization: `Bearer ${organizer.token}` })).body.tags;
   assert.deepEqual(tags.find((t) => String(t.bib) === '981').epcs, [pad('9871')]);
 });
+
+test('a scan that finds nothing says WHY: the app never reported to this race', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const made = await request(app).post('/api/contests').set(auth)
+    .send({ kind: 'race', title: 'Diagnosis race', start_at: past, end_at: future });
+  assert.equal(made.status, 201);
+  const fresh = made.body;
+  await request(app).post(`/api/contests/${fresh.id}/tags`).set(auth)
+    .send({ epc: pad('7001'), bib: '701', participant: 'Nobody Reads' });
+  await text(ALLOWED, `/use ${fresh.id}`);
+
+  send.reset();
+  await text(ALLOWED, '/chip 701');
+  await new Promise((r) => setTimeout(r, 47000));
+  const msg = send.last('message').text;
+  assert.match(msg, /never<\/b> reported to this race/, 'it names the actual fault');
+  assert.doesNotMatch(msg, /gone quiet|reported no chip/, 'and not a fault that does not apply');
+});
+
+test('a scan that saw the racer\'s own chip says so instead of blaming the reader', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const made = await request(app).post('/api/contests').set(auth)
+    .send({ kind: 'race', title: 'Own chip race', start_at: past, end_at: future });
+  assert.equal(made.status, 201);
+  const c = made.body;
+  const reader = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth)
+    .send({ name: 'Mat7' })).body;
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth)
+    .send({ epc: pad('8601'), bib: '86', participant: 'Danon Nisan' });
+  await text(ALLOWED, `/use ${c.id}`);
+
+  send.reset();
+  await text(ALLOWED, '/chip 86');
+  // The operator holds up the tag the racer is already wearing.
+  await new Promise((r) => setTimeout(r, 3000));
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token)
+    .send({ reads: [{ epc: pad('8601'), read_at: new Date().toISOString() }] });
+
+  await new Promise((r) => setTimeout(r, 45000));
+  const msg = send.last('message').text;
+  assert.match(msg, /already this racer's own chip/, 'it recognises the tag in hand');
+  assert.doesNotMatch(msg, /No reader has joined/);
+});
