@@ -825,3 +825,106 @@ test('re-saving an existing assignment is still an update, not a collision', asy
   const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
   assert.equal(tags.find((t) => String(t.bib) === '950').category, 'M45', 'the edit landed');
 });
+
+// These chips are a short number padded to 24 — 000000000000000000009866 is
+// "9866" — so the full form is a wall of zeros around the part that matters.
+test('chips are shown short, and the short form is what can be typed back', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  await text(ALLOWED, `/use ${contestId}`);
+  await text(ALLOWED, `/add bib=970 name=Short Chip cat=M40 epc=${pad('9866')}`);
+
+  send.reset();
+  await text(ALLOWED, '/list 970');
+  const listed = send.last('message').text;
+  assert.match(listed, /9866/, 'the chip is visible at last');
+  assert.ok(!/000000000000000000009866/.test(listed), 'without the padding');
+
+  // And typing that same short form addresses the same chip.
+  send.reset();
+  await text(ALLOWED, '/chip 970 9867');
+  assert.match(send.last('message').text, /chip replaced/i);
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '970').epcs, [pad('9867')]);
+});
+
+// A chip that is not mostly padding cannot be typed short, so it is shown as a
+// tail behind an ellipsis rather than pretending otherwise.
+test('a real random EPC is shown as a tail, not as a typeable number', async () => {
+  await text(ALLOWED, '/add bib=971 name=Random Chip cat=M40 epc=E28011606000020000A1B2');
+  send.reset();
+  await text(ALLOWED, '/list 971');
+  const listed = send.last('message').text;
+  assert.match(listed, /…/, 'marked as not typeable');
+  assert.match(listed, /0A1B2/, 'with enough of the tail to recognise it');
+});
+
+// The point of the whole thing: bib in, chip out, new number in — two messages.
+test('/chip <bib> shows the chip and takes the new number as the next message', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  send.reset();
+  await text(ALLOWED, '/chip 970');
+  const prompt = send.last('message').text;
+  assert.match(prompt, /9867/, 'shows what they carry now');
+  assert.ok(!/000000000000000000009867/.test(prompt), 'short, not padded');
+  assert.match(prompt, /send its number/i, 'and offers typing as well as waving');
+
+  send.reset();
+  await text(ALLOWED, '9912');          // just the number, no command
+  assert.match(send.last('message').text, /chip replaced/i);
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '970').epcs, [pad('9912')]);
+});
+
+// Typing a number must stop the scan that is still running, or it could bind a
+// chip afterwards over the one the operator just settled on.
+test('a typed number ends the scan instead of racing it', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const reader = (await request(app).post(`/api/contests/${contestId}/readers`).set(auth)
+    .send({ name: 'Mat5' })).body;
+  await text(ALLOWED, '/chip 970');
+  await text(ALLOWED, '9001');           // settled by typing
+  send.reset();
+
+  // A chip waved a moment later must NOT overwrite that.
+  await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token)
+    .send({ epcs: [pad('BEEF')] });
+  await new Promise((r) => setTimeout(r, 4000));
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '970').epcs, [pad('9001')],
+    'the typed chip stands');
+});
+
+test('a typo keeps the chip prompt open instead of dropping out of it', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  await text(ALLOWED, '/chip 970');
+  send.reset();
+
+  await text(ALLOWED, 'ok');  // a fat-fingered reply, not a chip
+  const warn = send.last('message').text;
+  assert.match(warn, /not a chip number/, 'it says what went wrong');
+  assert.doesNotMatch(warn, /✅/, 'and nothing was assigned');
+
+  // Still in the flow: the next message is taken as the chip, with no re-/chip.
+  send.reset();
+  await text(ALLOWED, '9123');
+  assert.match(send.last('message').text, /✅/, 'the retry lands');
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '970').epcs, [pad('9123')]);
+});
+
+test('/cancel stops the scan, so a later chip is not bound', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  const reader = (await request(app).post(`/api/contests/${contestId}/readers`).set(auth)
+    .send({ name: 'Mat6' })).body;
+  await text(ALLOWED, '/chip 970');
+  await text(ALLOWED, '/cancel');
+  send.reset();
+
+  await request(app).post('/api/ingest/seen').set('X-Reader-Token', reader.token)
+    .send({ epcs: [pad('C0DE')] });
+  await new Promise((r) => setTimeout(r, 4000));
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`).set(auth)).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '970').epcs, [pad('9123')],
+    'the cancelled scan bound nothing');
+  assert.equal(send.calls.filter((c) => c.type === 'message' && /✅/.test(c.text)).length, 0);
+});

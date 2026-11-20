@@ -256,6 +256,22 @@ function padEpc(raw) {
 function syntheticEpc(bib) {
   return padEpc(String(bib).trim());
 }
+/**
+ * A chip id as the operator reads it off the band. These chips are a short
+ * number zero-padded to 24 — 000000000000000000009866 is "9866" — so printing
+ * all 24 is a wall of zeros around the four characters that matter.
+ *
+ * Stripping the padding is also exactly what can be typed back: padEpc puts
+ * the zeros in front again. A chip that is NOT mostly padding cannot be typed
+ * short, so it shows as a tail behind an ellipsis to say so.
+ */
+function shortEpc(epc) {
+  const full = String(epc || '').toUpperCase();
+  const bare = full.replace(/^0+/, '');
+  if (!bare) return '0';
+  if (bare.length <= 8) return bare;          // a number chip: type it as-is
+  return `…${full.slice(-6)}`;                // a real EPC: shown, not typeable
+}
 
 // Parse "bib=101 name=Jane Doe cat=M40 dist=10k team=Aces gender=F" — values may
 // contain spaces; a new token starts only at a known "key=".
@@ -283,6 +299,10 @@ function racerLine(r) {
   const tail = [r.category, r.distance, r.gender, r.wave_name && `🚩${r.wave_name}`]
     .filter(Boolean).map(esc).join(' · ');
   if (tail) bits.push(`<i>${tail}</i>`);
+  // The chip, short. Without it there was nowhere at all to look up what a
+  // racer is carrying, which is the first thing asked when one goes wrong.
+  const chips = (r.epcs && r.epcs.length ? r.epcs : [r.epc]).filter(Boolean);
+  if (chips.length) bits.push(`🏷 ${chips.map((e) => esc(shortEpc(e))).join(' + ')}`);
   if (r.racer_status) bits.push(`[${esc(r.racer_status)}]`);
   return bits.join(' — ');
 }
@@ -297,7 +317,11 @@ function bibNum(bib) {
 function racerCompact(r) {
   const cat = r.category ? `  <i>${esc(r.category)}</i>` : '';
   const status = r.racer_status ? ` [${esc(r.racer_status)}]` : '';
-  return `<b>#${esc(r.bib || '?')}</b> ${esc(r.participant || '')}${cat}${status}`;
+  // The chip, short enough to sit on the line: "9866", not the 24 characters
+  // it is stored as. /list <bib> is how an operator looks one up at the mat.
+  const chips = (r.epcs && r.epcs.length ? r.epcs : [r.epc]).filter(Boolean);
+  const tag = chips.length ? `  🏷 ${chips.map((e) => esc(shortEpc(e))).join('+')}` : '';
+  return `<b>#${esc(r.bib || '?')}</b> ${esc(r.participant || '')}${cat}${tag}${status}`;
 }
 // A one-glance breakdown: riders per distance/category, plus the gender split.
 function rosterSummary(racers) {
@@ -403,7 +427,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const res = await A('POST', `/contests/${contestId}/chips`, { bib, epc, mode });
     const j = res.json || {};
     if (res.status === 409 && j.held_by_bib) {
-      await send.message(chatId, `⚠️ Chip <code>${esc(epc)}</code> is already on `
+      await send.message(chatId, `⚠️ Chip <code>${esc(shortEpc(epc))}</code> is already on `
         + `#${esc(j.held_by_bib)} ${esc(j.held_by || '')}.\n`
         + `Free it first: <code>/chip ${esc(j.held_by_bib)}</code> with a different chip, or /del that racer.`);
       return false;
@@ -416,7 +440,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       await send.message(chatId, `ℹ️ #${esc(bib)} ${esc(j.participant || '')} already carries that chip.`);
       return true;
     }
-    const all = (j.epcs || []).map((e) => `<code>${esc(e)}</code>`).join(' + ');
+    const all = (j.epcs || []).map((e) => `<code>${esc(shortEpc(e))}</code>`).join(' + ');
     await send.message(chatId, `✅ #${esc(bib)} ${esc(j.participant || '')} — `
       + `${mode === 'add' ? 'chip added' : 'chip replaced'}: ${all}`);
     return true;
@@ -814,16 +838,33 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (!r) { await send.message(chatId, `No racer with bib #${esc(bib)}.`); return; }
     if (parts[1]) { await applyChip(chatId, c.id, bib, padEpc(parts[1]), mode); return; }
 
-    const have = (r.epcs || [r.epc]).map((e) => `<code>${esc(e)}</code>`).join(' + ');
-    await send.message(chatId, `📡 #${esc(bib)} ${esc(r.participant || '')} carries ${have}.\n`
-      + `<b>Hold the new chip to the reader now.</b> Waiting ${SCAN_WINDOW_MS / 1000}s…`);
+    const have = (r.epcs || [r.epc]).filter(Boolean)
+      .map((e) => `<code>${esc(shortEpc(e))}</code>`).join(' + ');
+    // Both ways are open at once rather than asked about first: wave the chip,
+    // or type its number. Whichever happens first wins.
+    setState(chatId, { flow: 'chip', bib, mode });
+    await send.message(chatId, `🏷 #${esc(bib)} ${esc(r.participant || '')} — chip ${have}\n`
+      + `<b>Hold the new chip to the reader</b>, or send its number `
+      + `(e.g. <code>9866</code>). Waiting ${SCAN_WINDOW_MS / 1000}s…`);
     // Detached on purpose: the operator gets the prompt at once and the answer
     // when it happens, instead of this chat going quiet for most of a minute.
     scanForChip(chatId, c.id, bib, mode).catch(() => {});
   }
 
+  // Which scan a chat is on. A new /chip, or a number typed instead of waving,
+  // bumps it so the previous loop stops rather than binding a chip later over
+  // something the operator has already settled.
+  const scanGen = new Map();
+  const newScan = (chatId) => {
+    const n = (scanGen.get(String(chatId)) || 0) + 1;
+    scanGen.set(String(chatId), n);
+    return n;
+  };
+  const scanIsCurrent = (chatId, n) => scanGen.get(String(chatId)) === n;
+
   /** Watch for a chip that belongs to nobody, then bind it. */
   async function scanForChip(chatId, contestId, bib, mode) {
+    const gen = newScan(chatId);
     // Two channels, because the race may be timed either way:
     //  - sightings, which the device reports whatever the "Live results"
     //    setting says, since an unassigned chip is not a result;
@@ -837,6 +878,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const deadline = Date.now() + SCAN_WINDOW_MS;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, SCAN_POLL_MS));
+      if (!scanIsCurrent(chatId, gen)) return; // superseded: typed, or a new /chip
 
       const fresh = await sightedChips(contestId, SCAN_FRESH_SECS);
       if (fresh.length) { await applyChip(chatId, contestId, bib, fresh[0], mode); return; }
@@ -851,9 +893,12 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       const hit = newer.find((x) => !x.bib);
       if (hit) { await applyChip(chatId, contestId, bib, String(hit.epc).toUpperCase(), mode); return; }
     }
+    if (!scanIsCurrent(chatId, gen)) return;
+    const st = getState(chatId);
+    if (st && st.flow === 'chip' && String(st.bib) === String(bib)) setState(chatId, null);
     await send.message(chatId, `⌛ No new chip seen for #${esc(bib)}.\n`
       + `Check the timing app is on this race and the reader is connected, `
-      + `or give the id: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} &lt;chip&gt;</code>`);
+      + `or send it directly: <code>${mode === 'add' ? '/chip2' : '/chip'} ${esc(bib)} 9866</code>`);
   }
 
   /** Unassigned chips the reader reported in the last `secs` seconds. */
@@ -1196,13 +1241,34 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
   async function handleText(chatId, text) {
     text = COMMAND_LABELS[text] || text; // a reply-keyboard tap arrives as its label
     const st = getState(chatId);
-    if (text === '/cancel') { setState(chatId, null); await send.message(chatId, 'Cancelled.'); return; }
+    if (text === '/cancel') {
+      setState(chatId, null);
+      newScan(chatId); // a cancelled /chip must not bind a chip a minute later
+      await send.message(chatId, 'Cancelled.');
+      return;
+    }
     // A group button opens its sub-menu (and interrupts any half-finished wizard).
     if (CATEGORY[text]) { if (st) setState(chatId, null); return openMenu(chatId, CATEGORY[text]); }
     if (st && st.flow === 'add' && text === '/skip') { await wizardStep(chatId, st, ''); return; }
     // In a wizard and the user typed a value (not a new command)
     if (st && st.flow === 'add' && !text.startsWith('/')) { await wizardStep(chatId, st, text); return; }
     if (st && st.flow === 'email_add' && !text.startsWith('/')) { await emailAdd(chatId, text, st.spec); return; }
+    if (st && st.flow === 'chip' && !text.startsWith('/')) {
+      const v = text.trim();
+      // A typo must not throw the operator out of the flow: the reader is
+      // still being watched, and /chip <bib> would have to be typed again.
+      if (!/^[0-9A-Fa-f]{1,24}$/.test(v)) {
+        await send.message(chatId, `⚠️ <code>${esc(v)}</code> is not a chip number. `
+          + `Send the digits as printed (e.g. <code>9866</code>), or /cancel.`);
+        return;
+      }
+      const c = await activeContest(chatId);
+      setState(chatId, null);
+      newScan(chatId); // the typed value wins; stop the scan still running
+      if (!c) { await send.message(chatId, 'Race no longer selected.'); return; }
+      await applyChip(chatId, c.id, st.bib, padEpc(v), st.mode);
+      return;
+    }
     if (st && st.flow === 'editval' && !text.startsWith('/')) {
       const c = await activeContest(chatId);
       setState(chatId, null);
