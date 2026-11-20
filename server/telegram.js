@@ -215,7 +215,7 @@ const CATEGORY = {
 // The labels map back to their slash commands in handleText.
 const COMMAND_LABELS = {
   '❓ Help': '/help',
-  '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '🔁 Laps': '/laps',
+  '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '✏️ Edit': '/edit', '🔁 Laps': '/laps',
   '👥 Marshals': '/operators', '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league',
 };
 // One button per action. Grouping them behind 🏁 Race / 👤 Start list /
@@ -226,7 +226,8 @@ function mainKeyboard() {
   return {
     keyboard: [
       [{ text: '🏁 Races' }, { text: '📋 List' }],
-      [{ text: '➕ Add' }, { text: '📄 CSV' }, { text: '📑 PDF' }],
+      [{ text: '➕ Add' }, { text: '✏️ Edit' }],
+      [{ text: '📄 CSV' }, { text: '📑 PDF' }],
       [{ text: '🏆 League' }, { text: '❓ Help' }],
     ],
     resize_keyboard: true,
@@ -345,6 +346,7 @@ const HELP = [
   '/list [text] — show racers (optionally filtered)',
   '/add — add a racer (guided), or one line:',
   '   <code>/add bib=101 name=Jane Doe cat=M40 dist=10k gender=F team=Aces wave=Elite epc=E28011</code>',
+  '/edit — ✏️ then send a bib, or part of a name',
   '/edit &lt;bib&gt; — edit a racer (buttons: name, bib, category, distance, team, gender, wave, chip, status), or:',
   '   <code>/edit 101 name=New Name cat=M45 wave=Sport epc=E280A1</code>',
   '/chip &lt;bib&gt; &lt;chip&gt; — swap a racer\'s chip (lost or broken)',
@@ -739,13 +741,26 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (!c) return;
     const trimmed = String(rest || '').trim();
     const bib = trimmed.split(/\s+/)[0];
-    if (!bib) { await send.message(chatId, 'Usage: /edit <bib>'); return; }
+    // No bib: ask for one instead of printing a usage line. That line was a
+    // dead end, and ✏️ Edit on the keyboard arrives here with nothing else.
+    if (!bib) {
+      setState(chatId, { flow: 'editbib' });
+      await send.message(chatId, 'Send the <b>bib number</b> of the racer to edit '
+        + '(or part of their name), or /cancel:');
+      return;
+    }
     const racers = await listRacers(c.id);
     const r = findRacer(racers, bib);
     if (!r) { await send.message(chatId, `No racer with bib #${esc(bib)}.`); return; }
     const fields = parseFields(trimmed.slice(bib.length));
     if (Object.keys(fields).length) { await applyEdit(chatId, c.id, r, fields); return; }
-    await send.message(chatId, `Editing ${racerLine(r)}\nChoose a field:`, {
+    await editPicker(chatId, r);
+  }
+
+  /** The field picker for one racer — shown by /edit, and again after a save. */
+  async function editPicker(chatId, r, prefix = 'Editing') {
+    const bib = String(r.bib || '');
+    return send.message(chatId, `${prefix} ${racerLine(r)}\nChoose a field:`, {
       reply_markup: kb([
         [btn('Name', `ef:${bib}:participant`), btn('Bib', `ef:${bib}:bib`)],
         [btn('Category', `ef:${bib}:category`), btn('Distance', `ef:${bib}:distance`)],
@@ -754,6 +769,20 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         [btn('Status', `ef:${bib}:racer_status`), btn('🗑 Delete', `del:${bib}`)],
       ]),
     });
+  }
+
+  /**
+   * Find the racer an operator means, by bib or by name. Bib wins outright, so
+   * a race that numbers its riders with words still behaves; a name falls back
+   * to a loose match, which may be ambiguous and so returns every hit.
+   */
+  function resolveRacers(racers, query) {
+    const q = String(query || '').trim();
+    const exact = findRacer(racers, q);
+    if (exact) return [exact];
+    const needle = q.toLowerCase();
+    if (!needle) return [];
+    return racers.filter((r) => String(r.participant || '').toLowerCase().includes(needle));
   }
 
   // Merge changed fields into the racer and persist. Handles the synthetic-EPC
@@ -779,29 +808,42 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     // took a chip that belonged to someone else, and had to refuse a racer with
     // two chips because the delete was bib-wide.
     if (newEpc && newEpc !== primaryEpc) {
-      if (!EPC_RE.test(newEpc)) { await send.message(chatId, '⚠️ Chip EPC must be 4–64 hex chars.'); return; }
-      if (!await applyChip(chatId, contestId, oldBib, newEpc, 'replace')) return;
+      if (!EPC_RE.test(newEpc)) { await send.message(chatId, '⚠️ Chip EPC must be 4–64 hex chars.'); return null; }
+      if (!await applyChip(chatId, contestId, oldBib, newEpc, 'replace')) return null;
       // Any other fields in the same command still need saving, and the row is
       // now keyed by the new chip.
       const rest = { ...merged, epcs: undefined, epc: newEpc };
       const res = await upsertRacer(contestId, rest);
-      await report(chatId, res, rest);
-      return;
+      return (await report(chatId, res, rest)) ? String(rest.bib || '') : null;
     }
     // Synthetic-EPC bib rename regenerates the derived chip id, then drops the old row.
     const wasSynthetic = primaryEpc === syntheticEpc(oldBib);
     if (newBib !== oldBib && wasSynthetic && !twoChip) {
       const res = await upsertRacer(contestId, { ...merged, epcs: undefined, epc: syntheticEpc(newBib) });
       if (res.status < 400) await A('DELETE', `/contests/${contestId}/tags/${primaryEpc}`);
-      await report(chatId, res, merged);
-      return;
+      return (await report(chatId, res, merged)) ? newBib : null;
     }
     const res = await upsertRacer(contestId, merged);
-    await report(chatId, res, merged);
+    return (await report(chatId, res, merged)) ? newBib : null;
+  }
+
+  /**
+   * Re-open the picker on the saved racer, so changing a second field does not
+   * mean typing /edit <bib> again. The bib is re-read from the server because
+   * the edit may have BEEN the bib.
+   */
+  async function editAgain(chatId, contestId, bib) {
+    if (!bib) return;
+    const r = findRacer(await listRacers(contestId), bib);
+    if (r) await editPicker(chatId, r, 'Still editing');
   }
   async function report(chatId, res, r) {
-    if (res.status >= 400) { await send.message(chatId, `⚠️ ${esc((res.json && res.json.error) || 'update failed')}`); return; }
+    if (res.status >= 400) {
+      await send.message(chatId, `⚠️ ${esc((res.json && res.json.error) || 'update failed')}`);
+      return false;
+    }
     await send.message(chatId, `✅ Saved ${racerLine(r)}`);
+    return true;
   }
 
   // How long /chip waits at the mat for a chip to be waved, and how often it
@@ -1202,7 +1244,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       // then offer Add — no extra tap, and the empty state is unmistakable.
       await send.message(chatId,
         `${header}\n\nAdd a racer with ➕ or <code>/add</code>. Edit / remove: <code>/edit &lt;bib&gt;</code> · <code>/del &lt;bib&gt;</code>.`,
-        { reply_markup: kb([[btn('➕ Add', 'go:add')]]) });
+        { reply_markup: kb([[btn('➕ Add', 'go:add'), btn('✏️ Edit', 'go:edit')]]) });
       const c = await activeContest(chatId);
       if (c) return cmdList(chatId, '');
       return undefined;
@@ -1225,6 +1267,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         case 'races': return await cmdRaces(chatId, '');
         case 'list': return await cmdList(chatId, '');
         case 'add': return await cmdAdd(chatId, '');
+        case 'edit': return await cmdEdit(chatId, '');
         case 'laps': return await cmdLaps(chatId, '');
         case 'operators': return await cmdOperators(chatId, '');
         case 'emails': return await emailList(chatId);
@@ -1253,6 +1296,25 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     // In a wizard and the user typed a value (not a new command)
     if (st && st.flow === 'add' && !text.startsWith('/')) { await wizardStep(chatId, st, text); return; }
     if (st && st.flow === 'email_add' && !text.startsWith('/')) { await emailAdd(chatId, text, st.spec); return; }
+    if (st && st.flow === 'editbib' && !text.startsWith('/')) {
+      const c = await activeContest(chatId);
+      if (!c) { setState(chatId, null); await send.message(chatId, 'Race no longer selected.'); return; }
+      const hits = resolveRacers(await listRacers(c.id), text);
+      // Nothing matched: stay in the prompt rather than make them tap ✏️ again.
+      if (!hits.length) {
+        await send.message(chatId, `⚠️ No racer matches <code>${esc(text.trim())}</code>. `
+          + `Send a bib number or part of a name, or /cancel.`);
+        return;
+      }
+      setState(chatId, null);
+      if (hits.length === 1) { await editPicker(chatId, hits[0]); return; }
+      // Several people match the name, so the operator picks which one.
+      const rows = hits.slice(0, 12).map((r) => [btn(
+        `#${r.bib || '?'} ${String(r.participant || '').slice(0, 40)}`, `eb:${r.bib}`)]);
+      await send.message(chatId, `${hits.length} racers match — pick one:`,
+        { reply_markup: kb(rows) });
+      return;
+    }
     if (st && st.flow === 'chip' && !text.startsWith('/')) {
       const v = text.trim();
       // A typo must not throw the operator out of the flow: the reader is
@@ -1275,7 +1337,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       if (!c) { await send.message(chatId, 'Race no longer selected.'); return; }
       const r = findRacer(await listRacers(c.id), st.bib);
       if (!r) { await send.message(chatId, `No racer with bib #${esc(st.bib)}.`); return; }
-      await applyEdit(chatId, c.id, r, { [st.field]: text });
+      await editAgain(chatId, c.id, await applyEdit(chatId, c.id, r, { [st.field]: text }));
       return;
     }
     if (st) setState(chatId, null); // a fresh command interrupts a half-finished wizard
@@ -1342,6 +1404,13 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     if (tag === 'del') return cmdDel(chatId, a);
     if (tag === 'delyes') return doDelete(chatId, a);
     if (tag === 'delno') return send.message(chatId, 'Cancelled.');
+    if (tag === 'eb') { // a racer picked from a name search
+      const c = await activeContest(chatId);
+      if (!c) return send.message(chatId, 'Race no longer selected.');
+      const r = findRacer(await listRacers(c.id), a);
+      if (!r) return send.message(chatId, `No racer with bib #${esc(a)}.`);
+      return editPicker(chatId, r);
+    }
     if (tag === 'ef') { // pick a field to edit
       const bib = a; const field = b;
       if (field === 'gender') {
@@ -1363,6 +1432,10 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
           : `No waves yet — create one with <code>/edit ${esc(bib)} wave=NAME</code>.`,
         waves.length ? { reply_markup: kb(rows) } : undefined);
       }
+      // The chip has its own flow — hold the tag to the reader, or send the
+      // short number — so the button hands over to it instead of asking for 24
+      // characters to be typed, which is what this used to do.
+      if (field === 'epc') return cmdChip(chatId, bib, 'replace');
       setState(chatId, { flow: 'editval', bib, field });
       return send.message(chatId, `Send the new ${FIELD_LABELS[field] || field} for #${esc(bib)}:`);
     }
@@ -1374,7 +1447,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       if (!r) return send.message(chatId, `No racer with bib #${esc(bib)}.`);
       // The wave button carries an id, for the same byte limit as above.
       if (field === 'wave') value = await waveName(chatId, value);
-      return applyEdit(chatId, c.id, r, { [field]: value });
+      return editAgain(chatId, c.id, await applyEdit(chatId, c.id, r, { [field]: value }));
     }
     if (tag === 'addg') { // gender chosen during the add wizard
       const st = getState(chatId);

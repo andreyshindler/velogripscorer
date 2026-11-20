@@ -127,7 +127,7 @@ test('flat keyboard: /start offers one button per action; group labels still wor
   // CSV and PDF are on the keyboard itself: at a race they are wanted in one
   // tap, not two behind a group.
   assert.deepEqual(labels,
-    ['🏁 Races', '📋 List', '➕ Add', '📄 CSV', '📑 PDF', '🏆 League', '❓ Help']);
+    ['🏁 Races', '📋 List', '➕ Add', '✏️ Edit', '📄 CSV', '📑 PDF', '🏆 League', '❓ Help']);
   assert.ok(!labels.some((l) => CATEGORY_LABELS.includes(l)), 'no group buttons on the keyboard');
 
   // A phone still showing the grouped keyboard keeps working: the group labels
@@ -927,4 +927,77 @@ test('/cancel stops the scan, so a later chip is not bound', async () => {
   assert.deepEqual(tags.find((t) => String(t.bib) === '970').epcs, [pad('9123')],
     'the cancelled scan bound nothing');
   assert.equal(send.calls.filter((c) => c.type === 'message' && /✅/.test(c.text)).length, 0);
+});
+
+test('✏️ Edit asks for the bib, then opens the field picker', async () => {
+  send.reset();
+  await text(ALLOWED, '✏️ Edit');          // the keyboard button, not /edit 970
+  assert.match(send.last('message').text, /bib number/, 'it asks instead of printing usage');
+
+  // A wrong number keeps the prompt: tapping ✏️ again would be the alternative.
+  send.reset();
+  await text(ALLOWED, '99999');
+  assert.match(send.last('message').text, /No racer matches/);
+  assert.equal(send.last('message').extra, undefined, 'no picker for a miss');
+
+  send.reset();
+  await text(ALLOWED, '970');
+  const picker = JSON.stringify(send.last('message').extra.reply_markup);
+  assert.ok(picker.includes('ef:970:category'), 'the field picker opens');
+  assert.ok(picker.includes('ef:970:epc'), 'including the chip');
+});
+
+test('the bib prompt also takes a name, and asks which when several match', async () => {
+  const auth = { Authorization: `Bearer ${organizer.token}` };
+  for (const [bib, name] of [[981, 'Dana Levi'], [982, 'Dana Cohen']]) {
+    await request(app).post(`/api/contests/${contestId}/tags`).set(auth)
+      .send({ epc: pad(bib), bib: String(bib), participant: name });
+  }
+
+  send.reset();
+  await text(ALLOWED, '✏️ Edit');
+  await text(ALLOWED, 'dana');             // lower case, partial
+  const rows = send.last('message').extra.reply_markup.inline_keyboard;
+  const data = rows.flat().map((b) => b.callback_data);
+  assert.deepEqual(data.sort(), ['eb:981', 'eb:982'], 'both Danas are offered');
+
+  send.reset();
+  await tap(ALLOWED, 'eb:982');
+  assert.match(send.last('message').text, /Dana Cohen/);
+  assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes('ef:982:category'));
+
+  // A name that is unique skips the picking step entirely.
+  send.reset();
+  await text(ALLOWED, '✏️ Edit');
+  await text(ALLOWED, 'Levi');
+  assert.match(send.last('message').text, /Dana Levi/);
+  assert.ok(JSON.stringify(send.last('message').extra.reply_markup).includes('ef:981:'));
+});
+
+test('the picker comes back after a save, so a second field needs no /edit', async () => {
+  send.reset();
+  await tap(ALLOWED, 'ef:981:gender');
+  await tap(ALLOWED, 'ev:981:gender:Female');
+  const msgs = send.calls.filter((c) => c.type === 'message').map((c) => c.text);
+  assert.ok(msgs.some((t) => /✅ Saved/.test(t)), 'it saved');
+  const last = send.last('message');
+  assert.match(last.text, /Still editing/, 'and offers the next field');
+  assert.ok(JSON.stringify(last.extra.reply_markup).includes('ef:981:category'));
+});
+
+test('the Chip button hands over to /chip instead of asking for 24 characters', async () => {
+  send.reset();
+  await tap(ALLOWED, 'ef:981:epc');
+  const msg = send.last('message').text;
+  assert.match(msg, /Hold the new chip to the reader/, 'the scan is offered');
+  assert.match(msg, /9866/, 'and the short typed form');
+  assert.doesNotMatch(msg, /Send the new Chip/, 'not the old type-it-out prompt');
+
+  // And it is a real /chip flow: the typed short number binds.
+  send.reset();
+  await text(ALLOWED, '9871');
+  assert.match(send.last('message').text, /✅/);
+  const tags = (await request(app).get(`/api/contests/${contestId}/tags`)
+    .set({ Authorization: `Bearer ${organizer.token}` })).body.tags;
+  assert.deepEqual(tags.find((t) => String(t.bib) === '981').epcs, [pad('9871')]);
 });
