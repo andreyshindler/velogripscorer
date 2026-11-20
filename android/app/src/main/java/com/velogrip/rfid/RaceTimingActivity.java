@@ -561,11 +561,7 @@ public class RaceTimingActivity extends BaseActivity {
     private void render() {
         updateSyncStatus();
         updateWaveUi();
-        List<RaceEngine.Result> results = RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceLaps(), prefs.raceFinalized(), System.currentTimeMillis(),
-                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, prefs.raceFinalized());
 
         java.util.Set<String> finishedBibs = new java.util.HashSet<>();
         // Racers auto-marked DNS by the start-line roll call (computed, not stored).
@@ -1556,11 +1552,7 @@ public class RaceTimingActivity extends BaseActivity {
         // already marked the no-shows DNS, while this call passed 0 for the
         // roll-call window and got them back as "on_course" — so "riders are
         // still out there" was asked about an empty course.
-        List<RaceEngine.Result> results = RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceLaps(), true, System.currentTimeMillis(),
-                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, true);
         final List<RaceEngine.Result> onCourse = new ArrayList<>();
         // Who the roll call called a no-show. Up to now that verdict was
         // recomputed on every render and never written down, so it reached the
@@ -1715,11 +1707,7 @@ public class RaceTimingActivity extends BaseActivity {
     }
 
     private void showRaceProgress() {
-        List<RaceEngine.Result> results = RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceLaps(), prefs.raceFinalized(), System.currentTimeMillis(),
-                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, prefs.raceFinalized());
         int finished = 0, onCourse = 0, notStarted = 0, dns = 0;
         long lastElapsed = 0;
         for (RaceEngine.Result r : results) {

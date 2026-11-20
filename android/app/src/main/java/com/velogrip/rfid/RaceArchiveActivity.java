@@ -79,10 +79,7 @@ public class RaceArchiveActivity extends BaseActivity {
         standingsHeader.setTypeface(null, android.graphics.Typeface.BOLD);
         box.addView(standingsHeader);
 
-        List<RaceEngine.Result> results = RaceEngine.compute(
-                racers, store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), prefs.raceLaps(), prefs.raceFinalized(), prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, prefs.raceFinalized());
         TextView standings = new TextView(this);
         standings.setTypeface(android.graphics.Typeface.MONOSPACE);
         standings.setTextSize(13);

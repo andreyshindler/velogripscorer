@@ -62,10 +62,7 @@ public class ProgressListActivity extends BaseActivity {
         LinearLayout box = findViewById(R.id.listBox);
         box.removeAllViews();
 
-        List<RaceEngine.Result> results = RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(), prefs.raceLaps(),
-                prefs.raceFinalized(), prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, prefs.raceFinalized());
 
         int shown = 0;
         for (RaceEngine.Result r : results) {

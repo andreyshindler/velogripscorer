@@ -90,10 +90,7 @@ public class SegmentResultsActivity extends BaseActivity {
 
     /** Results for this distance + category (category empty = Overall). */
     private List<RaceEngine.Result> segment() {
-        List<RaceEngine.Result> all = RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), prefs.raceLaps(), prefs.raceFinalized(), prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> all = RaceResults.compute(store, prefs, prefs.raceFinalized());
         List<RaceEngine.Result> out = new ArrayList<>();
         for (RaceEngine.Result r : all) {
             if (!r.distance.equals(distance)) continue;

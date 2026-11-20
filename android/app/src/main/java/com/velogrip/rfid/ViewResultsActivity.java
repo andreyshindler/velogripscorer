@@ -70,10 +70,7 @@ public class ViewResultsActivity extends BaseActivity {
     }
 
     private List<RaceEngine.Result> compute() {
-        return RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), prefs.raceLaps(), prefs.raceFinalized(), prefs.leaderEndsRaceActive());
+        return RaceResults.compute(store, prefs, prefs.raceFinalized());
     }
 
     private void render() {

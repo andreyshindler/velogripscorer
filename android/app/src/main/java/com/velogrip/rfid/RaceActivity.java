@@ -361,10 +361,7 @@ public class RaceActivity extends BaseActivity {
             ((TextView) massClock).setText(RaceEngine.formatClock(System.currentTimeMillis() - massStart));
         }
 
-        List<RaceEngine.Result> results = RaceEngine.compute(
-                store.racers(), store.waves(), store.allPassings(),
-                prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(),
-                store.lapTargets(), prefs.raceLaps(), false, prefs.leaderEndsRaceActive());
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, false);
 
         // Multiple distances: standings split per distance with its own places
         java.util.LinkedHashMap<String, List<RaceEngine.Result>> sections = new java.util.LinkedHashMap<>();
