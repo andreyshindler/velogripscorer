@@ -1550,19 +1550,34 @@ public class RaceTimingActivity extends BaseActivity {
     private void finishRace() {
         // Preview with laps-down finalisation so partial-lap riders count as
         // finished; the only ones left "out" are those with no crossings at all.
+        //
+        // The roll call has to be applied HERE too. Without it this preview
+        // disagreed with the screen the operator is looking at: the list had
+        // already marked the no-shows DNS, while this call passed 0 for the
+        // roll-call window and got them back as "on_course" — so "riders are
+        // still out there" was asked about an empty course.
         List<RaceEngine.Result> results = RaceEngine.compute(
                 store.racers(), store.waves(), store.allPassings(),
                 prefs.suppressSecs(), prefs.lapGapSecs(), prefs.recordLaps(), store.lapTargets(),
-                prefs.raceLaps(), true, prefs.leaderEndsRaceActive());
+                prefs.raceLaps(), true, System.currentTimeMillis(),
+                prefs.rollCallSecs() * 1000L, prefs.rollCallClosedAt(), prefs.leaderEndsRaceActive());
         final List<RaceEngine.Result> onCourse = new ArrayList<>();
+        // Who the roll call called a no-show. Up to now that verdict was
+        // recomputed on every render and never written down, so it reached the
+        // results screen but never the start list — and the upload sends only
+        // stored statuses, which is why the website never showed these riders
+        // as DNS. Finishing the race is when it stops being a guess.
+        final List<String> noShows = new ArrayList<>();
         for (RaceEngine.Result r : results) {
             if ("on_course".equals(r.status) || "not_started".equals(r.status)) onCourse.add(r);
+            else if ("DNS".equals(r.status) && r.bib != null && !r.bib.isEmpty()) noShows.add(r.bib);
         }
         if (onCourse.isEmpty()) {
             new android.app.AlertDialog.Builder(this)
                     .setTitle(R.string.rc_finish)
                     .setMessage(R.string.finish_race_confirm)
-                    .setPositiveButton(R.string.finish_race_ok, (d, w) -> finalizeAndGoToResults())
+                    .setPositiveButton(R.string.finish_race_ok,
+                            (d, w) -> { storeNoShows(noShows); finalizeAndGoToResults(); })
                     .setNegativeButton(R.string.cancel_popup, null)
                     .show();
             return;
@@ -1576,10 +1591,19 @@ public class RaceTimingActivity extends BaseActivity {
                             for (RaceEngine.Result r : onCourse) {
                                 if (!r.bib.isEmpty()) store.setRacerStatus(r.bib, status);
                             }
+                            storeNoShows(noShows);
                             finalizeAndGoToResults();
                         })
                 .setNegativeButton(R.string.cancel_popup, null)
                 .show();
+    }
+
+    /** Write the roll call's DNS into the start list, so it survives the race
+     *  and is uploaded with every other declared status. Only ever applied to a
+     *  racer the engine already reports as DNS, and a racer who was declared
+     *  DNS by hand is simply written the same value again. */
+    private void storeNoShows(List<String> bibs) {
+        for (String bib : bibs) store.setRacerStatus(bib, "DNS");
     }
 
     /** Commit the finish: persist laps-down finalisation so the results screen
