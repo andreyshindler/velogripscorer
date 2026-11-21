@@ -620,4 +620,12 @@
         <item>UHF binary frames (0xA0…)</item>
         <item>Demo mode (fake reads)</item>
     </string-array>
+    <string name="dns_return_banner">#%1$s %2$s was read after being marked DNS — decide ›</string>
+    <string name="dns_return_title">#%1$s %2$s was read after being marked DNS</string>
+    <string name="dns_return_lap">Read at %1$s, and it has been counted as a lap.</string>
+    <string name="dns_return_seen">Read at %1$s.</string>
+    <string name="dns_late_start">Started late — do not count it as a lap</string>
+    <string name="dns_keep_lap">A real lap — leave it</string>
+    <string name="dns_declare_dns">Not racing — mark DNS for good</string>
+    <string name="dns_late_done">#%1$s started late at %2$s</string>
 </resources>

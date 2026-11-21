@@ -156,7 +156,8 @@ public final class RaceEngine {
                 if (gun == null) continue;
                 int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
                 if (target == Integer.MAX_VALUE) continue;
-                List<Long> cr = buildCrossings(collectRaw(group, readsByEpc), gun, suppressMs, lapGapMs, target);
+                List<Long> cr = buildCrossings(collectRaw(group, readsByEpc), gun, suppressMs, lapGapMs,
+                        target, lateStartOf(group));
                 if (cr.size() >= target) cutoff = Math.min(cutoff, cr.get(target - 1));
             }
         }
@@ -180,7 +181,7 @@ public final class RaceEngine {
             }
             List<Read> raw = collectRaw(group, readsByEpc);
             int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
-            List<Long> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target);
+            List<Long> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target, lateStartOf(group));
 
             // Leader rule: finish on the first crossing that reaches the target
             // OR falls at/after the cutoff (the current lap); drop the rest.
@@ -251,6 +252,15 @@ public final class RaceEngine {
     }
 
     /** All reads for a merged racer (a rider may carry two chips). */
+    /** The late start on any chip of a merged racer; the later one wins. */
+    private static long lateStartOf(List<RaceStore.Racer> group) {
+        long late = 0;
+        for (RaceStore.Racer m : group) {
+            if (m.lateStartMs != null && m.lateStartMs > late) late = m.lateStartMs;
+        }
+        return late;
+    }
+
     private static List<Read> collectRaw(List<RaceStore.Racer> group, Map<String, List<Read>> readsByEpc) {
         List<Read> raw = new ArrayList<>();
         for (RaceStore.Racer m : group) {
@@ -296,7 +306,18 @@ public final class RaceEngine {
     }
 
     /** Valid crossings (suppression + lap-gap applied), capped at the target. */
-    private static List<Long> buildCrossings(List<Read> raw, long gun, long suppressMs, long lapGapMs, int target) {
+    /**
+     * @param lateStart when the racer set off, if they missed the gun (0 = they
+     *                  did not). Their reads up to lateStart + the suppression
+     *                  window are them leaving the start line, not laps. The
+     *                  suppression applies after a late start for the same
+     *                  reason it applies after the gun — they are still
+     *                  clearing the mat, and the lap gap cannot help because
+     *                  they have no crossing yet to be measured against.
+     *                  Mirrors server/race-results.js.
+     */
+    private static List<Long> buildCrossings(List<Read> raw, long gun, long suppressMs, long lapGapMs,
+                                             int target, long lateStart) {
         List<Long> crossings = new ArrayList<>();
         if (raw.isEmpty()) return crossings;
         Collections.sort(raw, new Comparator<Read>() {
@@ -310,7 +331,7 @@ public final class RaceEngine {
             if (rd.at < gun) continue;
             // Manual operator taps are deliberate: they skip the RFID start-
             // suppression window and the lap-gap de-dup, so each tap is a crossing.
-            if (!rd.manual && rd.at < gun + suppressMs) continue;
+            if (!rd.manual && rd.at < Math.max(gun, lateStart) + suppressMs) continue;
             if (crossings.size() >= target) break; // race done for this racer
             if (rd.manual || crossings.isEmpty()
                     || rd.at - crossings.get(crossings.size() - 1) >= lapGapMs) {

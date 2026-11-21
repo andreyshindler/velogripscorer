@@ -26,6 +26,10 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     public static final class Racer {
         public final String epc, bib, name, category, wave, distance, status, gender, team;
+        /** When this racer set off, if they missed the gun. null = started with it.
+         *  Their reads up to this plus the suppression window are them leaving the
+         *  start line, not laps; the clock still runs from the gun. */
+        public final Long lateStartMs;
 
         public Racer(String epc, String bib, String name, String category, String wave) {
             this(epc, bib, name, category, wave, "", "", "", "");
@@ -47,8 +51,14 @@ public final class RaceStore extends SQLiteOpenHelper {
 
         public Racer(String epc, String bib, String name, String category, String wave,
                      String distance, String status, String gender, String team) {
+            this(epc, bib, name, category, wave, distance, status, gender, team, null);
+        }
+
+        public Racer(String epc, String bib, String name, String category, String wave,
+                     String distance, String status, String gender, String team, Long lateStartMs) {
             this.epc = epc; this.bib = bib; this.name = name; this.category = category; this.wave = wave;
             this.distance = distance; this.status = status; this.gender = gender; this.team = team;
+            this.lateStartMs = lateStartMs;
         }
     }
 
@@ -85,7 +95,7 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 9);
+        super(ctx, "race.db", null, 10);
     }
 
     @Override
@@ -94,7 +104,7 @@ public final class RaceStore extends SQLiteOpenHelper {
                 " name TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT ''," +
                 " wave TEXT NOT NULL DEFAULT '', distance TEXT NOT NULL DEFAULT ''," +
                 " racer_status TEXT NOT NULL DEFAULT '', gender TEXT NOT NULL DEFAULT ''," +
-                " team TEXT NOT NULL DEFAULT '')");
+                " team TEXT NOT NULL DEFAULT '', late_start_at INTEGER)");
         db.execSQL("CREATE TABLE waves (name TEXT PRIMARY KEY, started_at INTEGER, synced INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE passings (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL," +
                 " rssi REAL, antenna INTEGER, read_at INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0," +
@@ -134,6 +144,9 @@ public final class RaceStore extends SQLiteOpenHelper {
         }
         if (oldVersion < 9) {
             db.execSQL("ALTER TABLE passings ADD COLUMN manual INTEGER NOT NULL DEFAULT 0");
+        }
+        if (oldVersion < 10) {
+            db.execSQL("ALTER TABLE racers ADD COLUMN late_start_at INTEGER");
         }
     }
 
@@ -480,17 +493,43 @@ public final class RaceStore extends SQLiteOpenHelper {
         values.put("racer_status", racer.status);
         values.put("gender", racer.gender);
         values.put("team", racer.team);
+        // CONFLICT_REPLACE rewrites the whole row, and the start-list sync
+        // upserts every racer every few seconds — so a late start left out of
+        // these values would be wiped seconds after the operator set it. It is
+        // decided on this device and never arrives from the server, so carry
+        // whatever is stored unless the caller is deliberately setting one.
+        Long late = racer.lateStartMs != null ? racer.lateStartMs : lateStartFor(racer.epc);
+        if (late != null) values.put("late_start_at", late);
         getWritableDatabase().insertWithOnConflict("racers", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    /** The stored late start for one chip, or null. */
+    private Long lateStartFor(String epc) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT late_start_at FROM racers WHERE epc = ?", new String[]{epc});
+        try {
+            return c.moveToNext() && !c.isNull(0) ? c.getLong(0) : null;
+        } finally {
+            c.close();
+        }
+    }
+
+    /** Record (atMs) or clear (null) the moment a racer set off late. */
+    public void setLateStart(String bib, Long atMs) {
+        ContentValues values = new ContentValues();
+        if (atMs == null) values.putNull("late_start_at"); else values.put("late_start_at", atMs);
+        getWritableDatabase().update("racers", values, "bib = ?", new String[]{bib});
     }
 
     public List<Racer> racers() {
         List<Racer> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave, distance, racer_status, gender, team FROM racers ORDER BY bib, epc", null);
+                "SELECT epc, bib, name, category, wave, distance, racer_status, gender, team, late_start_at FROM racers ORDER BY bib, epc", null);
         try {
             while (c.moveToNext()) {
                 out.add(new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                        c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8)));
+                        c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8),
+                        c.isNull(9) ? null : c.getLong(9)));
             }
         } finally {
             c.close();
@@ -500,11 +539,12 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     public Racer racerByBib(String bib) {
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT epc, bib, name, category, wave, distance, racer_status, gender, team FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
+                "SELECT epc, bib, name, category, wave, distance, racer_status, gender, team, late_start_at FROM racers WHERE bib = ? LIMIT 1", new String[]{bib});
         try {
             return c.moveToNext()
                     ? new Racer(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                            c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8))
+                            c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8),
+                            c.isNull(9) ? null : c.getLong(9))
                     : null;
         } finally {
             c.close();

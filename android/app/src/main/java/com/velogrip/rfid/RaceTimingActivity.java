@@ -70,6 +70,14 @@ public class RaceTimingActivity extends BaseActivity {
     // driven off this rather than off each read, so a chip read that changes
     // nothing — a finisher still standing by the gate — moves nothing.
     private String shownCrossing;
+    // Bibs the start-line roll call currently calls no-shows, as of the last
+    // render. A bib that leaves this set has been read again — they turned up
+    // late, or someone walked their tag past the mat — and that is a call only
+    // the operator can make, so it waits in dnsReturns until they make it.
+    private final java.util.Set<String> rollCallDns = new java.util.HashSet<>();
+    private final java.util.LinkedHashSet<String> dnsReturns = new java.util.LinkedHashSet<>();
+    private final java.util.Set<String> dnsReturnsSettled = new java.util.HashSet<>();
+    private TextView dnsReturnBanner;
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
     // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
@@ -149,6 +157,11 @@ public class RaceTimingActivity extends BaseActivity {
         pagerInner = findViewById(R.id.bibPagerInner);
         pager.setOnPage(p -> { page = p; updateHint(); });
         resultsBox = findViewById(R.id.resultsBox);
+        dnsReturnBanner = findViewById(R.id.dnsReturnBanner);
+        dnsReturnBanner.setOnClickListener(v -> {
+            java.util.Iterator<String> it = dnsReturns.iterator();
+            if (it.hasNext()) askAboutDnsReturn(it.next());
+        });
         hint = findViewById(R.id.timingHint);
         syncStatus = findViewById(R.id.syncStatus);
         startWaveLabel = findViewById(R.id.startWaveLabel);
@@ -578,6 +591,21 @@ public class RaceTimingActivity extends BaseActivity {
                 lapsByBib.put(r.bib, r.laps);
             }
         }
+        // A racer who was a no-show a moment ago and is not one now has been
+        // read. Collected here rather than off the read itself, so it is the
+        // same roll call the screen is showing that decides it.
+        java.util.Set<String> dnsNow = new java.util.HashSet<>();
+        for (RaceEngine.Result r : results) {
+            if ("DNS".equals(r.status) && r.bib != null && !r.bib.isEmpty()) dnsNow.add(r.bib);
+        }
+        for (String bib : rollCallDns) {
+            if (!dnsNow.contains(bib) && !dnsReturnsSettled.contains(bib)) dnsReturns.add(bib);
+        }
+        rollCallDns.clear();
+        rollCallDns.addAll(dnsNow);
+        dnsReturns.removeAll(dnsNow); // marked DNS again: nothing left to ask
+        updateDnsReturnBanner(results);
+
         // Finish counter: finished so far / racers still expected to finish
         // (start list minus DNS — incl. roll-call no-shows — minus DNF/DSQ).
         // It follows the wave chips like the list under it: with a wave picked,
@@ -1102,6 +1130,76 @@ public class RaceTimingActivity extends BaseActivity {
             keepSv.post(() -> keepSv.scrollTo(0, keepY));
         }
         scrollToBib = null;
+    }
+
+    /** Show the oldest unanswered return, or nothing. */
+    private void updateDnsReturnBanner(List<RaceEngine.Result> results) {
+        if (dnsReturnBanner == null) return;
+        java.util.Iterator<String> it = dnsReturns.iterator();
+        if (!it.hasNext()) { dnsReturnBanner.setVisibility(View.GONE); return; }
+        String bib = it.next();
+        String name = "";
+        for (RaceEngine.Result r : results) {
+            if (bib.equals(r.bib)) { name = r.name == null ? "" : r.name; break; }
+        }
+        dnsReturnBanner.setText(getString(R.string.dns_return_banner, bib, name));
+        dnsReturnBanner.setVisibility(View.VISIBLE);
+    }
+
+    /** The racer's first read at or after the gun — the one that brought them
+     *  back, and the moment they set off if that is what it was. */
+    private Long firstReadSinceGun(String bib) {
+        Long gun = gunTime();
+        if (gun == null) return null;
+        Long first = null;
+        for (String epc : epcsForBib(bib)) {
+            for (RaceStore.Passing p : store.passingsForEpc(epc)) {
+                if (p.readAtMs < gun) continue;
+                if (first == null || p.readAtMs < first) first = p.readAtMs;
+            }
+        }
+        return first;
+    }
+
+    /**
+     * What to do about a racer the roll call had written off who has been read
+     * again. Three real outcomes, and the operator is told what already
+     * happened so the choice is informed rather than guessed.
+     */
+    private void askAboutDnsReturn(final String bib) {
+        final Long gun = gunTime();
+        final Long at = firstReadSinceGun(bib);
+        String name = "";
+        RaceStore.Racer r = store.racerByBib(bib);
+        if (r != null && r.name != null) name = r.name;
+        String when = (at != null && gun != null)
+                ? RaceEngine.formatElapsed(at - gun, 1) : "—";
+        // Whether that read has already become a lap decides the wording: it is
+        // the difference between "decide" and "undo".
+        boolean counted = false;
+        if (at != null && gun != null) {
+            counted = at >= gun + prefs.suppressSecs() * 1000L;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.dns_return_title, bib, name))
+                .setMessage(getString(counted ? R.string.dns_return_lap : R.string.dns_return_seen, when))
+                .setItems(new String[]{
+                        getString(R.string.dns_late_start),
+                        getString(R.string.dns_keep_lap),
+                        getString(R.string.dns_declare_dns)},
+                        (d, which) -> {
+                            if (which == 0 && at != null) {
+                                store.setLateStart(bib, at);
+                                tapToast(getString(R.string.dns_late_done, bib, when));
+                            } else if (which == 2) {
+                                store.setRacerStatus(bib, "DNS");
+                            }
+                            dnsReturns.remove(bib);
+                            dnsReturnsSettled.add(bib);
+                            scheduleRender();
+                        })
+                .setNegativeButton(R.string.cancel_popup, null)
+                .show();
     }
 
     /** A single finish-list row: a lap crossing / finish for a racer, or a

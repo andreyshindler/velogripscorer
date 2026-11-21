@@ -620,4 +620,12 @@
         <item>מסגרות UHF בינאריות (0xA0…)</item>
         <item>מצב הדגמה (קריאות מדומות)</item>
     </string-array>
+    <string name="dns_return_banner">‏#%1$s %2$s נקרא אחרי שסומן DNS — החלט ›</string>
+    <string name="dns_return_title">‏#%1$s %2$s נקרא אחרי שסומן DNS</string>
+    <string name="dns_return_lap">‏נקרא ב-%1$s, והמעבר נספר לו כהקפה.</string>
+    <string name="dns_return_seen">‏נקרא ב-%1$s.</string>
+    <string name="dns_late_start">יצא באיחור — אל תספור כהקפה</string>
+    <string name="dns_keep_lap">זו הקפה אמיתית — השאר</string>
+    <string name="dns_declare_dns">לא מתחרה — סמן DNS סופית</string>
+    <string name="dns_late_done">‏#%1$s יצא באיחור, ב-%2$s</string>
 </resources>

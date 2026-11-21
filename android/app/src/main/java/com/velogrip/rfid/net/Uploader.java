@@ -158,7 +158,13 @@ public final class Uploader {
                 RaceStore.Racer r = racers.get(i);
                 if (i > from) json.append(',');
                 json.append("{\"bib\":").append(jsonString(r.bib))
-                        .append(",\"status\":").append(jsonString(r.status)).append('}');
+                        .append(",\"status\":").append(jsonString(r.status));
+                // Always sent, null included, so clearing a late start on the
+                // tablet clears it on the website too. The server only reads
+                // the key when it is present.
+                json.append(",\"late_start\":")
+                        .append(r.lateStartMs == null ? "null" : String.valueOf(r.lateStartMs.longValue()));
+                json.append('}');
             }
             json.append("]}");
             int code = post("/api/ingest/racer-statuses", json.toString());

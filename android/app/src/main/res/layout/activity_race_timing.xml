@@ -58,6 +58,21 @@
         android:textColor="#FFFFFF"
         android:visibility="gone" />
 
+    <!-- A racer the roll call had marked DNS has been read again. A strip and
+         not a popup: this screen is tapped, and a dialog appearing by itself
+         mid-race would swallow a tap meant for a bib. It waits to be tapped. -->
+    <TextView
+        android:id="@+id/dnsReturnBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="8dp"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#231202"
+        android:background="#F5821F"
+        android:visibility="gone" />
+
     <!-- Clock row: ‹ prev · clock · next › -->
     <LinearLayout
         android:layout_width="match_parent"
