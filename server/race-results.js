@@ -254,11 +254,29 @@ function computeRaceResults(contest, { category } = {}) {
     return (timeOnly ? 0 : y.laps - x.laps) || x.elapsed_ms - y.elapsed_ms;
   });
   // overall rank + gap behind the leader + place within category
+  //
+  // A dead heat shares a place and the next one skips it: 1, 1, 3. Two riders
+  // with the same laps and the same elapsed millisecond are not 2nd and 3rd —
+  // which one printed first was decided by the order the rows came back, and
+  // nothing about the race. The league standings have always shared the place
+  // (see placeMap in league-scoring.js), so the same two riders were joint 2nd
+  // in the standings and 2nd-and-3rd on the race page. This is that
+  // disagreement settled, on the side that was arbitrary.
+  //
+  // Tied means what the sort above means by equal, so a time-only sport
+  // compares the time alone: there a lap count carries no placing.
+  const tiedWith = (a, b) => !!a && !!b
+    && (timeOnly || a.laps === b.laps)
+    && a.elapsed_ms === b.elapsed_ms;
   const categoryPlace = new Map();
   let leader = null;
-  results.forEach((r, i) => {
+  let finishers = 0, place = 0, prev = null;
+  results.forEach((r) => {
     if (r.status !== 'finished') return;
-    r.rank = i + 1;
+    finishers += 1;
+    place = tiedWith(prev, r) ? place : finishers;
+    prev = r;
+    r.rank = place;
     if (!leader) leader = r;
     // Ranked on time alone -> the gap is always a time gap; a lap count there
     // carries no placing, so "-1 lap" would be misleading.
@@ -272,9 +290,12 @@ function computeRaceResults(contest, { category } = {}) {
     // public results page, the CSV and the PDF all section per distance and
     // always did; this is the number behind them finally agreeing.
     const key = `${r.distance || ''}\u0000${r.category || ''}`;
-    const place = (categoryPlace.get(key) || 0) + 1;
-    categoryPlace.set(key, place);
-    r.category_rank = place;
+    const c = categoryPlace.get(key) || { seen: 0, place: 0, prev: null };
+    c.seen += 1;
+    c.place = tiedWith(c.prev, r) ? c.place : c.seen;
+    c.prev = r;
+    categoryPlace.set(key, c);
+    r.category_rank = c.place;
   });
 
   return results;

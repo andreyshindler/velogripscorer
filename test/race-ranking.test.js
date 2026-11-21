@@ -15,6 +15,7 @@ process.env.DATA_DIR = process.env.DATA_DIR || fs.mkdtempSync(path.join(os.tmpdi
 
 const { db } = require('../server/db');
 const { computeRaceResults } = require('../server/race-results');
+const { computeLeagueStandings, normalizeSettings } = require('../server/league-scoring');
 
 const gun = Date.now() - 600_000;
 const iso = (offsetSecs) => new Date(gun + offsetSecs * 1000).toISOString();
@@ -837,4 +838,81 @@ test('clearing a late start puts the racer back as they were', () => {
   race.setLate(null);
   const r = computeRaceResults(race.contest()).find((x) => x.bib === '31');
   assert.equal(r.laps, 3, 'the operator can undo the call');
+});
+
+// ---- a dead heat shares a place -------------------------------------------
+// Found in a real race: two riders with the same laps and the same elapsed
+// millisecond were 2nd and 3rd on the race page but joint 2nd in the league
+// standings. Which of them came first was decided by row order, not the race.
+
+function seedDeadHeat(sport) {
+  const contestId = db.prepare(
+    `INSERT INTO contests (organizer_id, title, description, category, tags, visibility,
+       start_at, end_at, kind, sport, status, suppress_secs, min_lap_gap_secs, record_laps)
+     VALUES (?,?,'','other','[]','public',?,?, 'race', ?, 'finished', 10, 30, 1)`
+  ).run(organizerId, `Heat ${sport}-${Math.random()}`, iso(-60), iso(3600), sport).lastInsertRowid;
+  const readerId = db.prepare(
+    'INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)'
+  ).run(contestId, 'Timing app', `tok_heat_${contestId}_${Math.random()}`, '').lastInsertRowid;
+  const waveId = db.prepare(
+    'INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)'
+  ).run(contestId, 'wave1', new Date(gun).toISOString()).lastInsertRowid;
+  // Three in one category: the winner, then two who cross on the same read.
+  const add = (epc, bib, cat, at) => {
+    db.prepare('INSERT INTO tag_assignments (contest_id, epc, bib, participant, category, distance, wave_id) VALUES (?,?,?,?,?,?,?)')
+      .run(contestId, epc, bib, 'R' + bib, cat, 'MTB', waveId);
+    db.prepare('INSERT INTO tag_reads (reader_id, contest_id, epc, read_at) VALUES (?,?,?,?)')
+      .run(readerId, contestId, epc, iso(at));
+  };
+  add('H_WIN', '1', 'A', 100);
+  add('H_T1', '2', 'A', 200);   // identical second
+  add('H_T2', '3', 'A', 200);   // identical second
+  add('H_LAST', '4', 'A', 300);
+  add('H_OTHER', '9', 'B', 200); // another category, same instant
+  return db.prepare('SELECT * FROM contests WHERE id = ?').get(contestId);
+}
+
+test('two riders on the same crossing share a place, and the next skips it', () => {
+  const results = computeRaceResults(seedDeadHeat('MTB XCO'));
+  const by = Object.fromEntries(results.map((r) => [r.bib, r]));
+  assert.equal(by['2'].elapsed_ms, by['3'].elapsed_ms, 'the two really are identical');
+
+  // #9 is in another category but crosses on the same instant, so THREE
+  // riders share second overall and the next one is fifth.
+  assert.equal(by['1'].rank, 1);
+  assert.equal(by['2'].rank, 2);
+  assert.equal(by['3'].rank, 2, 'joint second, not third');
+  assert.equal(by['9'].rank, 2, 'and so is the rider from the other category');
+  assert.equal(by['4'].rank, 5, 'the next one skips the places the tie used up');
+
+  assert.equal(by['1'].category_rank, 1);
+  assert.equal(by['2'].category_rank, 2);
+  assert.equal(by['3'].category_rank, 2, 'joint second in the category too');
+  assert.equal(by['4'].category_rank, 4);
+  // A rider in another category is unaffected by a tie in this one.
+  assert.equal(by['9'].category_rank, 1);
+});
+
+test('the race page and the league standings agree on a dead heat', () => {
+  const contest = seedDeadHeat('MTB XCO');
+  const results = computeRaceResults(contest);
+  const { individual } = computeLeagueStandings(
+    [{ contest: { id: contest.id }, round: 1, results }], normalizeSettings({}));
+  const cat = individual.find((g) => g.category === 'A');
+  const pts = Object.fromEntries(cat.rows.map((r) => [r.bib, r.total]));
+  // Same place => same points, and the race page must now say the same place.
+  assert.equal(pts['2'], pts['3'], 'the league pays them equally');
+  const byBib = Object.fromEntries(results.map((r) => [r.bib, r]));
+  assert.equal(byBib['2'].category_rank, byBib['3'].category_rank,
+    'so the race page must not rank one above the other');
+});
+
+test('a time-only sport ties on the time alone', () => {
+  // Running is ranked on elapsed time only, so that is what a tie compares.
+  const results = computeRaceResults(seedDeadHeat('Running'));
+  const by = Object.fromEntries(results.map((r) => [r.bib, r]));
+  assert.equal(by['2'].rank, 2);
+  assert.equal(by['3'].rank, 2);
+  assert.equal(by['9'].rank, 2);
+  assert.equal(by['4'].rank, 5);
 });

@@ -194,9 +194,21 @@ public final class RaceEngine {
                 return Long.compare(a.elapsedMs, b.elapsedMs);
             }
         });
-        int rank = 1;
+        // A dead heat shares a place and the next one skips it: 1, 1, 3. Two
+        // riders with the same laps and the same elapsed millisecond are not
+        // 2nd and 3rd — which one came first was decided by the order the rows
+        // arrived in, and nothing about the race. Mirrors the shared place in
+        // server/race-results.js and in league-scoring.js, so the tablet, the
+        // website and the standings give one answer.
+        int finishers = 0, place = 0;
+        Result prev = null;
         for (Result r : results) {
-            if ("finished".equals(r.status)) r.rank = rank++;
+            if (!"finished".equals(r.status)) continue;
+            finishers++;
+            boolean tied = prev != null && prev.laps == r.laps && prev.elapsedMs == r.elapsedMs;
+            place = tied ? place : finishers;
+            r.rank = place;
+            prev = r;
         }
         return results;
     }
