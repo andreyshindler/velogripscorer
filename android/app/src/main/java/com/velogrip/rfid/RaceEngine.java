@@ -44,71 +44,29 @@ public final class RaceEngine {
 
     private RaceEngine() { }
 
-    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
-                                       List<RaceStore.Passing> passings,
-                                       int suppressSecs, int minLapGapSecs) {
-        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, true);
-    }
-
-    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
-                                       List<RaceStore.Passing> passings,
-                                       int suppressSecs, int minLapGapSecs, boolean recordLaps) {
-        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps, null);
-    }
-
     /**
+     * The whole race, scored. Call it through RaceResults.compute, which fills
+     * these in from the store and the preferences — screens used to call this
+     * directly through a row of shorter overloads, and the ones that defaulted
+     * the roll-call arguments to zero quietly switched the roll call off, so
+     * six screens disagreed with the timing screen about who was still out
+     * there. Those overloads are gone for that reason; do not add them back.
+     *
      * lapTargets maps distance -> laps to finish (default 1 per distance);
      * null means the legacy unlimited mode where any crossing finishes and
      * every further crossing counts as another lap.
-     */
-    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
-                                       List<RaceStore.Passing> passings,
-                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
-                                       Map<String, Integer> lapTargets) {
-        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps, lapTargets, false);
-    }
-
-    /**
+     *
      * finalizeLapsDown: when the race is closed with racers still out, those
      * with at least one crossing are finished at their last crossing with the
      * laps they completed (ranked below full-distance finishers).
-     */
-    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
-                                       List<RaceStore.Passing> passings,
-                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
-                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown) {
-        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
-                lapTargets, finalizeLapsDown, 0L, 0L, 0L);
-    }
-
-    /**
+     *
      * Start-line roll call. nowMs is the current time; a racer whose wave has
      * been gunned, who has no crossings and was never read since the gun, is
      * marked DNS once the roll call has closed for that wave — either the window
      * (rollCallWindowMs, 0 = off) has elapsed or the operator closed it manually
      * (rollCallClosedAt, 0 = open). It is recomputed every call, so a later read
-     * clears it automatically. All three zero = feature off (legacy behaviour).
-     */
-    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
-                                       List<RaceStore.Passing> passings,
-                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
-                                       Map<String, Integer> lapTargets, boolean finalizeLapsDown,
-                                       long nowMs, long rollCallWindowMs, long rollCallClosedAt) {
-        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
-                lapTargets, 0, finalizeLapsDown, nowMs, rollCallWindowMs, rollCallClosedAt, false);
-    }
-
-    /** As above plus the MTB "leader ends race" rule (opt-in). */
-    public static List<Result> compute(List<RaceStore.Racer> racers, List<RaceStore.Wave> waves,
-                                       List<RaceStore.Passing> passings,
-                                       int suppressSecs, int minLapGapSecs, boolean recordLaps,
-                                       Map<String, Integer> lapTargets, int raceLaps,
-                                       boolean finalizeLapsDown, boolean leaderEndsRace) {
-        return compute(racers, waves, passings, suppressSecs, minLapGapSecs, recordLaps,
-                lapTargets, raceLaps, finalizeLapsDown, 0L, 0L, 0L, leaderEndsRace);
-    }
-
-    /**
+     * clears it automatically. All three zero = the roll call is off.
+     *
      * leaderEndsRace (MTB/XCO): once the first racer completes the target laps,
      * the race is over — everyone still out finishes only their current lap and
      * later crossings are ignored. Needs a lap target; inert otherwise.
