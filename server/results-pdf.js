@@ -14,6 +14,9 @@ const { PDFDocument, rgb } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 const { visualParts } = require('./bidi');
 const { formatElapsed, isFemaleG, isMaleG, genderLabelG, isTimeOnlySport } = require('./race-results');
+// The same order the standings and the results page use: an age category is
+// read by the number in it, so "עד 42" leads and "מעל 60" lands after 50-60.
+const { compareCategories } = require('./league-scoring');
 
 // Hebrew column headers + labels, matching the web UI (public/i18n.js `he`).
 const H = {
@@ -254,7 +257,8 @@ async function raceResultsPdf(contest, results) {
     drawTable(ctx, cols, view, x0);
   };
 
-  const distances = [...new Set(finished.map((r) => r.distance))];
+  const distances = [...new Set(finished.map((r) => r.distance))]
+    .sort((a, b) => String(a || '').localeCompare(String(b || ''), undefined, { numeric: true }));
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
     const label = d || H.overall;
@@ -265,9 +269,7 @@ async function raceResultsPdf(contest, results) {
   for (const d of distances) {
     const inD = finished.filter((r) => r.distance === d);
     const label = d || H.overall;
-    const combos = [...new Set(inD.filter((r) => r.category).map((r) => `${r.category}|${(r.gender || '').toLowerCase()}`))];
-    for (const combo of combos) {
-      const [cat, g] = combo.split('|');
+    for (const { category: cat, gender: g } of categorySections(inD)) {
       const gl = genderHe(genderLabelG(g), true);
       // RTL reading order: distance, then gender, then category.
       section(rtlTitle([label, gl, cat]),
@@ -371,6 +373,31 @@ function bestNote(teams) {
   return c ? `${c} ${H.counted}` : H.overall;
 }
 
+/**
+ * The category sections of a race PDF, in the order they are printed.
+ *
+ * They used to come out in the order a category first appeared in the results
+ * — which is finishing order — so the PDF opened with 50-60, then עד 42, then
+ * 43-45, depending on who happened to cross first. Ordered by the category's
+ * number now, the same rule the standings and the results page use.
+ *
+ * Exported for the tests: the order is the thing being fixed, and reading it
+ * back out of a rendered PDF is not a test anyone would trust.
+ */
+function categorySections(rows) {
+  return [...new Set(rows.filter((r) => r.category)
+    .map((r) => `${r.category}|${(r.gender || '').toLowerCase()}`))]
+    .sort((a, b) => {
+      const [ca, ga] = a.split('|');
+      const [cb, gb] = b.split('|');
+      return compareCategories(ca, cb) || ga.localeCompare(gb);
+    })
+    .map((combo) => {
+      const [category, gender] = combo.split('|');
+      return { category, gender };
+    });
+}
+
 // raceSectionRows is exported for the tests: it carries the placing, tie and
 // gap rules, none of which can be read back out of a rendered PDF.
-module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceSectionRows };
+module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceSectionRows, categorySections };

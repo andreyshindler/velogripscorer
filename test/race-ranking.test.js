@@ -916,3 +916,35 @@ test('a time-only sport ties on the time alone', () => {
   assert.equal(by['9'].rank, 2);
   assert.equal(by['4'].rank, 5);
 });
+
+// ---- the PDF's section order ----------------------------------------------
+// Reported with a screenshot of race-results-15.pdf: the sections ran
+// 50-60, עד 42, 43-45, 46-47, 46-50 — the order each category first appeared
+// in the results, which is finishing order.
+
+test('the PDF sections categories by their number, not by who finished first', () => {
+  const { categorySections } = require('../server/results-pdf');
+  // Deliberately in the order the reported PDF had them.
+  const rows = [
+    { category: '50-60', gender: 'Male' },
+    { category: 'עד 42', gender: 'Male' },
+    { category: '43-45', gender: 'Male' },
+    { category: '46-47', gender: 'Male' },
+    { category: '46-50', gender: 'Male' },
+  ];
+  assert.deepEqual(categorySections(rows).map((s) => s.category),
+    ['עד 42', '43-45', '46-47', '46-50', '50-60']);
+});
+
+test('the PDF keeps one section per category AND gender', () => {
+  const { categorySections } = require('../server/results-pdf');
+  const rows = [
+    { category: '43-45', gender: 'Male' },
+    { category: 'עד 42', gender: 'Female' },
+    { category: '43-45', gender: 'Female' },
+    { category: '43-45', gender: 'Male' },   // a repeat is one section
+    { category: '', gender: 'Male' },        // no category: no section of its own
+  ];
+  const got = categorySections(rows).map((s) => `${s.category}/${s.gender}`);
+  assert.deepEqual(got, ['עד 42/female', '43-45/female', '43-45/male']);
+});
