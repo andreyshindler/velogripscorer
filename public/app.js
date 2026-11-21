@@ -1675,9 +1675,42 @@ let raceRanksOnTime = false;
 // "-N laps"; one who is FASTER than that row — possible when the leader leads
 // on laps rather than time — gets no gap at all. fmtElapsedMs clamps negatives
 // to zero, so without this a quicker racer showed a fabricated "+0:00.0".
+/**
+ * Two rows are the same result when the ranking cannot separate them: the same
+ * elapsed time, and the same laps unless the sport ranks on time alone, where
+ * a lap carries no placing. Mirrors server/race-results.js.
+ */
+function sameResult(a, b) {
+  return !!a && !!b && a.elapsed_ms === b.elapsed_ms
+    && (raceRanksOnTime || a.laps === b.laps);
+}
+
+/**
+ * Competition ranking down a sorted list: a dead heat shares a place and the
+ * next one skips it (1, 1, 3). The server sends `rank` and `category_rank`
+ * with this rule already applied, but these tables are filtered views — one
+ * distance, often one gender — and no server field counts exactly that set.
+ * So the rule is applied again here rather than a weaker one invented: it used
+ * to compare elapsed time alone, which in a lap race would have joined a rider
+ * to someone a lap ahead of them.
+ */
+function sharedPlaces(rows) {
+  const out = [];
+  let prev = null, place = 0;
+  rows.forEach((r, i) => {
+    place = sameResult(prev, r) ? place : i + 1;
+    out.push(place);
+    prev = r;
+  });
+  return out;
+}
+
 function gapToLeader(r, leader, isFirst) {
   if (isFirst) return '–';
-  if (!leader || r.elapsed_ms === leader.elapsed_ms) return '';
+  if (!leader) return '';
+  // Level with the leader: the same dash their row carries, so two riders
+  // sharing first place read alike instead of one dash and one blank.
+  if (sameResult(r, leader)) return '–';
   // Only a lap race places by laps; in a running race the gap is always a time.
   if (!raceRanksOnTime
       && Number.isFinite(r.laps) && Number.isFinite(leader.laps) && r.laps < leader.laps) {
@@ -1831,10 +1864,9 @@ function filteredResultsTable(results, id, dist, cat, gender) {
   const genderCrumb = gender === 'Male' ? t('male') + ' ' : gender === 'Female' ? t('female') + ' ' : '';
   const crumb = `${esc(dist || t('overall'))} ${genderCrumb}- ${cat ? esc(cat) : t('overall')}`;
   const nameCell = (r) => `${esc(r.participant)}${r.team ? `<div class="muted" style="font-size:.78rem">${esc(r.team)}</div>` : ''}`;
-  let prevMs = null, prevPlace = 0;
+  const places = sharedPlaces(finished);
   const finishedHtml = finished.map((r, i) => {
-    const place = (prevMs !== null && r.elapsed_ms === prevMs) ? prevPlace : i + 1;
-    prevMs = r.elapsed_ms; prevPlace = place;
+    const place = places[i];
     const diff = gapToLeader(r, leader, i === 0);
     return `<tr>
       <td><strong>${place}</strong></td><td>${esc(r.bib || '')}</td><td>${nameCell(r)}</td>
@@ -1949,9 +1981,14 @@ function fullResultsTable(results, editable, checkpoints) {
     if (!finished.length && !others.length) return '';
     const lead = finished[0];
     // Blank for the leader here (this table marks it with a medal instead).
-    const behindOf = (r, i) => (i === 0 || !lead ? '' : gapToLeader(r, lead, false));
-    const finRows = finished.map((r, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}">
-      <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
+    // Blank for anyone level with the leader too, not just the first row:
+    // this table marks the lead with a medal, and a joint leader is one.
+    const behindOf = (r, i) => (i === 0 || !lead || sameResult(r, lead) ? '' : gapToLeader(r, lead, false));
+    // A dead heat shares the medal: two riders level for first are both gold,
+    // and the next one is third.
+    const places = sharedPlaces(finished);
+    const finRows = finished.map((r, i) => `<tr class="${places[i] <= 3 ? 'top' + places[i] : ''}">
+      <td><strong>${MEDALS[places[i]] || places[i]}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
       <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
