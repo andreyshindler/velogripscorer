@@ -757,3 +757,84 @@ test('a chip swap is rejected whole when anything about it is wrong', async () =
   assert.equal(same.body.unchanged, true);
   assert.deepEqual(chips('101'), ['AAAA0001']);
 });
+
+// ---- a racer who set off late ----------------------------------------------
+// Rolling over the start mat minutes after the gun is them STARTING, not a lap.
+// Without a late start recorded, that read is their first crossing — and in a
+// single-crossing race it is their finish, at a time they never rode.
+
+function seedLateStarter({ recordLaps, raceLaps }) {
+  const contestId = db.prepare(
+    `INSERT INTO contests (organizer_id, title, description, category, tags, visibility,
+       start_at, end_at, kind, sport, status, suppress_secs, min_lap_gap_secs, record_laps, race_laps)
+     VALUES (?,?,'','other','[]','public',?,?, 'race', 'MTB XCO', 'active', 10, 30, ?, ?)`
+  ).run(organizerId, `Late ${recordLaps}-${raceLaps}-${Math.random()}`, iso(-60), iso(3600),
+    recordLaps, raceLaps).lastInsertRowid;
+  const readerId = db.prepare(
+    'INSERT INTO readers (contest_id, name, token, location) VALUES (?,?,?,?)'
+  ).run(contestId, 'Timing app', `tok_late_${contestId}_${Math.random()}`, '').lastInsertRowid;
+  const waveId = db.prepare(
+    'INSERT INTO waves (contest_id, name, started_at) VALUES (?,?,?)'
+  ).run(contestId, 'wave1', new Date(gun).toISOString()).lastInsertRowid;
+  db.prepare(
+    'INSERT INTO tag_assignments (contest_id, epc, bib, participant, wave_id) VALUES (?,?,?,?,?)'
+  ).run(contestId, 'EPC_LATE', '31', 'Late Starter', waveId);
+  const read = (secs) => db.prepare(
+    'INSERT INTO tag_reads (reader_id, contest_id, epc, read_at) VALUES (?,?,?,?)'
+  ).run(readerId, contestId, 'EPC_LATE', iso(secs));
+  read(192);   // 3:12 — rolling over the mat, setting off
+  read(900);   // 15:00 — a real lap
+  read(1620);  // 27:00 — a real lap
+  return {
+    contest: () => db.prepare('SELECT * FROM contests WHERE id = ?').get(contestId),
+    setLate: (secs) => db.prepare(
+      'UPDATE tag_assignments SET late_start_at = ? WHERE contest_id = ? AND bib = ?'
+    ).run(secs === null ? null : gun + secs * 1000, contestId, '31'),
+  };
+}
+
+test('without a late start, leaving the start line counts as a lap', () => {
+  const race = seedLateStarter({ recordLaps: 1, raceLaps: 3 });
+  const r = computeRaceResults(race.contest()).find((x) => x.bib === '31');
+  assert.equal(r.laps, 3, 'the roll-out is counted as lap 1 — the behaviour being fixed');
+  assert.equal(r.status, 'finished', 'so three laps arrive one lap early');
+});
+
+test('a late start makes the roll-out stop counting as a lap', () => {
+  const race = seedLateStarter({ recordLaps: 1, raceLaps: 3 });
+  race.setLate(192);
+  const r = computeRaceResults(race.contest()).find((x) => x.bib === '31');
+  assert.equal(r.laps, 2, 'only the two real laps count');
+  // The server has no "on course with N laps" state — anyone with a crossing
+  // carries a time here, and the tablet is what shows a rider mid-race.
+  assert.equal(r.status, 'finished');
+});
+
+test('a late start never moves the clock: elapsed still runs from the gun', () => {
+  const race = seedLateStarter({ recordLaps: 1, raceLaps: 2 });
+  race.setLate(192);
+  const r = computeRaceResults(race.contest()).find((x) => x.bib === '31');
+  assert.equal(r.status, 'finished');
+  assert.equal(r.laps, 2);
+  // 27:00 from the gun, not 27:00 minus the 3:12 spent getting to the line.
+  assert.equal(r.elapsed_ms, 1620_000, 'the lateness is the racer\'s own loss');
+});
+
+test('in a single-crossing race a late start saves the real finish', () => {
+  const unfixed = seedLateStarter({ recordLaps: 0, raceLaps: 0 });
+  const before = computeRaceResults(unfixed.contest()).find((x) => x.bib === '31');
+  assert.equal(before.elapsed_ms, 192_000, 'the roll-out was recorded as the finish');
+
+  const race = seedLateStarter({ recordLaps: 0, raceLaps: 0 });
+  race.setLate(192);
+  const after = computeRaceResults(race.contest()).find((x) => x.bib === '31');
+  assert.equal(after.elapsed_ms, 900_000, 'the first real crossing is the finish');
+});
+
+test('clearing a late start puts the racer back as they were', () => {
+  const race = seedLateStarter({ recordLaps: 1, raceLaps: 3 });
+  race.setLate(192);
+  race.setLate(null);
+  const r = computeRaceResults(race.contest()).find((x) => x.bib === '31');
+  assert.equal(r.laps, 3, 'the operator can undo the call');
+});

@@ -113,6 +113,11 @@ function computeRaceResults(contest, { category } = {}) {
       const g = groups.get(key);
       g.epcs.push(a.epc);
       if (!g.racer_status && a.racer_status) g.racer_status = a.racer_status;
+      // Two chips, one racer: the later start wins, so a late start recorded
+      // against either chip holds for the racer.
+      if (a.late_start_at && (!g.late_start_at || a.late_start_at > g.late_start_at)) {
+        g.late_start_at = a.late_start_at;
+      }
     }
   }
 
@@ -149,6 +154,7 @@ function computeRaceResults(contest, { category } = {}) {
     if (a.racer_status) return { ...base, status: a.racer_status, laps: 0 };
     if (!wave || !wave.started_at) return { ...base, status: raceFinished ? 'DNS' : 'not_started', laps: 0 };
     const startMs = gunMs(wave);
+    const lateStartMs = Number(a.late_start_at) > 0 ? Number(a.late_start_at) : 0;
     // Operator taps are deliberate: exempt from the start-suppression window
     // and the lap-gap dedupe (each tap is one crossing) — mirrors the app.
     const valid = a.epcs
@@ -158,7 +164,17 @@ function computeRaceResults(contest, { category } = {}) {
       // line before they start. (Stale taps from a previous run, or a mis-tap
       // before the start, used to survive here and produce a NEGATIVE split.)
       // Manual taps still bypass the start-suppression window, but not the gun.
-      .filter((r) => r.at >= startMs && (r.manual || r.at >= startMs + suppressMs));
+      //
+      // A racer who started late carries their own threshold. Rolling over the
+      // mat minutes after the gun is them setting off, and without this it
+      // counted as their first lap — or, in a single-crossing race, as their
+      // finish. Their elapsed is still measured from the gun, so the lateness
+      // is their own loss, as it is in any mass start.
+      // The late start suppresses a window after ITSELF, exactly as the gun
+      // does: the racer is still clearing the mat, and the lap gap cannot help
+      // because they have no crossing yet to be measured against.
+      .filter((r) => r.at >= startMs
+        && (r.manual || r.at >= Math.max(startMs, lateStartMs) + suppressMs));
     if (!valid.length) return { ...base, status: raceFinished ? 'DNF' : 'on_course', laps: 0 };
 
     const target = targetFor(a.distance || '');

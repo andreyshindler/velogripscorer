@@ -306,6 +306,10 @@ for (const stmt of [
   `ALTER TABLE tag_assignments ADD COLUMN distance TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tag_assignments ADD COLUMN team TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tag_assignments ADD COLUMN gender TEXT NOT NULL DEFAULT ''`,
+  // A racer who started late: the moment they were first seen going out.
+  // Their reads before it are them leaving the start, not laps. Stored as
+  // epoch milliseconds, and NULL for everyone who started with the gun.
+  `ALTER TABLE tag_assignments ADD COLUMN late_start_at INTEGER`,
   `ALTER TABLE tag_reads ADD COLUMN antenna INTEGER`,
   // Operator taps from the app/web: exempt from the start-suppression window.
   `ALTER TABLE tag_reads ADD COLUMN manual INTEGER NOT NULL DEFAULT 0`,

@@ -388,6 +388,10 @@ router.post('/ingest/racer-statuses', (req, res) => {
   if (!statuses) return res.status(400).json({ error: 'statuses array required' });
 
   const update = db.prepare('UPDATE tag_assignments SET racer_status = ? WHERE contest_id = ? AND bib = ?');
+  // A late start travels on this channel too: it belongs to the racer, like the
+  // status, and the device decides it mid-race. Sent as epoch milliseconds;
+  // null clears it, which is how the operator undoes the call.
+  const setLate = db.prepare('UPDATE tag_assignments SET late_start_at = ? WHERE contest_id = ? AND bib = ?');
   let applied = 0;
   db.transaction(() => {
     for (const s of statuses) {
@@ -395,6 +399,12 @@ router.post('/ingest/racer-statuses', (req, res) => {
       const status = String(s?.status || '').trim().toUpperCase();
       if (!bib || !['', 'DNS', 'DNF', 'DSQ'].includes(status)) continue;
       if (update.run(status, reader.contest_id, bib).changes > 0) applied++;
+      // Only when the key is present, so a device that never sends it cannot
+      // wipe a late start the operator set from somewhere else.
+      if (Object.prototype.hasOwnProperty.call(s, 'late_start')) {
+        const ms = Number(s.late_start);
+        setLate.run(Number.isFinite(ms) && ms > 0 ? ms : null, reader.contest_id, bib);
+      }
     }
   })();
   if (applied) sseBroadcast(reader.contest_id, 'tag_reads', { statuses: applied });
