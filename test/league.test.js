@@ -545,3 +545,39 @@ test('computeLeagueStandings: a fully level tie still has a stable order', () =>
   const b = computeLeagueStandings(races, settings).individual[0].rows.map((r) => r.bib);
   assert.deepEqual(a, b, 'the same input must always produce the same order');
 });
+
+// ---- category order -------------------------------------------------------
+// Reported from the standings page: "עד 42" sat under 50-60, at the bottom.
+// The labels were sorted as text, and Hebrew letters sort after digits, so the
+// youngest group landed last.
+
+test('categories are ordered by their number, so "up to 42" comes first', () => {
+  const { compareCategories } = require('../server/league-scoring');
+  const cats = ['46-47', '50-60', 'עד 42', '43-45', '46-50'];
+  assert.deepEqual(cats.slice().sort(compareCategories),
+    ['עד 42', '43-45', '46-47', '46-50', '50-60']);
+  // The words around the number do not decide anything, only the number.
+  assert.deepEqual(['מעל 60', 'עד 42', '46-50'].sort(compareCategories),
+    ['עד 42', '46-50', 'מעל 60']);
+  // A category with no number at all goes after the numbered ones rather than
+  // interleaving by spelling.
+  assert.deepEqual(['Elite', '50-60', 'עד 42'].sort(compareCategories),
+    ['עד 42', '50-60', 'Elite']);
+  // Same first number: the label decides, so the order is at least stable.
+  assert.deepEqual(['46-50', '46-47'].sort(compareCategories), ['46-47', '46-50']);
+});
+
+test('the standings sections come out in that order', () => {
+  const rider = (bib, category) => ({
+    bib, participant: 'R' + bib, status: 'finished', laps: 1, elapsed_ms: 60_000,
+    distance: 'MTB', gender: 'M', category, team: 'T',
+  });
+  const races = [{
+    contest: { id: 1 }, round: 1,
+    results: [rider('1', '50-60'), rider('2', 'עד 42'), rider('3', '46-47'), rider('4', '43-45')],
+  }];
+  const { individual } = computeLeagueStandings(races, normalizeSettings({}));
+  assert.deepEqual(individual.map((g) => g.category),
+    ['עד 42', '43-45', '46-47', '50-60'],
+    'the youngest group heads the page, not trails it');
+});

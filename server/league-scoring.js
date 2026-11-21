@@ -56,6 +56,28 @@ function normalizeSettings(raw) {
   return Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map((k) => [k, s[k]]));
 }
 
+/**
+ * Age categories are read by their number: "עד 42", "43-45", "46-50". Sorting
+ * the labels as text put "עד 42" last, because Hebrew letters sort after
+ * digits — the youngest group at the bottom of the standings, under 50-60.
+ * The first number in the label is what orders them, whatever words surround
+ * it, so "up to 42" and "מעל 60" both land where a reader expects.
+ *
+ * A category with no number at all (Elite, נוער) goes after the numbered ones
+ * rather than interleaving by spelling. Equal numbers ("46-47" and "46-50")
+ * fall back to the label.
+ *
+ * public/app.js sorts its own category sections and carries the same rule.
+ */
+function categoryNumber(label) {
+  const m = String(label || '').match(/\d+/);
+  return m ? Number(m[0]) : Number.POSITIVE_INFINITY;
+}
+function compareCategories(a, b) {
+  return categoryNumber(a) - categoryNumber(b)
+    || String(a || '').localeCompare(String(b || ''), undefined, { numeric: true });
+}
+
 /** Scoring group: riders place within their distance + gender + category. */
 function groupKey(r) {
   return `${(r.distance || '').trim()}|${genderLabelG(r.gender)}|${(r.category || '').trim()}`;
@@ -241,7 +263,9 @@ function computeLeagueStandings(races, settings) {
   const individual = [...groups.values()];
   for (const g of individual) g.rows.sort(byStandings('bib'));
   individual.sort((a, b) =>
-    a.distance.localeCompare(b.distance) || a.gender.localeCompare(b.gender) || a.category.localeCompare(b.category));
+    a.distance.localeCompare(b.distance, undefined, { numeric: true })
+    || a.gender.localeCompare(b.gender)
+    || compareCategories(a.category, b.category));
 
   const teams = [...teamMap.values()].map((row) => {
     const { total, counted_ids } = bestN(row.per_race, settings.team_best_n);
@@ -287,4 +311,5 @@ function presetSettings(name) {
 module.exports = {
   DEFAULT_SETTINGS, PRESETS, presetSettings, rampDown,
   normalizeSettings, groupKey, scoreRace, computeLeagueStandings,
+  compareCategories,
 };

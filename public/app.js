@@ -14,6 +14,22 @@ const state = {
   sse: null,
 };
 
+/**
+ * Age categories are read by their number: "עד 42", "43-45", "46-50". Sorted
+ * as plain text, "עד 42" lands last — Hebrew letters sort after digits — so
+ * the youngest group appeared under 50-60. The first number in the label
+ * orders them, whatever words surround it; a category with no number at all
+ * goes after the numbered ones. Same rule as server/league-scoring.js.
+ */
+function compareCategories(a, b) {
+  const num = (x) => {
+    const m = String(x || '').match(/\d+/);
+    return m ? Number(m[0]) : Number.POSITIVE_INFINITY;
+  };
+  return num(a) - num(b)
+    || String(a || '').localeCompare(String(b || ''), undefined, { numeric: true });
+}
+
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -1867,7 +1883,7 @@ function raceWinnersTables(id, results, raceDone) {
 
   const body = dists.map((d) => {
     const rows = byDist.get(d);
-    const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+    const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort(compareCategories);
     return `<tr class="dist-sep"><td colspan="${colCount}">${esc(d || t('overall'))}</td></tr>
       ${line(d, t('overall'), rows, 0, '', '')}
       ${rows.some((r) => isFemaleW(r.gender)) ? line(d, t('female'), rows.filter((r) => isFemaleW(r.gender)), 20, '', 'Female') : ''}
@@ -1890,7 +1906,7 @@ function topFinishersTables(results, n) {
   const dists = [...byDist.keys()].sort();
   return dists.map((d) => {
     const rows = byDist.get(d);
-    const cats = ['', ...[...new Set(rows.map((r) => r.category).filter(Boolean))].sort()];
+    const cats = ['', ...[...new Set(rows.map((r) => r.category).filter(Boolean))].sort(compareCategories)];
     return cats.map((cat) => {
       const scope = (cat ? rows.filter((r) => r.category === cat) : rows)
         .filter((r) => r.status === 'finished')
