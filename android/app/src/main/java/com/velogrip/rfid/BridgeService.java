@@ -118,6 +118,8 @@ public class BridgeService extends Service {
      * being stored, uploaded and redrawn.
      */
     private long leaderDoneAt = 0;
+    /** The edit stamp the lap tally was last valid for; see handleReads. */
+    private long lastCrossingEdit = 0;
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
@@ -409,6 +411,21 @@ public class BridgeService extends Service {
         // No gun anywhere means setup or a restart: forget what we have stored,
         // so a re-gunned race records its crossings from scratch.
         if (!started) { beepedRacers.clear(); crossingsByEpc.clear(); leaderDoneAt = 0; }
+        // A screen changed the recorded crossings — a time corrected, two
+        // swapped, an entry cancelled, a finish tapped in by hand. The tally
+        // below is held in memory and knows none of that, so it would go on
+        // counting a race the database no longer has: a deleted crossing left
+        // the count one too high and could retire a chip that still had a lap
+        // to give (its next pass was dropped outright and never read again),
+        // and a moved crossing left the lap-gap window measured against a time
+        // that is gone. Drop it and let each chip re-read its own tally from
+        // the store on its next pass.
+        long edited = prefs.crossingsEditedAt();
+        if (edited != lastCrossingEdit) {
+            lastCrossingEdit = edited;
+            crossingsByEpc.clear();
+            leaderDoneAt = 0;   // re-arms from the seeded tally if it still holds
+        }
         // The operator closed the course from Race control: the race is over and
         // no chip is timing any more. Read fresh each batch so closing (or
         // reopening) takes effect on the next read, not on the next race.
@@ -575,8 +592,16 @@ public class BridgeService extends Service {
         if (c != null) return c;
         c = new Crossings();
         for (RaceStore.Passing p : store.passingsForEpc(epc)) { // ordered by read_at
-            if (p.readAtMs < minAt) continue;
-            if (c.count == 0 || p.readAtMs - c.last >= gapMs) { c.count++; c.last = p.readAtMs; }
+            // Manual rows — an operator's tap, or a time they corrected — are
+            // deliberate crossings, exempt from the suppression window and the
+            // lap gap. RaceEngine has always counted them that way; this tally
+            // did not, so after a correction the two disagreed about how many
+            // laps a chip had given and therefore about when it was done.
+            if (!p.manual && p.readAtMs < minAt) continue;
+            if (p.manual || c.count == 0 || p.readAtMs - c.last >= gapMs) {
+                c.count++;
+                c.last = Math.max(c.last, p.readAtMs);
+            }
         }
         crossingsByEpc.put(epc, c);
         return c;

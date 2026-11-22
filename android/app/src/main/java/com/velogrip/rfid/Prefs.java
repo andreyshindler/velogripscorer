@@ -55,6 +55,14 @@ public final class Prefs {
     // Race control, reset when a race starts or restarts.
     public long courseClosedAt() { return sp.getLong("courseClosedAt", 0L); }
     public void setCourseClosedAt(long ms) { sp.edit().putLong("courseClosedAt", ms).apply(); }
+    // Bumped whenever a screen adds, moves or removes a recorded crossing. The
+    // reader service keeps its lap tally in memory and would otherwise go on
+    // counting from a race that no longer exists in the database — see
+    // BridgeService, which drops that tally and re-reads it when this changes.
+    public long crossingsEditedAt() { return sp.getLong("crossingsEditedAt", 0L); }
+    public void setCrossingsEdited() {
+        sp.edit().putLong("crossingsEditedAt", System.currentTimeMillis()).apply();
+    }
     // When the operator last un-started every wave (race restart). The start-list
     // sync must not pull a gun time older than this back down from the server, or
     // a restarted race silently resurrects the previous run's guns and the wave

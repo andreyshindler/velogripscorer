@@ -483,7 +483,7 @@ public class RaceTimingActivity extends BaseActivity {
         long now = System.currentTimeMillis();
         RaceStore.Pending waiting = oldestRacerPending();
         if (waiting != null) {
-            store.recordPassing(waiting.epc, now);
+            recordPassing(waiting.epc, now);
             store.deletePending(waiting.id);
             scrollToBib = waiting.bib; // show the new finish, same as time-then-racer
         } else {
@@ -504,7 +504,7 @@ public class RaceTimingActivity extends BaseActivity {
         // Swap mode: this tile is the correct racer — move the finish to them.
         if (swapBib != null) {
             clearRacerPassings(swapBib);
-            store.recordPassing(r.epc, swapTimeMs);
+            recordPassing(r.epc, swapTimeMs);
             tapToast("⇄ #" + r.bib + "  " + r.name);
             swapBib = null;
             scrollToBib = r.bib;
@@ -516,7 +516,7 @@ public class RaceTimingActivity extends BaseActivity {
         }
         RaceStore.Pending time = oldestTimePending();
         if (time != null) {
-            store.recordPassing(r.epc, time.readAtMs);
+            recordPassing(r.epc, time.readAtMs);
             store.deletePending(time.id);
             tapToast("⏱ #" + r.bib + "  " + r.name);
             scrollToBib = r.bib;
@@ -1123,7 +1123,7 @@ public class RaceTimingActivity extends BaseActivity {
             if (scoped && !bibsInScope.contains(p.bib)) continue;
             if (p.hasRacer() && !p.hasTime()) {
                 resultsBox.addView(resultRow("—", p.bib, p.name, getString(R.string.tap_time), true,
-                        () -> { store.recordPassing(p.epc, System.currentTimeMillis());
+                        () -> { recordPassing(p.epc, System.currentTimeMillis());
                                 store.deletePending(p.id); scrollToBib = p.bib; render(); },
                         () -> openRacerInfo(p.bib)));
             }
@@ -1385,7 +1385,7 @@ public class RaceTimingActivity extends BaseActivity {
         new android.app.AlertDialog.Builder(this)
                 .setTitle(R.string.assign_to_racer)
                 .setItems(labels, (d, which) -> {
-                    store.recordPassing(racers.get(which).epc, p.readAtMs);
+                    recordPassing(racers.get(which).epc, p.readAtMs);
                     store.deletePending(p.id);
                     render();
                 })
@@ -1399,6 +1399,29 @@ public class RaceTimingActivity extends BaseActivity {
         java.util.List<String> epcs = new ArrayList<>();
         for (RaceStore.Racer r : store.racers()) if (r.bib.equals(bib)) epcs.add(r.epc);
         return epcs;
+    }
+
+    // Every change to a recorded crossing goes through these three rather than
+    // straight to the store, so the reader service is always told that its
+    // in-memory lap tally no longer matches the database. It counts laps to
+    // know when a chip has given them all and can stop being read; left stale,
+    // a deleted crossing kept the count one too high and retired a chip that
+    // still had a lap to give — its next pass was dropped outright and the
+    // rider simply stopped being timed.
+
+    private void recordPassing(String epc, long atMs) {
+        store.recordPassing(epc, atMs);
+        prefs.setCrossingsEdited();
+    }
+
+    private void deletePassing(long id) {
+        store.deletePassing(id);
+        prefs.setCrossingsEdited();
+    }
+
+    private void updatePassing(long id, long atMs) {
+        store.updatePassing(id, atMs);
+        prefs.setCrossingsEdited();
     }
 
     /** The read behind one of a racer's counted crossings, or 0 if there is none
@@ -1556,7 +1579,7 @@ public class RaceTimingActivity extends BaseActivity {
             new android.app.AlertDialog.Builder(this)
                     .setMessage(R.string.edit_crossing_delete_confirm)
                     .setPositiveButton(R.string.yes, (d, w) -> {
-                        store.deletePassing(passingId);
+                        deletePassing(passingId);
                         store.markCorrected(p.epc);
                         shownCrossing = null;   // a later read from them is new again
                         render();
@@ -1591,7 +1614,7 @@ public class RaceTimingActivity extends BaseActivity {
         if (atMs < gun) { tapToast(getString(R.string.edit_crossing_before_gun)); return false; }
         RaceStore.Passing p = store.passingById(passingId);
         if (p == null) return false;
-        store.updatePassing(passingId, atMs);
+        updatePassing(passingId, atMs);
         store.markCorrected(p.epc);
         // The list is ordered by time, so a corrected crossing moves: follow it
         // to its new place rather than leaving the operator to find it.
@@ -1604,8 +1627,8 @@ public class RaceTimingActivity extends BaseActivity {
     private void swapCrossings(long a, long b) {
         RaceStore.Passing pa = store.passingById(a), pb = store.passingById(b);
         if (pa == null || pb == null) { render(); return; }
-        store.updatePassing(a, pb.readAtMs);
-        store.updatePassing(b, pa.readAtMs);
+        updatePassing(a, pb.readAtMs);
+        updatePassing(b, pa.readAtMs);
         store.markCorrected(pa.epc);
         store.markCorrected(pb.epc);
         scrollToBib = bibForEpc(pa.epc);   // follow the racer whose row was tapped
@@ -1667,7 +1690,7 @@ public class RaceTimingActivity extends BaseActivity {
 
     private void clearRacerPassings(String bib) {
         for (String epc : epcsForBib(bib)) {
-            for (RaceStore.Passing p : store.passingsForEpc(epc)) store.deletePassing(p.id);
+            for (RaceStore.Passing p : store.passingsForEpc(epc)) deletePassing(p.id);
             // The website keeps whatever was already uploaded unless it is told
             // otherwise, so an entry cancelled here used to stay published.
             store.markCorrected(epc);
