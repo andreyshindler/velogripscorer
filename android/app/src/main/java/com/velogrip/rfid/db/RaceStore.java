@@ -481,6 +481,14 @@ public final class RaceStore extends SQLiteOpenHelper {
                 new Object[]{distance, bib});
     }
 
+    /** Male / Female / "" for every chip of the bib. Stored in the canonical
+     *  spelling the scoring understands, whatever the screen shows. */
+    public void setRacerGender(String bib, String gender) {
+        if (bib.isEmpty()) return;
+        getWritableDatabase().execSQL("UPDATE racers SET gender = ? WHERE bib = ?",
+                new Object[]{gender, bib});
+    }
+
     public void setRacerTeam(String bib, String team) {
         if (bib.isEmpty()) return;
         getWritableDatabase().execSQL("UPDATE racers SET team = ? WHERE bib = ?",

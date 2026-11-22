@@ -283,13 +283,23 @@ function computeRaceResults(contest, { category } = {}) {
     r.behind = r.rank === 1 ? '' : (!timeOnly && r.laps < leader.laps
       ? `-${leader.laps - r.laps} lap${leader.laps - r.laps > 1 ? 's' : ''}`
       : '+' + formatElapsed(r.elapsed_ms - leader.elapsed_ms));
-    // Keyed by distance AND category. Age bands repeat across fields — an XCO
-    // race with Elite and Sport has a 43-45 in both, and a combined running +
-    // MTB event certainly does — so keying on the category alone ranked a
-    // runner against a rider and handed out one podium for two races. The
-    // public results page, the CSV and the PDF all section per distance and
-    // always did; this is the number behind them finally agreeing.
-    const key = `${r.distance || ''}\u0000${r.category || ''}`;
+    // Keyed by distance, GENDER and category — the same group the league
+    // scores on (league-scoring.js groupKey), so one race cannot report a
+    // category place that the standings then disagree with.
+    //
+    // Age bands repeat across fields — an XCO race with Elite and Sport has a
+    // 43-45 in both, and a combined running + MTB event certainly does — so
+    // keying on the category alone ranked a runner against a rider and handed
+    // out one podium for two races. Gender is the same fault one level down:
+    // where the category label is a plain age ("עד 44") and the gender lives
+    // in its own column, the fastest woman was placed behind men she never
+    // raced. Lists whose labels already name the gender ("גברים עד 44") are
+    // unaffected, which is why this went unnoticed — and why the PDF, which
+    // has always sectioned by gender, disagreed with this number.
+    //
+    // Through genderLabelG, so "Male", "גבר" and "גברים" are one group rather
+    // than three, and anything unrecognised stays grouped as it is today.
+    const key = `${r.distance || ''}\u0000${genderLabelG(r.gender)}\u0000${r.category || ''}`;
     const c = categoryPlace.get(key) || { seen: 0, place: 0, prev: null };
     c.seen += 1;
     c.place = tiedWith(c.prev, r) ? c.place : c.seen;

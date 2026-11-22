@@ -13,9 +13,14 @@ import com.velogrip.rfid.db.RaceStore;
 
 /**
  * Racer Info — the details behind the ❯ arrow on a Race Timing row. Name,
- * distance, category, wave and the chip IDs are editable; age / gender / team /
- * email / info fields mirror the reference but are not part of the start-list
- * data, so they are shown read-only.
+ * distance, category, wave, gender, team and the chip IDs are editable; age
+ * and the other reference fields are not part of the start-list data, so they
+ * are shown read-only.
+ *
+ * Edits here are local to this device: the app pulls the start list down and
+ * sends up times and declared statuses, not roster changes. A correction made
+ * on the tablet fixes what the tablet scores and prints; the website keeps its
+ * own copy until the same change is made there.
  */
 public class RacerInfoActivity extends BaseActivity {
 
@@ -88,9 +93,58 @@ public class RacerInfoActivity extends BaseActivity {
         box.addView(dropdownRow(getString(R.string.team_name), r.team,
                 distinctValues(true), val -> store.setRacerTeam(bib, val)));
 
+        // Gender decides which group a racer is scored in — results are ranked
+        // by distance, gender and category — so it has to be fixable here. It
+        // was shown as "not stored", which it never was: the column has been on
+        // the racers table all along, filled by the start list and sent up with
+        // it. A racer whose gender came over blank or wrong could only be put
+        // right on the website.
+        box.addView(genderRow(r.gender));
+
         // reference fields not stored by the start list
         box.addView(readonlyRow(getString(R.string.racer_age), getString(R.string.not_stored)));
-        box.addView(readonlyRow(getString(R.string.racer_gender), getString(R.string.not_stored)));
+    }
+
+    /** Male / Female / unset, shown in the operator's language and stored in
+     *  the canonical spelling the scoring reads. */
+    private LinearLayout genderRow(String current) {
+        final String[] values = {"", "Male", "Female"};
+        String[] labels = {getString(R.string.category_none),
+                getString(R.string.gender_male), getString(R.string.gender_female)};
+
+        LinearLayout row = baseRow(getString(R.string.racer_gender));
+        Spinner sp = new Spinner(this);
+        ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sp.setAdapter(ad);
+        final int initial = genderIndex(current);
+        sp.setSelection(initial);
+        sp.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        sp.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> p, android.view.View v, int pos, long id) {
+                if (pos == initial) return;   // the initial programmatic selection
+                store.setRacerGender(bib, values[pos]);
+                render();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p) { }
+        });
+        row.addView(sp);
+        return row;
+    }
+
+    /** Which of the three options a stored value is. Start lists spell gender
+     *  in whatever way the office that typed them chose, so the same words the
+     *  server knows are accepted here — see MALE_WORDS / FEMALE_WORDS in
+     *  server/race-results.js, which this list mirrors. */
+    private static int genderIndex(String raw) {
+        String s = raw == null ? "" : raw.trim().toLowerCase(java.util.Locale.ROOT);
+        for (String m : new String[]{"m", "male", "man", "men", "boy", "ז", "זכר", "גבר", "גברים", "בן", "בנים"}) {
+            if (m.equals(s)) return 1;
+        }
+        for (String f : new String[]{"f", "female", "woman", "women", "girl", "נ", "נקבה", "אישה", "אשה", "נשים", "בת", "בנות"}) {
+            if (f.equals(s)) return 2;
+        }
+        return 0;
     }
 
     private LinearLayout editableRow(String label, String value, java.util.function.Consumer<String> onSave) {

@@ -922,3 +922,73 @@ test('league scoring separates men and women spelled in Hebrew, on a plain age c
   assert.equal(by('903').place, 2);
   assert.equal(by('903').points, 18);
 });
+
+test('category places split by gender, so the race page and the standings agree', async () => {
+  const org = await register('catgender@test.co', 'Category Gender Org');
+  const c = (await request(app).post('/api/contests').set(auth(org)).send({
+    kind: 'race', title: 'Plain ages', sport: 'Running', start_at: past, end_at: future,
+  })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(org)).send({ name: 'all' })).body;
+  // One category label for everyone; the gender lives in its own column and is
+  // spelled the way a Hebrew start list spells it.
+  const people = [
+    ['AAAA9101', '911', 'גבר מהיר', 'גברים', 60_000],
+    ['AAAA9102', '912', 'אישה מהירה', 'נשים', 70_000],
+    ['AAAA9103', '913', 'גבר שני', 'גברים', 80_000],
+    ['AAAA9104', '914', 'אישה שנייה', 'נשים', 90_000],
+  ];
+  for (const [epc, bib, participant, gender] of people) {
+    await request(app).post(`/api/contests/${c.id}/tags`).set(auth(org))
+      .send({ epc, bib, participant, category: 'עד 44', gender, wave_id: w.id });
+  }
+  const reader = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(org))
+    .send({ name: 'Finish' })).body;
+  const gun = new Date(Date.now() - 600_000).toISOString();
+  await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', reader.token)
+    .send({ name: 'all', started_at: gun });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
+    reads: people.map(([epc, , , , ms]) => ({ epc, read_at: new Date(Date.parse(gun) + ms).toISOString() })),
+  });
+
+  const res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(org));
+  const by = (bib) => res.body.results.find((r) => r.bib === bib);
+  assert.equal(by('911').rank, 1, 'overall is still one race');
+  assert.equal(by('912').rank, 2);
+  // Category places are per gender: each of them wins their own group.
+  assert.equal(by('911').category_rank, 1);
+  assert.equal(by('912').category_rank, 1, 'the fastest woman is first, not second');
+  assert.equal(by('913').category_rank, 2);
+  assert.equal(by('914').category_rank, 2);
+
+  // And the same split the league scores on, so the two cannot disagree.
+  const { normalizeSettings, scoreRace } = require('../server/league-scoring');
+  const { riders } = scoreRace(res.body.results, normalizeSettings({}));
+  for (const bib of ['911', '912', '913', '914']) {
+    assert.equal(riders.find((r) => r.bib === bib).place, by(bib).category_rank, `bib ${bib}`);
+  }
+});
+
+test('one gender spelled several ways is still one category group', async () => {
+  const org = await register('mixedspell@test.co', 'Mixed Spelling Org');
+  const c = (await request(app).post('/api/contests').set(auth(org)).send({
+    kind: 'race', title: 'Mixed spellings', sport: 'Running', start_at: past, end_at: future,
+  })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(org)).send({ name: 'all' })).body;
+  // The same people, typed by three different hands.
+  for (const [epc, bib, gender] of [['AAAA9201', '921', 'Male'], ['AAAA9202', '922', 'גבר'], ['AAAA9203', '923', 'גברים']]) {
+    await request(app).post(`/api/contests/${c.id}/tags`).set(auth(org))
+      .send({ epc, bib, participant: 'Runner ' + bib, category: '40-49', gender, wave_id: w.id });
+  }
+  const reader = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(org))
+    .send({ name: 'Finish' })).body;
+  const gun = new Date(Date.now() - 600_000).toISOString();
+  await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', reader.token)
+    .send({ name: 'all', started_at: gun });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', reader.token).send({
+    reads: [['AAAA9201', 60_000], ['AAAA9202', 70_000], ['AAAA9203', 80_000]]
+      .map(([epc, ms]) => ({ epc, read_at: new Date(Date.parse(gun) + ms).toISOString() })),
+  });
+  const res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(org));
+  const ranks = ['921', '922', '923'].map((b) => res.body.results.find((r) => r.bib === b).category_rank);
+  assert.deepEqual(ranks, [1, 2, 3], 'three spellings of male are one group, not three firsts');
+});
