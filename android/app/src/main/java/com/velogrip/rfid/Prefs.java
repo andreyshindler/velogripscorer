@@ -48,6 +48,13 @@ public final class Prefs {
     public int rollCallSecs() { return sp.getInt("rollCallSecs", 0); } // 0 = off by default
     public long rollCallClosedAt() { return sp.getLong("rollCallClosedAt", 0L); }
     public void setRollCallClosedAt(long ms) { sp.edit().putLong("rollCallClosedAt", ms).apply(); }
+    // When the operator closed the course (0 = open). The race is over and the
+    // reader stops recording: a rider who gave the laps they were going to give
+    // and now stands by the antenna is read for as long as they stand there, and
+    // every one of those reads used to be stored, uploaded and redrawn. Set from
+    // Race control, reset when a race starts or restarts.
+    public long courseClosedAt() { return sp.getLong("courseClosedAt", 0L); }
+    public void setCourseClosedAt(long ms) { sp.edit().putLong("courseClosedAt", ms).apply(); }
     // When the operator last un-started every wave (race restart). The start-list
     // sync must not pull a gun time older than this back down from the server, or
     // a restarted race silently resurrects the previous run's guns and the wave

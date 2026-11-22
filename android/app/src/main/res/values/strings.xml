@@ -254,6 +254,16 @@
     <string name="rc_rollcall_title">Close roll call</string>
     <string name="rc_rollcall_sub">Mark racers not seen at the start as DNS now</string>
     <string name="rollcall_closed">Roll call closed — unseen racers marked DNS</string>
+    <string name="rc_course_close_title">Close the course</string>
+    <string name="rc_course_close_sub">Race over — stop reading chips</string>
+    <string name="rc_course_open_title">Reopen the course</string>
+    <string name="rc_course_open_sub">Closed at %1$s — start reading chips again</string>
+    <string name="close_course_confirm_empty">Everyone has finished. Chips will no longer be read, so a racer standing by the antenna cannot add a lap.</string>
+    <string name="close_course_confirm_out">%1$d racers have not finished. Closing the course stops reading every chip — they can no longer be timed.</string>
+    <string name="close_course_ok">Close the course</string>
+    <string name="course_closed">Course closed — chips are no longer read</string>
+    <string name="course_reopened">Course open — chips are read again</string>
+    <string name="course_closed_strip">Course closed — chips are not being read</string>
     <string name="rollcall_window">Auto-DNS no-shows after start for:</string>
     <string name="rollcall_window_hint">Time after the gun, after which anyone not read since the gun is marked DNS (0 = off)</string>
     <string name="rollcall_suppress_note">Presence comes from a read at the start mat, so a reader has to cover the start. The “Do not detect…” window above does not hide those reads.</string>

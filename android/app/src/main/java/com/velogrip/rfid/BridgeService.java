@@ -106,6 +106,18 @@ public class BridgeService extends Service {
         int count;
         long last;
     }
+    /**
+     * When the leader finished the full distance, under the XCO leader rule
+     * (0 = not yet, or the rule is off).
+     *
+     * From that instant the race is over: every other rider finishes the lap
+     * they are on and nothing after it counts — which is exactly what
+     * RaceEngine does when it scores them. The recording side did not know it,
+     * so a rider the leader rule had already finished on 2 of 4 laps was never
+     * "done" by the cap test below, and every read from their chip went on
+     * being stored, uploaded and redrawn.
+     */
+    private long leaderDoneAt = 0;
     private final java.util.Set<String> beepedRacers = new java.util.HashSet<>(); // reader thread only
     private long registeredAt = 0;
     private android.media.ToneGenerator tone;
@@ -396,7 +408,11 @@ public class BridgeService extends Service {
         boolean started = raceHasGun();
         // No gun anywhere means setup or a restart: forget what we have stored,
         // so a re-gunned race records its crossings from scratch.
-        if (!started) { beepedRacers.clear(); crossingsByEpc.clear(); }
+        if (!started) { beepedRacers.clear(); crossingsByEpc.clear(); leaderDoneAt = 0; }
+        // The operator closed the course from Race control: the race is over and
+        // no chip is timing any more. Read fresh each batch so closing (or
+        // reopening) takes effect on the next read, not on the next race.
+        final boolean courseClosed = prefs.courseClosedAt() > 0;
         // Gun time per wave, read fresh for each batch: a cached copy would keep
         // rejecting a wave's racers for seconds after its gun, losing the very
         // first crossings. Cheap — one query per batch, not per read.
@@ -412,6 +428,13 @@ public class BridgeService extends Service {
                 }
                 continue;                                    // ignore tags not on the start list
             }
+            // Course closed: this racer's race is over, whatever laps they gave.
+            // Dropped here and not merely left unstored, so nothing in the system
+            // sees the read — no store row, no upload, no status broadcast and so
+            // no redraw of the finish list. Deliberately AFTER the start-list
+            // test above, so a chip belonging to nobody is still reported for
+            // binding (/chip by waving a tag at the mat keeps working).
+            if (courseClosed) continue;
             Long prev = lastSeen.get(read.epc);
             // Against the read's own time, not the batch's. A burst that flushes
             // after an outage spans real seconds; measuring it against a single
@@ -450,15 +473,29 @@ public class BridgeService extends Service {
             // that are dropped outright (see `retired` below).
             final long gapMs = prefs.lapGapSecs() * 1000L;
             boolean record = racerStarted;
-            // This chip has given every crossing it has to give. A read from it
-            // is a tag lying near the mat, not timing — see below, where it is
-            // dropped outright rather than merely left unstored.
+            // This chip has given every crossing it has to give — either its
+            // full lap count, or its last one before the leader rule closed the
+            // race. A read from it is a tag lying near the mat, not timing —
+            // see below, where it is dropped outright rather than left unstored.
             boolean retired = false;
             Crossings cr = null;
             if (crossing) {
                 cr = crossingsFor(read.epc, crossingFrom, gapMs);
                 if (cr.count >= crossingCap(epcDistance.get(read.epc))) {
                     record = false;    // every lap already timed: this racer is done
+                    crossing = false;
+                    retired = true;
+                    // This chip is at the full distance, so the leader has
+                    // finished — picked up here as well as on the crossing
+                    // itself, because an app restarted mid-race seeds the tally
+                    // from the store and never sees that crossing happen.
+                    if (leaderDoneAt == 0 && prefs.leaderEndsRaceActive()) leaderDoneAt = cr.last;
+                } else if (leaderDoneAt > 0 && cr.count > 0 && cr.last >= leaderDoneAt) {
+                    // The leader rule has ended the race and this chip has
+                    // already given the crossing that closed the lap it was on.
+                    // The engine scores nothing after that one, so recording it
+                    // adds a row, an upload and a redraw for no result at all.
+                    record = false;
                     crossing = false;
                     retired = true;
                 } else if (cr.count > 0 && Math.abs(read.readAtMs - cr.last) < gapMs) {
@@ -477,10 +514,13 @@ public class BridgeService extends Service {
             // kept throwing the operator back to the top of it once the race
             // was over. Drop them here instead: nothing in the system sees one.
             //
-            // Only a chip that is DONE is dropped. An unknown chip still lands
-            // as a No-Bib time, and a racer with laps left to give still counts
-            // — so a rider missing from the start list cannot be timed out by
-            // this, which is the one way it could cost somebody their result.
+            // Only a chip that is DONE is dropped — done at the full distance,
+            // or done because the leader rule ended the race and it has already
+            // given the crossing that closed its lap. An unknown chip still
+            // lands as a No-Bib time, and a racer with laps left to give still
+            // counts — so a rider missing from the start list cannot be timed
+            // out by this, which is the one way it could cost somebody their
+            // result.
             if (retired) continue;
             if (record || checkpoint) {
                 // A checkpoint stamps reads in server time now, so splits survive a later
@@ -491,7 +531,18 @@ public class BridgeService extends Service {
                     store.addPassing(read);
                     // Only a crossing counts towards the lap tally; a start-mat
                     // read must not, or the racer's real finish gets blocked.
-                    if (crossing && cr != null) { cr.count++; cr.last = Math.max(cr.last, read.readAtMs); }
+                    if (crossing && cr != null) {
+                        cr.count++;
+                        cr.last = Math.max(cr.last, read.readAtMs);
+                        // The first chip to complete the full distance ends the
+                        // race for the whole field (XCO). Noted at the crossing
+                        // that did it, so the rule arms on the leader's own
+                        // finish rather than on their next stray read.
+                        if (leaderDoneAt == 0 && prefs.leaderEndsRaceActive()
+                                && cr.count >= crossingCap(epcDistance.get(read.epc))) {
+                            leaderDoneAt = cr.last;
+                        }
+                    }
                 }
             }
             // The beep marks a TIME, so it sounds on the crossing — not on the

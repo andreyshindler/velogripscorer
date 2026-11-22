@@ -533,6 +533,15 @@ public class RaceTimingActivity extends BaseActivity {
     private void updateSyncStatus() {
         if (syncStatus == null) return;
         long pending = store.pendingCount();
+        // A closed course outranks everything else on this strip: nothing is
+        // being read, so a reader warning would be noise — and without a word
+        // on screen the operator is left wondering why chips stopped counting.
+        if (prefs.courseClosedAt() > 0) {
+            syncStatus.setVisibility(android.view.View.VISIBLE);
+            syncStatus.setBackgroundColor(0xFF6B4FA8); // purple: stopped on purpose
+            syncStatus.setText(getString(R.string.course_closed_strip));
+            return;
+        }
         // A reader that has stopped answering outranks anything about uploads:
         // passes already taken are safe in the store, but passes not being read
         // are gone for good. Unlike the upload strip this must show even when
@@ -1479,6 +1488,17 @@ public class RaceTimingActivity extends BaseActivity {
         content.addView(controlRow(R.drawable.ic_ctrl_flag, 0xFFC0555A, 0xFF3A1F22,
                 R.string.rc_rollcall_title, R.string.rc_rollcall_sub,
                 () -> { dlg.dismiss(); closeRollCall(); }));
+        content.addView(controlDivider());
+        // Closing the course is not the same as finishing the race: finishing
+        // leaves the console for the results, while this stops the reader and
+        // stays here, so the operator can still correct times and sort out the
+        // last riders with nothing being added underneath them.
+        final long closedAt = prefs.courseClosedAt();
+        content.addView(controlRow(R.drawable.ic_ctrl_gun, 0xFF8E5BD0, 0xFF2A1F3A,
+                closedAt > 0 ? R.string.rc_course_open_title : R.string.rc_course_close_title,
+                closedAt > 0 ? getString(R.string.rc_course_open_sub, timeOfDay(closedAt))
+                             : getString(R.string.rc_course_close_sub),
+                () -> { dlg.dismiss(); toggleCourse(); }));
 
         dlg.show();
     }
@@ -1593,10 +1613,15 @@ public class RaceTimingActivity extends BaseActivity {
         return new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date(ms));
     }
 
+    private View controlRow(int iconRes, int iconColor, int badgeBg,
+                            int titleRes, int subRes, Runnable onTap) {
+        return controlRow(iconRes, iconColor, badgeBg, titleRes, getString(subRes), onTap);
+    }
+
     /** One styled Race-control row: a rounded, tinted icon badge, a title and a
      *  one-line hint, and a chevron. */
     private View controlRow(int iconRes, int iconColor, int badgeBg,
-                            int titleRes, int subRes, Runnable onTap) {
+                            int titleRes, CharSequence sub, Runnable onTap) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1629,7 +1654,7 @@ public class RaceTimingActivity extends BaseActivity {
         t.setTextColor(getColor(R.color.text_primary));
         t.setTypeface(null, android.graphics.Typeface.BOLD);
         TextView s = new TextView(this);
-        s.setText(subRes);
+        s.setText(sub);
         s.setTextSize(12.5f);
         s.setTextColor(getColor(R.color.text_muted));
         s.setPadding(0, dp(2), 0, 0);
@@ -1738,6 +1763,46 @@ public class RaceTimingActivity extends BaseActivity {
         tapToast(getString(R.string.rollcall_closed));
     }
 
+    /**
+     * Close the course, or reopen it.
+     *
+     * Closed, the reader records nothing: a rider who gave the laps they were
+     * going to give and then stands by the antenna is read for as long as they
+     * stand there, and under the leader rule the first of those reads is scored
+     * as another lap — a 2-lap ride published as 3, timed at the moment they
+     * were standing at the mat. There was no way to stop that short of finishing
+     * the race, which leaves the console altogether.
+     *
+     * Reopening asks nothing: it only puts timing back.
+     */
+    private void toggleCourse() {
+        if (prefs.courseClosedAt() > 0) {
+            prefs.setCourseClosedAt(0);
+            scheduleRender();
+            tapToast(getString(R.string.course_reopened));
+            return;
+        }
+        // Anyone not finished can no longer be timed, so say how many that is
+        // before doing it — pressed by mistake mid-race, this costs real times.
+        int out = 0;
+        for (RaceEngine.Result r : RaceResults.compute(store, prefs, false)) {
+            if ("on_course".equals(r.status) || "not_started".equals(r.status)) out++;
+        }
+        final int stillOut = out;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.rc_course_close_title)
+                .setMessage(stillOut == 0
+                        ? getString(R.string.close_course_confirm_empty)
+                        : getString(R.string.close_course_confirm_out, stillOut))
+                .setPositiveButton(R.string.close_course_ok, (d, w) -> {
+                    prefs.setCourseClosedAt(System.currentTimeMillis());
+                    scheduleRender();
+                    tapToast(getString(R.string.course_closed));
+                })
+                .setNegativeButton(R.string.cancel_popup, null)
+                .show();
+    }
+
     /** Restart (false start): keep or discard recorded times, un-gun the race
      *  and return to Race Start so the organizer can start it again. */
     private void restartRace() {
@@ -1762,6 +1827,7 @@ public class RaceTimingActivity extends BaseActivity {
             prefs.setGunsClearedAt(System.currentTimeMillis());
             prefs.setRaceFinalized(false);
             prefs.setRollCallClosedAt(0);          // fresh race: roll call re-opens
+            prefs.setCourseClosedAt(0);            // fresh race: the course is open
             shownCrossing = null;                  // the next crossing is new again
             // keep the reader (and its WiFi) connected through the restart;
             // clearing the gun re-arms the per-racer beeps

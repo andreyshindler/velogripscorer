@@ -75,6 +75,7 @@ public class RaceStartActivity extends BaseActivity {
     private void startRace() {
         prefs.setRaceFinalized(false); // fresh race: no laps-down finalisation
         prefs.setRollCallClosedAt(0);  // fresh race: the start-line roll call re-opens
+        prefs.setCourseClosedAt(0);    // fresh race: the course is open, chips are read
         boolean mass = !RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
         long gun = System.currentTimeMillis() + clockAdjustMs;
         if (mass) {
