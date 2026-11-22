@@ -1560,11 +1560,33 @@ public class RaceTimingActivity extends BaseActivity {
     }
 
     /** Record a wave's gun on the phone. The bridge service syncs it up to the
-     *  server on its next pass; the race clock picks it up on the next tick. */
+     *  server on its next pass; the race clock picks it up on the next tick.
+     *
+     *  This is the moment the wave actually leaves, so it is also where the horn
+     *  sounds and the announcement plays — including on a restart, which re-arms
+     *  the gun to now and therefore sends the wave off now. */
     private void fireGun(String waveName, boolean force) {
-        store.startWave(waveName, System.currentTimeMillis(), force);
+        long at = System.currentTimeMillis();
+        StartSound.fire(this, prefs, waveClip(waveName));
+        store.startWave(waveName, at, force);
         Toast.makeText(this, getString(R.string.wave_gun_recorded, waveName), Toast.LENGTH_LONG).show();
         scheduleRender();
+    }
+
+    /** Which spoken clip belongs to this wave: its position in the start list,
+     *  not its name, so "wave1", "מקצה א" and any other naming all announce
+     *  correctly. A third wave asks for wave_3 whether or not that clip is
+     *  installed — drop one in and it speaks, leave it out and the horn fires
+     *  alone. Null only for a wave that is not in the start list at all. */
+    private String waveClip(String waveName) {
+        if (waveName == null || waveName.isEmpty()) return StartSound.RACE_STARTED;
+        int i = 1;
+        for (RaceStore.Wave w : store.waves()) {
+            if (w.name.isEmpty()) continue; // mass-start marker
+            if (w.name.equals(waveName)) return StartSound.waveClip(i);
+            i++;
+        }
+        return null;
     }
 
     private String timeOfDay(long ms) {

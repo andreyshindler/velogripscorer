@@ -73,12 +73,14 @@ public class RaceStartActivity extends BaseActivity {
     }
 
     private void startRace() {
-        playStartSound();              // audible go signal
         prefs.setRaceFinalized(false); // fresh race: no laps-down finalisation
         prefs.setRollCallClosedAt(0);  // fresh race: the start-line roll call re-opens
         boolean mass = !RaceSetupActivity.TYPE_WAVE.equals(prefs.startType());
         long gun = System.currentTimeMillis() + clockAdjustMs;
         if (mass) {
+            // One gun for the whole field: this button IS the start, so it
+            // sounds the horn and says the race has begun.
+            StartSound.fire(this, prefs, StartSound.RACE_STARTED);
             store.startWave("", gun, true);
             for (RaceStore.Wave w : store.waves()) {
                 if (!w.name.isEmpty()) store.startWave(w.name, gun, true);
@@ -86,67 +88,12 @@ public class RaceStartActivity extends BaseActivity {
             Toast.makeText(this, R.string.race_started_mass, Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, RaceTimingActivity.class));
         } else {
-            // wave races arm the gun per wave inside the console
+            // Wave races arm the gun per wave inside the console, so nobody has
+            // started yet and this button stays SILENT. A horn here would send
+            // the first wave off minutes before its own gun; the horn and the
+            // announcement belong to each wave's own start.
             Toast.makeText(this, R.string.race_started_wave, Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, RaceTimingActivity.class));
-        }
-    }
-
-    /** "Go" signal when the race starts (shares the beep toggle): one long beep
-     *  by default, or three short beeps if chosen on the Chip Timing screen. */
-    private void playStartSound() {
-        if (!prefs.beepOnRead()) return;
-        try {
-            final android.media.ToneGenerator tg =
-                    new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, prefs.beepVolume());
-            android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
-            if (prefs.startBeepLong()) {
-                // TONE_PROP_BEEP has a short fixed length; use a continuous tone
-                // so it actually sustains for ~1.5 seconds (a "go" horn).
-                tg.startTone(android.media.ToneGenerator.TONE_SUP_DIAL, 1500);
-                h.postDelayed(tg::release, 1700);
-            } else {
-                tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180);
-                h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180), 350);
-                h.postDelayed(() -> tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 400), 700);
-                h.postDelayed(tg::release, 1400);
-            }
-            // Spoken confirmation, AFTER the tone has finished — never instead of
-            // it. startRace() stamps the gun the instant this method is called,
-            // i.e. at the tone's onset, so the riders' instant stays a sharp
-            // attack they can react to. A sentence has no such instant: whoever
-            // waited to understand the words would be leaving a second late with
-            // the clock already running. Arriving afterwards also makes its past
-            // tense true — by then the race really has started.
-            h.postDelayed(this::sayRaceStarted, prefs.startBeepLong() ? 1800 : 1500);
-        } catch (RuntimeException ignored) {
-            // some devices refuse the audio resource; the race still starts
-        }
-    }
-
-    /** "המירוץ התחיל" for the operator. Confirmation only: nothing is timed off
-     *  it, so its latency does not matter and a failure is silent. */
-    private void sayRaceStarted() {
-        try {
-            // Looked up by name rather than as R.raw.race_started, so the app
-            // builds and runs with no clip present and simply stays quiet. The
-            // recording is content, not code: dropping res/raw/race_started.*
-            // in turns this on with nothing to recompile, and removing it turns
-            // it off again rather than breaking the build.
-            int clip = getResources().getIdentifier("race_started", "raw", getPackageName());
-            if (clip == 0) return; // no recording installed yet
-            // Application context, not this Activity: startRace() has already
-            // moved on to the timing console by the time this fires, and a
-            // player scoped to a destroyed Activity would be torn down with it.
-            android.media.MediaPlayer mp =
-                    android.media.MediaPlayer.create(getApplicationContext(), clip);
-            if (mp == null) return; // device could not open the clip
-            float v = Math.max(0f, Math.min(1f, prefs.beepVolume() / 100f));
-            mp.setVolume(v, v);
-            mp.setOnCompletionListener(android.media.MediaPlayer::release);
-            mp.start();
-        } catch (RuntimeException ignored) {
-            // the race is already running; a missing confirmation changes nothing
         }
     }
 
