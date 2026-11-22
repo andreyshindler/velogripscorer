@@ -242,6 +242,17 @@ public class PostResultsActivity extends BaseActivity {
                     if (wave.name.isEmpty() || wave.startedAtMs == null) continue;
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) store.markWaveSynced(wave.name);
                 }
+                // Times corrected on the device, restated so the website takes
+                // them. Done here as well as in the bridge's upload loop,
+                // because by now the race is over and that service has been
+                // stopped — a correction made on the results screen would
+                // otherwise never leave the phone.
+                for (String epc : store.correctedEpcs()) {
+                    if (uploader.replaceReads(epc, store.passingsForEpc(epc))) {
+                        store.markUploadedFor(epc);
+                        store.clearCorrected(epc);
+                    }
+                }
                 List<RaceStore.Passing> batch;
                 while (!(batch = store.pendingUpload(200)).isEmpty()) {
                     if (!uploader.upload(batch)) break;

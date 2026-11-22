@@ -703,6 +703,20 @@ public class BridgeService extends Service {
                         broadcastStatus(getString(R.string.log_wave_synced, wave.name));
                     }
                 }
+                // Corrections before new passes: a chip whose times were put
+                // right on the device restates its whole set, and doing that
+                // after a pending pass for the same chip went up would undo it.
+                // Each is cleared only once the server has taken it, so a
+                // correction made at the mat with no signal is re-sent later
+                // rather than lost — exactly like a pass.
+                for (String epc : store.correctedEpcs()) {
+                    if (uploader.replaceReads(epc, store.passingsForEpc(epc))) {
+                        // Those rows now match the server, so they must not go
+                        // up again as new reads and duplicate the lap.
+                        store.markUploadedFor(epc);
+                        store.clearCorrected(epc);
+                    }
+                }
                 List<RaceStore.Passing> batch = store.pendingUpload(BATCH_SIZE);
                 if (batch.isEmpty()) continue;
                 if (uploader.upload(batch, checkpoint)) {

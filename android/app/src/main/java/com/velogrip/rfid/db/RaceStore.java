@@ -95,7 +95,7 @@ public final class RaceStore extends SQLiteOpenHelper {
     }
 
     public RaceStore(Context ctx) {
-        super(ctx, "race.db", null, 10);
+        super(ctx, "race.db", null, 11);
     }
 
     @Override
@@ -113,6 +113,7 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE categories (name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1)");
         db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, epc TEXT NOT NULL DEFAULT ''," +
                 " bib TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', read_at INTEGER NOT NULL DEFAULT 0)");
+        db.execSQL("CREATE TABLE corrections (epc TEXT PRIMARY KEY)");
         db.execSQL("CREATE INDEX idx_passings_epc ON passings(epc, read_at)");
         db.execSQL("CREATE INDEX idx_passings_uploaded ON passings(uploaded, id)");
     }
@@ -148,6 +149,40 @@ public final class RaceStore extends SQLiteOpenHelper {
         if (oldVersion < 10) {
             db.execSQL("ALTER TABLE racers ADD COLUMN late_start_at INTEGER");
         }
+        if (oldVersion < 11) {
+            db.execSQL("CREATE TABLE corrections (epc TEXT PRIMARY KEY)");
+        }
+    }
+
+    // ---- corrected chips awaiting a re-send to the server ----
+    //
+    // The ingest endpoint only ever ADDS reads, and a local delete or edit never
+    // reached the server at all: a time corrected on the tablet left the website
+    // showing the original, and "Cancel entry" cancelled nothing there. So a
+    // corrected chip is noted here and the upload loop re-sends that chip's
+    // whole set of crossings, which replaces what the server holds for it.
+
+    /** This chip's crossings were edited on the device: re-send them. */
+    public void markCorrected(String epc) {
+        if (epc == null || epc.isEmpty()) return;
+        ContentValues v = new ContentValues();
+        v.put("epc", epc);
+        getWritableDatabase().insertWithOnConflict("corrections", null, v, SQLiteDatabase.CONFLICT_IGNORE);
+    }
+
+    public List<String> correctedEpcs() {
+        List<String> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery("SELECT epc FROM corrections ORDER BY epc", null);
+        try {
+            while (c.moveToNext()) out.add(c.getString(0));
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
+    public void clearCorrected(String epc) {
+        getWritableDatabase().execSQL("DELETE FROM corrections WHERE epc = ?", new Object[]{epc});
     }
 
     // ---- passings ----
@@ -192,15 +227,46 @@ public final class RaceStore extends SQLiteOpenHelper {
     public List<Passing> passingsForEpc(String epc) {
         List<Passing> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT id, epc, rssi, read_at FROM passings WHERE epc = ? ORDER BY read_at", new String[]{epc});
+                "SELECT id, epc, rssi, read_at, manual FROM passings WHERE epc = ? ORDER BY read_at",
+                new String[]{epc});
         try {
             while (c.moveToNext()) {
-                out.add(new Passing(c.getLong(0), c.getString(1), c.isNull(2) ? null : c.getDouble(2), c.getLong(3)));
+                out.add(new Passing(c.getLong(0), c.getString(1), c.isNull(2) ? null : c.getDouble(2),
+                        null, c.getLong(3), c.getInt(4) == 1));
             }
         } finally {
             c.close();
         }
         return out;
+    }
+
+    /**
+     * Move one recorded crossing to a different time, keeping the row.
+     *
+     * Marked manual, like the server's own read edit: a corrected time is a
+     * deliberate crossing, so it is exempt from the start-suppression window
+     * and the lap-gap de-dup. Without that, nudging a crossing to within the
+     * lap gap of its neighbour — the whole point of a photo-finish
+     * correction — would make the engine drop it and the lap would vanish.
+     */
+    public void updatePassing(long id, long atMs) {
+        getWritableDatabase().execSQL(
+                "UPDATE passings SET read_at = ?, manual = 1 WHERE id = ?", new Object[]{atMs, id});
+    }
+
+    /** One recorded crossing by its row id, or null if it is gone. */
+    public Passing passingById(long id) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT id, epc, rssi, read_at, manual FROM passings WHERE id = ?",
+                new String[]{String.valueOf(id)});
+        try {
+            return c.moveToNext()
+                    ? new Passing(c.getLong(0), c.getString(1), c.isNull(2) ? null : c.getDouble(2),
+                            null, c.getLong(3), c.getInt(4) == 1)
+                    : null;
+        } finally {
+            c.close();
+        }
     }
 
     public void deletePassing(long id) {
@@ -209,7 +275,11 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     /** Clears every recorded passing (Restart race -> Discard). */
     public void clearPassings() {
-        getWritableDatabase().execSQL("DELETE FROM passings");
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL("DELETE FROM passings");
+        // That restart clears the server's reads too, so there is nothing left
+        // for a pending correction to put right.
+        db.execSQL("DELETE FROM corrections");
     }
 
     /** Un-starts every wave so the race can be re-gunned from Race Start. */
@@ -219,6 +289,12 @@ public final class RaceStore extends SQLiteOpenHelper {
 
     public void clearPending() {
         getWritableDatabase().execSQL("DELETE FROM pending");
+    }
+
+    /** Every crossing of this chip is now on the server (it was just restated
+     *  wholesale), so none of them is still pending as a new read. */
+    public void markUploadedFor(String epc) {
+        getWritableDatabase().execSQL("UPDATE passings SET uploaded = 1 WHERE epc = ?", new Object[]{epc});
     }
 
     public void markUploaded(long maxIdInclusive) {
@@ -258,6 +334,7 @@ public final class RaceStore extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM distances");
         db.execSQL("DELETE FROM categories");
         db.execSQL("DELETE FROM pending");
+        db.execSQL("DELETE FROM corrections");
     }
 
     // ---- pending timing entries (pre-entered bib awaiting a time, or a time

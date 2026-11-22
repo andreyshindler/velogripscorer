@@ -178,6 +178,13 @@
     <string name="tap_timer_for_bib">Tap the timer to give this bib a time</string>
     <string name="times_waiting">%1$d time(s) waiting — tap a racer</string>
     <string name="edit_time_for">Edit time for %1$s - %2$s</string>
+    <string name="edit_crossing_lap_title">%1$s - %2$s, lap %3$d</string>
+    <string name="edit_crossing_swap">\u21c4  Swap with %1$s  %2$s %3$s</string>
+    <string name="edit_crossing_exact">Set exact time\u2026</string>
+    <string name="edit_crossing_delete">Delete this crossing</string>
+    <string name="edit_crossing_delete_confirm">Remove this crossing? The racer keeps their other laps.</string>
+    <string name="edit_crossing_before_gun">That would be before the gun.</string>
+    <string name="edit_crossing_swapped">Times swapped</string>
     <string name="enter">Enter</string>
     <string name="dns_dnf_dsq">DNS/DNF/DSQ</string>
     <string name="racer_info_title">Racer Info</string>

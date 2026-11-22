@@ -26,6 +26,12 @@ public final class RaceEngine {
         public final int laps;
         public final long elapsedMs;    // 0 unless finished
         public long[] lapElapsed = new long[0];   // elapsed of each counted crossing
+        /** The passings row behind each counted crossing, index for index with
+         *  lapElapsed. A screen showing a crossing can therefore correct that
+         *  one crossing instead of guessing which read produced it — editing by
+         *  time alone meant deleting a racer's whole race and re-entering one
+         *  finish, which in a lap race threw away every lap they had ridden. */
+        public long[] lapPassingId = new long[0];
 
         Result(String bib, String name, String category, String wave, String distance, String gender,
                String status, int laps, long elapsedMs) {
@@ -35,11 +41,14 @@ public final class RaceEngine {
         }
     }
 
-    /** A crossing time plus whether it came from a deliberate operator tap. */
+    /** A crossing time plus whether it came from a deliberate operator tap.
+     *  `id` is the passings row it came from, carried through so a counted
+     *  crossing can be traced back to the one read that produced it. */
     private static final class Read {
+        final long id;
         final long at;
         final boolean manual;
-        Read(long at, boolean manual) { this.at = at; this.manual = manual; }
+        Read(long id, long at, boolean manual) { this.id = id; this.at = at; this.manual = manual; }
     }
 
     private RaceEngine() { }
@@ -86,7 +95,7 @@ public final class RaceEngine {
         for (RaceStore.Passing p : passings) {
             List<Read> list = readsByEpc.get(p.epc);
             if (list == null) readsByEpc.put(p.epc, list = new ArrayList<>());
-            list.add(new Read(p.readAtMs, p.manual));
+            list.add(new Read(p.id, p.readAtMs, p.manual));
         }
 
         long suppressMs = suppressSecs * 1000L;
@@ -114,9 +123,9 @@ public final class RaceEngine {
                 if (gun == null) continue;
                 int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
                 if (target == Integer.MAX_VALUE) continue;
-                List<Long> cr = buildCrossings(collectRaw(group, readsByEpc), gun, suppressMs, lapGapMs,
+                List<Read> cr = buildCrossings(collectRaw(group, readsByEpc), gun, suppressMs, lapGapMs,
                         target, lateStartOf(group));
-                if (cr.size() >= target) cutoff = Math.min(cutoff, cr.get(target - 1));
+                if (cr.size() >= target) cutoff = Math.min(cutoff, cr.get(target - 1).at);
             }
         }
 
@@ -139,7 +148,7 @@ public final class RaceEngine {
             }
             List<Read> raw = collectRaw(group, readsByEpc);
             int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
-            List<Long> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target, lateStartOf(group));
+            List<Read> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target, lateStartOf(group));
 
             // Leader rule: finish on the first crossing that reaches the target
             // OR falls at/after the cutoff (the current lap); drop the rest.
@@ -147,18 +156,23 @@ public final class RaceEngine {
             if (leaderEndsRace && cutoff != Long.MAX_VALUE && !crossings.isEmpty()) {
                 int idx = -1;
                 for (int i = 0; i < crossings.size(); i++) {
-                    if ((target != Integer.MAX_VALUE && i + 1 >= target) || crossings.get(i) >= cutoff) { idx = i; break; }
+                    if ((target != Integer.MAX_VALUE && i + 1 >= target) || crossings.get(i).at >= cutoff) { idx = i; break; }
                 }
                 if (idx >= 0) {
                     crossings = new ArrayList<>(crossings.subList(0, idx + 1));
-                    cutByLeader = crossings.get(crossings.size() - 1) >= cutoff;
+                    cutByLeader = crossings.get(crossings.size() - 1).at >= cutoff;
                 }
             }
 
             boolean unlimited = target == Integer.MAX_VALUE;
-            // elapsed of each counted crossing, for per-lap split rows
+            // elapsed of each counted crossing, for per-lap split rows, and the
+            // read behind each one so a screen can correct that single crossing
             long[] splits = new long[crossings.size()];
-            for (int i = 0; i < crossings.size(); i++) splits[i] = crossings.get(i) - gun;
+            long[] ids = new long[crossings.size()];
+            for (int i = 0; i < crossings.size(); i++) {
+                splits[i] = crossings.get(i).at - gun;
+                ids[i] = crossings.get(i).id;
+            }
             Result res;
             if (crossings.isEmpty()) {
                 // Start-line roll call: gunned but no crossings. If the roll call
@@ -176,11 +190,12 @@ public final class RaceEngine {
                 res = new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, racer.gender,"on_course", crossings.size(), 0);
             } else {
-                long last = crossings.get(crossings.size() - 1);
+                long last = crossings.get(crossings.size() - 1).at;
                 res = new Result(racer.bib, racer.name, racer.category, racer.wave,
                         racer.distance, racer.gender,"finished", crossings.size(), last - gun);
             }
             res.lapElapsed = splits;
+            res.lapPassingId = ids;
             results.add(res);
         }
 
@@ -286,9 +301,9 @@ public final class RaceEngine {
      *                  they have no crossing yet to be measured against.
      *                  Mirrors server/race-results.js.
      */
-    private static List<Long> buildCrossings(List<Read> raw, long gun, long suppressMs, long lapGapMs,
+    private static List<Read> buildCrossings(List<Read> raw, long gun, long suppressMs, long lapGapMs,
                                              int target, long lateStart) {
-        List<Long> crossings = new ArrayList<>();
+        List<Read> crossings = new ArrayList<>();
         if (raw.isEmpty()) return crossings;
         Collections.sort(raw, new Comparator<Read>() {
             @Override public int compare(Read a, Read b) { return Long.compare(a.at, b.at); }
@@ -304,8 +319,8 @@ public final class RaceEngine {
             if (!rd.manual && rd.at < Math.max(gun, lateStart) + suppressMs) continue;
             if (crossings.size() >= target) break; // race done for this racer
             if (rd.manual || crossings.isEmpty()
-                    || rd.at - crossings.get(crossings.size() - 1) >= lapGapMs) {
-                crossings.add(rd.at);
+                    || rd.at - crossings.get(crossings.size() - 1).at >= lapGapMs) {
+                crossings.add(rd);
             }
         }
         return crossings;

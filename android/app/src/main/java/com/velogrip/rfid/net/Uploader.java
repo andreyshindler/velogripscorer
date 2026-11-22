@@ -105,6 +105,37 @@ public final class Uploader {
         return true;
     }
 
+    /**
+     * Restates one chip's crossings, replacing what the server holds for it.
+     *
+     * The reads endpoint only adds, so a correction made on the device — a
+     * nudged time, a swapped pair, a deleted crossing — could never reach the
+     * website by re-uploading: it would have added a lap instead of moving one.
+     * The device is the authoritative timer for the chips it recorded, so it
+     * restates the whole set and the server swaps its own rows for these.
+     *
+     * An empty list is meaningful: it means this chip has no crossings any more
+     * (a cancelled entry), and the server's are removed.
+     */
+    public boolean replaceReads(String epc, List<RaceStore.Passing> rows) throws IOException {
+        StringBuilder json = new StringBuilder("{\"epc\":").append(jsonString(epc)).append(",\"reads\":[");
+        for (int i = 0; i < rows.size(); i++) {
+            RaceStore.Passing row = rows.get(i);
+            if (i > 0) json.append(',');
+            json.append("{\"read_at\":\"").append(iso.format(new Date(row.readAtMs))).append('"');
+            if (row.rssi != null) json.append(",\"rssi\":").append(row.rssi);
+            if (row.manual) json.append(",\"manual\":true");
+            json.append('}');
+        }
+        json.append("],\"client_time\":\"").append(iso.format(new Date())).append("\"}");
+        int code = post("/api/ingest/replace-reads", json.toString());
+        if (code == 401) throw new IOException("server rejected reader token (401)");
+        if (code < 200 || code >= 300) {
+            throw new IOException("server rejected the correction (HTTP " + code + ")");
+        }
+        return true;
+    }
+
     /** Uploads a locally recorded gun time. The phone is the authoritative timer,
      *  so we force the server to take this gun time even if it already had one
      *  (e.g. after a race restart re-guns the wave a few minutes later). */

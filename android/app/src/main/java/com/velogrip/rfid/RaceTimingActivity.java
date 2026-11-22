@@ -975,9 +975,13 @@ public class RaceTimingActivity extends BaseActivity {
         for (RaceEngine.Result r : results) {
             int target = RaceEngine.lapTarget(recordLaps, lapTargets, raceLaps, r.distance);
             if (target > 1) {
-                for (int i = 0; i < r.lapElapsed.length; i++) rows.add(new ResRow(r.lapElapsed[i], r, i + 1));
+                for (int i = 0; i < r.lapElapsed.length; i++) {
+                    rows.add(new ResRow(r.lapElapsed[i], r, i + 1, passingIdOf(r, i)));
+                }
             } else if ("finished".equals(r.status)) {
-                rows.add(new ResRow(r.elapsedMs, r, 0));
+                // The finish IS the last counted crossing, so the row edits that
+                // read rather than rewriting the racer's whole race.
+                rows.add(new ResRow(r.elapsedMs, r, 0, passingIdOf(r, r.lapElapsed.length - 1)));
             }
         }
         // A banked No-Bib time has no racer yet, so it belongs to no wave and
@@ -1043,13 +1047,20 @@ public class RaceTimingActivity extends BaseActivity {
                 CharSequence label = row.lap > 0 ? r.name + " (" + row.lap + ")" : r.name;
                 if (showDist) label = withDistance(label.toString(), r.distance);
                 View rv;
+                final long pid = row.passingId;
                 if (row.lap > 0) {
-                    // multi-lap split row: view-only, arrow opens racer info
+                    // A lap crossing. Its time is editable like any other: these
+                    // rows used to be view-only, so in a lap race — the format
+                    // that needs it most — there was no way to correct a time at
+                    // all. The place number and the bib stay out of it: cancelling
+                    // an entry or moving it to another racer is about the whole
+                    // racer, not about one of their laps.
                     rv = resultRow(String.valueOf(seq), r.bib, label, time, false,
-                            null, () -> openRacerInfo(r.bib));
+                            pid > 0 ? () -> editCrossing(pid) : null, () -> openRacerInfo(r.bib));
                 } else {
                     rv = resultRow(String.valueOf(seq), r.bib, label, time, false,
-                            () -> editTime(r), () -> openRacerInfo(r.bib),
+                            pid > 0 ? () -> editCrossing(pid) : () -> racerStatus(r.bib),
+                            () -> openRacerInfo(r.bib),
                             () -> cancelEntry(seq, r), () -> bibActions(seq, r));
                 }
                 resultsBox.addView(rv);
@@ -1218,11 +1229,16 @@ public class RaceTimingActivity extends BaseActivity {
         final RaceEngine.Result result;   // null for a No-Bib row
         final RaceStore.Pending pending;  // null for a racer row
         final int lap;
-        ResRow(long elapsed, RaceEngine.Result result, int lap) {
+        /** The passings row this crossing came from (0 = none: a No-Bib time or
+         *  a racer with no crossing yet), so the row can correct that one read. */
+        final long passingId;
+        ResRow(long elapsed, RaceEngine.Result result, int lap, long passingId) {
             this.elapsed = elapsed; this.result = result; this.pending = null; this.lap = lap;
+            this.passingId = passingId;
         }
         ResRow(long elapsed, RaceStore.Pending pending) {
             this.elapsed = elapsed; this.result = null; this.pending = pending; this.lap = 0;
+            this.passingId = 0;
         }
     }
 
@@ -1374,9 +1390,223 @@ public class RaceTimingActivity extends BaseActivity {
         return epcs;
     }
 
-    private void editTime(RaceEngine.Result r) {
-        // Scroll-wheel time editor: h : mm : ss . t
-        long tenths = Math.round(r.elapsedMs / 100.0);
+    /** The read behind one of a racer's counted crossings, or 0 if there is none
+     *  (a racer with no crossing yet, or an index off the end). */
+    private static long passingIdOf(RaceEngine.Result r, int lapIndex) {
+        if (lapIndex < 0 || lapIndex >= r.lapPassingId.length) return 0;
+        return r.lapPassingId[lapIndex];
+    }
+
+    /** One crossing as the finish list shows it: the read behind it, whose it is
+     *  and which lap, so the editor can name the rows either side of it. */
+    private static final class Crossing {
+        final long passingId, elapsed;
+        final RaceEngine.Result racer;
+        final int lap;
+        Crossing(long passingId, long elapsed, RaceEngine.Result racer, int lap) {
+            this.passingId = passingId; this.elapsed = elapsed; this.racer = racer; this.lap = lap;
+        }
+    }
+
+    /**
+     * Every counted crossing of one wave, in finish-list order.
+     *
+     * One wave, because elapsed times are only comparable within a wave: with a
+     * stagger, "the row above" across waves is measured from a different gun and
+     * swapping two such times would not swap their places.
+     */
+    private List<Crossing> crossingsInWave(String wave) {
+        List<Crossing> out = new ArrayList<>();
+        boolean recordLaps = prefs.recordLaps();
+        java.util.Map<String, Integer> lapTargets = store.lapTargets();
+        int raceLaps = prefs.raceLaps();
+        for (RaceEngine.Result r : RaceResults.compute(store, prefs, prefs.raceFinalized())) {
+            if (!java.util.Objects.equals(wave == null ? "" : wave, r.wave == null ? "" : r.wave)) continue;
+            int target = RaceEngine.lapTarget(recordLaps, lapTargets, raceLaps, r.distance);
+            for (int i = 0; i < r.lapElapsed.length; i++) {
+                long pid = passingIdOf(r, i);
+                if (pid > 0) out.add(new Crossing(pid, r.lapElapsed[i], r, target > 1 ? i + 1 : 0));
+            }
+        }
+        java.util.Collections.sort(out, (a, b) -> Long.compare(a.elapsed, b.elapsed));
+        return out;
+    }
+
+    /**
+     * Correct one crossing.
+     *
+     * Two riders coming through together are read in whatever order the antenna
+     * saw them, which is not always the order they crossed. The fix has to be
+     * per-crossing: the old editor took an elapsed time and then DELETED every
+     * read the racer had and wrote one back, which in a lap race threw away
+     * every lap they had ridden. This moves the one read behind this row and
+     * leaves the rest alone, and because the engine re-scores from the reads,
+     * the place, the gap and the row's position all follow by themselves.
+     */
+    private void editCrossing(final long passingId) {
+        final RaceStore.Passing p = store.passingById(passingId);
+        if (p == null) { render(); return; }   // deleted under us
+        final String bib = bibForEpc(p.epc);
+        List<Crossing> all = crossingsInWave(waveForBib(bib));
+        int at = -1;
+        for (int i = 0; i < all.size(); i++) if (all.get(i).passingId == passingId) { at = i; break; }
+        if (at < 0) { render(); return; }      // no longer a counted crossing
+        final Crossing self = all.get(at);
+        final Long gun = gunForWave(self.racer.wave);
+        if (gun == null) { tapToast(getString(R.string.not_started_wave)); return; }
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(16);
+        box.setPadding(pad, dp(8), pad, dp(8));
+
+        final TextView now = line("", 20, true, getColor(R.color.text_primary));
+        now.setGravity(Gravity.CENTER);
+        now.setPadding(0, dp(4), 0, dp(10));
+        box.addView(now);
+
+        final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
+                .setTitle(self.lap > 0
+                        ? getString(R.string.edit_crossing_lap_title, bib == null ? "" : bib,
+                                self.racer.name, self.lap)
+                        : getString(R.string.edit_time_for, bib == null ? "" : bib, self.racer.name))
+                .setView(box)
+                .setNegativeButton(R.string.close, null)
+                .create();
+
+        // Reads the stored time back rather than tracking it, so the label is
+        // whatever the database now holds however it was changed.
+        final Runnable refresh = () -> {
+            RaceStore.Passing cur = store.passingById(passingId);
+            now.setText(cur == null ? "—"
+                    : RaceEngine.formatElapsed(Math.max(0, cur.readAtMs - gun), prefs.timingDecimals()));
+        };
+        refresh.run();
+
+        // The one-tap answer to a photo finish read in the wrong order: move a
+        // crossing a tenth or two and the two riders change places. Applied at
+        // once, with the sheet left open so it can be tapped again.
+        LinearLayout nudges = new LinearLayout(this);
+        nudges.setOrientation(LinearLayout.HORIZONTAL);
+        nudges.setGravity(Gravity.CENTER);
+        for (final long delta : new long[]{-1000, -500, -100, 100, 500, 1000}) {
+            android.widget.Button b = new android.widget.Button(this);
+            b.setText(String.format(Locale.US, "%+.1f", delta / 1000.0));
+            b.setTextSize(13);
+            b.setPadding(0, 0, 0, 0);
+            LinearLayout.LayoutParams lp =
+                    new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMarginEnd(dp(2));
+            b.setLayoutParams(lp);
+            b.setOnClickListener(v -> {
+                RaceStore.Passing cur = store.passingById(passingId);
+                if (cur == null) { dlg.dismiss(); render(); return; }
+                if (!moveCrossing(passingId, cur.readAtMs + delta, gun)) return;
+                refresh.run();
+                render();
+            });
+            nudges.addView(b);
+        }
+        box.addView(nudges);
+
+        // Swapping two crossings invents no time at all: both are real, only
+        // whose they are changes. Offered against the rows either side of this
+        // one, and only on the same lap — two riders a lap apart can share a
+        // clock without having shared a moment, and swapping those would put
+        // one racer's laps out of order.
+        for (int n = at - 1; n <= at + 1; n += 2) {
+            if (n < 0 || n >= all.size()) continue;
+            final Crossing other = all.get(n);
+            if (other.lap != self.lap) continue;
+            if (other.racer.bib != null && other.racer.bib.equals(bib)) continue; // same racer
+            android.widget.Button b = new android.widget.Button(this);
+            b.setText(getString(R.string.edit_crossing_swap,
+                    RaceEngine.formatElapsed(Math.max(0, other.elapsed), prefs.timingDecimals()),
+                    other.racer.bib, other.racer.name));
+            b.setAllCaps(false);
+            b.setOnClickListener(v -> {
+                dlg.dismiss();
+                swapCrossings(passingId, other.passingId);
+            });
+            box.addView(b);
+        }
+
+        android.widget.Button exact = new android.widget.Button(this);
+        exact.setText(R.string.edit_crossing_exact);
+        exact.setAllCaps(false);
+        exact.setOnClickListener(v -> { dlg.dismiss(); exactTime(passingId, gun, bib, self.racer.name); });
+        box.addView(exact);
+
+        android.widget.Button del = new android.widget.Button(this);
+        del.setText(R.string.edit_crossing_delete);
+        del.setAllCaps(false);
+        del.setOnClickListener(v -> {
+            dlg.dismiss();
+            new android.app.AlertDialog.Builder(this)
+                    .setMessage(R.string.edit_crossing_delete_confirm)
+                    .setPositiveButton(R.string.yes, (d, w) -> {
+                        store.deletePassing(passingId);
+                        store.markCorrected(p.epc);
+                        shownCrossing = null;   // a later read from them is new again
+                        render();
+                    })
+                    .setNegativeButton(R.string.no, null)
+                    .show();
+        });
+        box.addView(del);
+
+        if (bib != null && !bib.isEmpty()) {
+            android.widget.Button status = new android.widget.Button(this);
+            status.setText(R.string.dns_dnf_dsq);
+            status.setAllCaps(false);
+            status.setOnClickListener(v -> { dlg.dismiss(); racerStatus(bib); });
+            box.addView(status);
+        }
+
+        dlg.show();
+    }
+
+    /** The wave a bib runs in ("" when it has no wave, or no such racer). */
+    private String waveForBib(String bib) {
+        if (bib == null || bib.isEmpty()) return "";
+        RaceStore.Racer r = store.racerByBib(bib);
+        return r == null || r.wave == null ? "" : r.wave;
+    }
+
+    /** Move one crossing to a new wall-clock time, refusing one before the gun.
+     *  Marked manual by the store, so a time nudged inside the lap gap or the
+     *  start-suppression window is still counted. */
+    private boolean moveCrossing(long passingId, long atMs, long gun) {
+        if (atMs < gun) { tapToast(getString(R.string.edit_crossing_before_gun)); return false; }
+        RaceStore.Passing p = store.passingById(passingId);
+        if (p == null) return false;
+        store.updatePassing(passingId, atMs);
+        store.markCorrected(p.epc);
+        // The list is ordered by time, so a corrected crossing moves: follow it
+        // to its new place rather than leaving the operator to find it.
+        scrollToBib = bibForEpc(p.epc);
+        return true;
+    }
+
+    /** Exchange two crossings' times: the reader read them in the wrong order,
+     *  so each keeps a real time and only whose it is changes. */
+    private void swapCrossings(long a, long b) {
+        RaceStore.Passing pa = store.passingById(a), pb = store.passingById(b);
+        if (pa == null || pb == null) { render(); return; }
+        store.updatePassing(a, pb.readAtMs);
+        store.updatePassing(b, pa.readAtMs);
+        store.markCorrected(pa.epc);
+        store.markCorrected(pb.epc);
+        scrollToBib = bibForEpc(pa.epc);   // follow the racer whose row was tapped
+        tapToast(getString(R.string.edit_crossing_swapped));
+        render();
+    }
+
+    /** Type an exact elapsed for one crossing on the h:mm:ss.t wheels. */
+    private void exactTime(final long passingId, final long gun, String bib, String name) {
+        RaceStore.Passing p = store.passingById(passingId);
+        if (p == null) { render(); return; }
+        long tenths = Math.round(Math.max(0, p.readAtMs - gun) / 100.0);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.HORIZONTAL);
         box.setGravity(Gravity.CENTER);
@@ -1392,7 +1622,7 @@ public class RaceTimingActivity extends BaseActivity {
         box.addView(tt);
 
         new android.app.AlertDialog.Builder(this)
-                .setTitle(getString(R.string.edit_time_for, r.bib, r.name))
+                .setTitle(getString(R.string.edit_time_for, bib == null ? "" : bib, name))
                 .setView(box)
                 .setPositiveButton(R.string.enter, (dlg, w) -> {
                     long ms = ((hh.getValue() * 3600L + mm.getValue() * 60L + ss.getValue()) * 1000L)
@@ -1400,34 +1630,36 @@ public class RaceTimingActivity extends BaseActivity {
                     // An entered elapsed is measured from THIS racer's own wave
                     // gun; using the first wave's would misplace every racer in
                     // a later wave by the stagger between them.
-                    Long gun = gunForWave(r.wave);
-                    if (gun == null) { Toast.makeText(this, R.string.not_started_wave, Toast.LENGTH_LONG).show(); return; }
-                    setRacerFinish(r.bib, gun + ms);
-                    render();
+                    if (moveCrossing(passingId, gun + ms, gun)) render();
                 })
-                .setNeutralButton(R.string.dns_dnf_dsq, (d, w) ->
-                        new android.app.AlertDialog.Builder(this)
-                                .setTitle(R.string.racer_status)
-                                .setItems(new String[]{"DNS", "DNF", "DSQ", getString(R.string.status_ok)}, (dd, which) -> {
-                                    String[] st = {"DNS", "DNF", "DSQ", ""};
-                                    clearRacerPassings(r.bib);
-                                    store.setRacerStatus(r.bib, st[which]);
-                                    render();
-                                }).show())
                 .setNegativeButton(R.string.cancel_popup, null)
                 .show();
     }
 
-    /** Replace a racer's crossings with one at the given finish time. */
-    private void setRacerFinish(String bib, long finishAtMs) {
-        clearRacerPassings(bib);
-        java.util.List<String> epcs = epcsForBib(bib);
-        if (!epcs.isEmpty()) store.recordPassing(epcs.get(0), finishAtMs);
+    /** DNS / DNF / DSQ (or back to automatic) for a whole racer. */
+    private void racerStatus(final String bib) {
+        if (bib == null || bib.isEmpty()) return;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.racer_status)
+                .setItems(new String[]{"DNS", "DNF", "DSQ", getString(R.string.status_ok)}, (d, which) -> {
+                    String[] st = {"DNS", "DNF", "DSQ", ""};
+                    // A declared status overrides the crossings anyway, but the
+                    // times are cleared so the racer cannot come back as a
+                    // finisher if the status is later lifted by mistake.
+                    if (which < 3) clearRacerPassings(bib);
+                    store.setRacerStatus(bib, st[which]);
+                    render();
+                })
+                .setNegativeButton(R.string.cancel_popup, null)
+                .show();
     }
 
     private void clearRacerPassings(String bib) {
         for (String epc : epcsForBib(bib)) {
             for (RaceStore.Passing p : store.passingsForEpc(epc)) store.deletePassing(p.id);
+            // The website keeps whatever was already uploaded unless it is told
+            // otherwise, so an entry cancelled here used to stay published.
+            store.markCorrected(epc);
         }
         // Their crossing is gone, so if they come through again it is new and
         // the list should move to it.

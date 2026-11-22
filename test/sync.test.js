@@ -199,3 +199,85 @@ test('editing a racer updates every column and GET tags returns them', async () 
   assert.equal(r.gender, 'Female');
   assert.equal(r.racer_status, 'DNF');
 });
+
+// ---- corrections made on the device reach the server ----
+//
+// /ingest/reads only ever adds, so the app's own edits and deletes could never
+// land: a time corrected on the tablet left the website publishing the original,
+// and re-uploading the corrected read would have added a lap instead of moving
+// one. The device restates the chip's whole set and the server swaps its rows.
+
+test('the app replaces one chip\'s crossings, and only that chip on its own reader', async () => {
+  const o = await register('replace@test.co', 'Replace Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    kind: 'race', title: 'Photo finish', sport: 'Running', start_at: past, end_at: future,
+  })).body;
+  const phone = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(o))
+    .send({ name: 'Phone at finish' })).body;
+  const mat = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(o))
+    .send({ name: 'Halfway', role: 'checkpoint' })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'open' })).body;
+  for (const [epc, bib, who] of [['AAAA0801', '801', 'Rider A'], ['AAAA0802', '802', 'Rider B']]) {
+    await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+      .send({ epc, bib, participant: who, wave_id: w.id });
+  }
+  const gun = new Date(Date.now() - 600_000).toISOString();
+  await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', phone.token)
+    .send({ name: 'open', started_at: gun });
+  const at = (ms) => new Date(Date.parse(gun) + ms).toISOString();
+
+  // The antenna read B a tenth before A, so B is published ahead of A.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', phone.token).send({
+    reads: [{ epc: 'AAAA0801', read_at: at(600_100) }, { epc: 'AAAA0802', read_at: at(600_000) }],
+  });
+  // The checkpoint has its own split for A — another device's row, never ours.
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', mat.token)
+    .send({ reads: [{ epc: 'AAAA0801', read_at: at(300_000) }], pre_reconciled: true });
+
+  let res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  assert.equal(res.body.results.find((r) => r.bib === '802').rank, 1, 'B leads on the raw reads');
+
+  // The operator swaps the two times on the tablet: each keeps a real time and
+  // only whose it is changes. The device restates both chips.
+  const swapA = await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
+    .send({ epc: 'AAAA0801', reads: [{ read_at: at(600_000), manual: true }] });
+  assert.equal(swapA.status, 200);
+  assert.equal(swapA.body.removed, 1);
+  assert.equal(swapA.body.inserted, 1);
+  await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
+    .send({ epc: 'AAAA0802', reads: [{ read_at: at(600_100), manual: true }] });
+
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  const a = res.body.results.find((r) => r.bib === '801');
+  const b = res.body.results.find((r) => r.bib === '802');
+  assert.equal(a.rank, 1, 'A now leads');
+  assert.equal(b.rank, 2);
+  assert.equal(a.elapsed, '10:00.0');
+  assert.equal(b.elapsed, '10:00.1');
+
+  // One row per chip on this reader — a replace must not leave the old one
+  // behind and double the lap.
+  const reads = await request(app).get(`/api/contests/${c.id}/reads`).set(auth(o));
+  const forA = (name) => reads.body.reads.filter((r) => r.epc === 'AAAA0801' && r.reader_name === name);
+  assert.equal(forA('Phone at finish').length, 1);
+  // The checkpoint's own split for the same chip survived untouched.
+  assert.equal(forA('Halfway').length, 1);
+
+  // An empty set is meaningful: a cancelled entry removes the published time.
+  const cancel = await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
+    .send({ epc: 'AAAA0802', reads: [] });
+  assert.equal(cancel.body.removed, 1);
+  assert.equal(cancel.body.inserted, 0);
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  assert.notEqual(res.body.results.find((r) => r.bib === '802').status, 'finished');
+
+  // A checkpoint cannot restate anything, and a bad token / epc is refused.
+  assert.equal((await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', mat.token)
+    .send({ epc: 'AAAA0801', reads: [] })).status, 403);
+  assert.equal((await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', 'vgr_bogus')
+    .send({ epc: 'AAAA0801', reads: [] })).status, 401);
+  assert.equal((await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
+    .send({ epc: 'nothex', reads: [] })).status, 400);
+  assert.equal((await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
+    .send({ epc: 'AAAA0801' })).status, 400);
+});

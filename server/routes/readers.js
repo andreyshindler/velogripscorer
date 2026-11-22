@@ -212,6 +212,60 @@ router.post('/ingest/clear-reads', (req, res) => {
   res.json({ ok: true, cleared: info.changes });
 });
 
+// Replace one chip's crossings from the timing app (reader-token auth).
+//
+// /ingest/reads only ever adds, and the app's own corrections — a nudged
+// photo-finish, a swapped pair, a cancelled entry — are edits and deletes. They
+// were applied to the phone's database and nowhere else, so the website kept
+// publishing the original time, and re-uploading the corrected one would have
+// added a lap rather than moved one. The timing device owns the crossings it
+// recorded, so let it restate them: this swaps everything THIS reader holds for
+// that chip for the set it sends. Idempotent, and a correction that fails to
+// reach the server is simply re-sent on the next pass.
+//
+// Scoped to the calling reader's own rows: a checkpoint's splits for the same
+// chip belong to another device and are never touched.
+router.post('/ingest/replace-reads', (req, res) => {
+  const reader = readerFromToken(req);
+  if (!reader) return res.status(401).json({ error: 'unknown reader token' });
+  if (reader.role === 'checkpoint') return res.status(403).json({ error: 'checkpoint readers cannot replace reads' });
+  const epc = String(req.body?.epc || '').toUpperCase();
+  if (!EPC_RE.test(epc)) return res.status(400).json({ error: 'valid epc required' });
+  const reads = Array.isArray(req.body?.reads) ? req.body.reads.slice(0, MAX_BATCH) : null;
+  if (!reads) return res.status(400).json({ error: 'reads array required' });
+
+  const insert = db.prepare(
+    `INSERT INTO tag_reads (reader_id, contest_id, epc, rssi, antenna, manual, read_at, source)
+     VALUES (?,?,?,?,?,?,?,'app')`
+  );
+  let removed = 0;
+  const kept = [];
+  const tx = db.transaction(() => {
+    removed = db.prepare('DELETE FROM tag_reads WHERE reader_id = ? AND contest_id = ? AND epc = ?')
+      .run(reader.id, reader.contest_id, epc).changes;
+    for (const r of reads) {
+      if (!r?.read_at || Number.isNaN(Date.parse(r.read_at))) continue;
+      const readAt = new Date(r.read_at).toISOString();
+      const rssi = Number.isFinite(Number(r.rssi)) ? Number(r.rssi) : null;
+      const info = insert.run(reader.id, reader.contest_id, epc, rssi, null, r.manual ? 1 : 0, readAt);
+      kept.push({ id: info.lastInsertRowid, epc, rssi, read_at: readAt });
+    }
+    db.prepare(`UPDATE readers SET last_seen = datetime('now') WHERE id = ?`).run(reader.id);
+  });
+  tx();
+
+  const assignment = db.prepare('SELECT bib, participant FROM tag_assignments WHERE contest_id = ? AND epc = ?')
+    .get(reader.contest_id, epc);
+  auditLog(null, 'read.replace', 'contest', reader.contest_id,
+    `via reader ${reader.id} — epc ${epc}: ${removed} replaced by ${kept.length}`);
+  sseBroadcast(reader.contest_id, 'tag_reads', {
+    reader: { id: reader.id, name: reader.name, location: reader.location },
+    reads: kept.map((k) => ({ ...k, ...(assignment || {}) })),
+    replaced: { epc, removed },
+  });
+  res.json({ ok: true, removed, inserted: kept.length });
+});
+
 // Race reset from the timing app (reader-token auth). Restarting a race on the
 // phone was purely local: the server kept the gun times, so the web went on
 // showing the race live with the old results and there was no way to tell it
