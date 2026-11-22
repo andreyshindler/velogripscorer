@@ -559,7 +559,13 @@ public class RaceTimingActivity extends BaseActivity {
             }
             return;
         }
-        if (pending == 0 && online) {
+        // Times corrected on the tablet that the server has not taken. Shown
+        // even when every pass is up, because the website is then publishing
+        // times the operator has already put right and nothing else would say
+        // so — a correction failing in silence is the fault this whole path
+        // was built to end.
+        long corrections = store.correctedEpcs().size();
+        if (pending == 0 && online && corrections == 0) {
             syncStatus.setVisibility(android.view.View.GONE);
             return;
         }
@@ -568,7 +574,12 @@ public class RaceTimingActivity extends BaseActivity {
         // rather than showing an "Uploading" count that will never move.
         if (!prefs.liveResults()) {
             syncStatus.setBackgroundColor(0xFF4A5568); // grey: parked on purpose
-            syncStatus.setText(getString(R.string.sync_held, pending));
+            syncStatus.setText(pending > 0
+                    ? getString(R.string.sync_held, pending)
+                    : getString(R.string.sync_corrections_held, corrections));
+        } else if (pending == 0 && corrections > 0) {
+            syncStatus.setBackgroundColor(0xFFB9770E); // amber: the website is behind
+            syncStatus.setText(getString(R.string.sync_corrections, corrections));
         } else if (!online) {
             syncStatus.setBackgroundColor(0xFFC0392B); // red: not getting through
             syncStatus.setText(lastSyncError != null

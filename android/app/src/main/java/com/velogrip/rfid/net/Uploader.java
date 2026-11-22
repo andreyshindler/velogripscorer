@@ -117,6 +117,13 @@ public final class Uploader {
      * An empty list is meaningful: it means this chip has no crossings any more
      * (a cancelled entry), and the server's are removed.
      */
+    /** The server has no corrections endpoint — it predates this app build.
+     *  Distinct from a refusal, because there is nothing to retry: the caller
+     *  stops asking instead of blocking the passes behind it forever. */
+    public static final class UnsupportedByServer extends IOException {
+        UnsupportedByServer(String message) { super(message); }
+    }
+
     public boolean replaceReads(String epc, List<RaceStore.Passing> rows) throws IOException {
         StringBuilder json = new StringBuilder("{\"epc\":").append(jsonString(epc)).append(",\"reads\":[");
         for (int i = 0; i < rows.size(); i++) {
@@ -130,6 +137,9 @@ public final class Uploader {
         json.append("],\"client_time\":\"").append(iso.format(new Date())).append("\"}");
         int code = post("/api/ingest/replace-reads", json.toString());
         if (code == 401) throw new IOException("server rejected reader token (401)");
+        // 404 is the route itself missing, not this correction being wrong: the
+        // server has not been updated to the build that has it.
+        if (code == 404) throw new UnsupportedByServer("this server cannot take corrections yet");
         if (code < 200 || code >= 300) {
             throw new IOException("server rejected the correction (HTTP " + code + ")");
         }

@@ -88,6 +88,10 @@
     <string name="sync_offline">● לא מקוון — %1$d חציות נשמרו, יועלו כשהחיבור יחזור</string>
     <string name="sync_uploading">↑ מעלה — נותרו %1$d חציות</string>
     <string name="sync_held">◌ %1$d חציות נשמרות במכשיר — תוצאות בזמן אמת כבויות</string>
+    <string name="sync_corrections">\u25cc %1$d זמנים שתוקנו לא נשלחו \u2014 האתר עדיין מציג אותם כפי שנקראו</string>
+    <string name="sync_corrections_held">\u25cc %1$d זמנים שתוקנו נשמרים במכשיר \u2014 תוצאות בזמן אמת כבויות</string>
+    <string name="log_correction_unsupported">השרת הזה עדיין לא יודע לקבל זמנים מתוקנים \u2014 עדכן אותו ואז פרסם את התוצאות</string>
+    <string name="post_corrections_stuck">התוצאות פורסמו, אבל %1$d זמנים שתוקנו לא הגיעו לאתר \u2014 הוא מציג אותם כפי שנקראו.</string>
     <string name="sync_rejected">● %1$d חציות לא הועלו — %2$s</string>
     <string name="join_checkpoint_note">טיפ: סרוק את קוד ה-QR בלשונית הניהול באתר כדי למלא את הקוד אוטומטית. לאחר מכן הגדר את חיבור הקורא והתחל לתזמן — החציות נשלחות בזמן אמת, או נצברות וממוזגות כשמתחברים מחדש.</string>
 

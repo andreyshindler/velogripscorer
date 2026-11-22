@@ -654,6 +654,9 @@ public class BridgeService extends Service {
         Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken())
                 .protocol(prefs.protocol());
         boolean lapTargetsSynced = false;
+        // This server predates the corrections endpoint: stop asking until the
+        // app is restarted against an updated one.
+        boolean replaceUnsupported = false;
         while (running.get()) {
             try {
                 Thread.sleep(UPLOAD_INTERVAL_MS);
@@ -703,18 +706,38 @@ public class BridgeService extends Service {
                         broadcastStatus(getString(R.string.log_wave_synced, wave.name));
                     }
                 }
-                // Corrections before new passes: a chip whose times were put
-                // right on the device restates its whole set, and doing that
-                // after a pending pass for the same chip went up would undo it.
-                // Each is cleared only once the server has taken it, so a
-                // correction made at the mat with no signal is re-sent later
-                // rather than lost — exactly like a pass.
-                for (String epc : store.correctedEpcs()) {
-                    if (uploader.replaceReads(epc, store.passingsForEpc(epc))) {
-                        // Those rows now match the server, so they must not go
-                        // up again as new reads and duplicate the lap.
-                        store.markUploadedFor(epc);
-                        store.clearCorrected(epc);
+                // Times corrected on the device, restated so the server takes
+                // them. Each is cleared only once the server has, so one made
+                // at the mat with no signal is re-sent later rather than lost.
+                //
+                // In its own try, and never before the passes: a correction the
+                // server will not take must not hold the race's own crossings
+                // hostage. It did exactly that on a server too old to know the
+                // endpoint — every pass behind a 404 that could never clear,
+                // with the count climbing and the real reason buried in a
+                // message about passes.
+                if (!replaceUnsupported) {
+                    for (String epc : store.correctedEpcs()) {
+                        try {
+                            if (uploader.replaceReads(epc, store.passingsForEpc(epc))) {
+                                // Those rows now match the server, so they must
+                                // not go up again as new reads and double a lap.
+                                store.markUploadedFor(epc);
+                                store.clearCorrected(epc);
+                            }
+                        } catch (Uploader.UnsupportedByServer tooOld) {
+                            // This server has no corrections endpoint at all, so
+                            // there is nothing to retry until it is updated. Say
+                            // so once and leave the queue alone; the console
+                            // shows that corrections are waiting.
+                            replaceUnsupported = true;
+                            broadcastStatus(getString(R.string.log_correction_unsupported));
+                            break;
+                        } catch (Exception retryLater) {
+                            // Network, or the server refusing this one: keep it
+                            // queued and get on with the passes.
+                            break;
+                        }
                     }
                 }
                 List<RaceStore.Passing> batch = store.pendingUpload(BATCH_SIZE);

@@ -88,6 +88,10 @@
     <string name="sync_offline">● Offline — %1$d passes saved, will upload when back online</string>
     <string name="sync_uploading">↑ Uploading — %1$d passes left</string>
     <string name="sync_held">◌ %1$d passes held on this device — live results are off</string>
+    <string name="sync_corrections">\u25cc %1$d corrected times not sent \u2014 the website still shows them as read</string>
+    <string name="sync_corrections_held">\u25cc %1$d corrected times held on this device \u2014 live results are off</string>
+    <string name="log_correction_unsupported">This server cannot take corrected times yet \u2014 update it, then post the results</string>
+    <string name="post_corrections_stuck">Results posted, but %1$d corrected times did not reach the website \u2014 it is showing them as they were read.</string>
     <string name="sync_rejected">● %1$d passes not uploaded — %2$s</string>
     <string name="join_checkpoint_note">Tip: scan the QR on the web Manage tab to fill the code in automatically. Next, set up the reader connection and start timing — your passes upload live, or buffer and merge when you reconnect.</string>
 

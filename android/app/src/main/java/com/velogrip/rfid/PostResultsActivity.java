@@ -233,6 +233,7 @@ public class PostResultsActivity extends BaseActivity {
         new Thread(() -> {
             String error = null;
             int uploaded = 0;
+            int unsentCorrections = 0;
             try {
                 Uploader uploader = new Uploader(prefs.serverUrl(), prefs.readerToken())
                 .protocol(prefs.protocol());
@@ -242,23 +243,33 @@ public class PostResultsActivity extends BaseActivity {
                     if (wave.name.isEmpty() || wave.startedAtMs == null) continue;
                     if (uploader.uploadWaveStart(wave.name, wave.startedAtMs)) store.markWaveSynced(wave.name);
                 }
-                // Times corrected on the device, restated so the website takes
-                // them. Done here as well as in the bridge's upload loop,
-                // because by now the race is over and that service has been
-                // stopped — a correction made on the results screen would
-                // otherwise never leave the phone.
-                for (String epc : store.correctedEpcs()) {
-                    if (uploader.replaceReads(epc, store.passingsForEpc(epc))) {
-                        store.markUploadedFor(epc);
-                        store.clearCorrected(epc);
-                    }
-                }
                 List<RaceStore.Passing> batch;
                 while (!(batch = store.pendingUpload(200)).isEmpty()) {
                     if (!uploader.upload(batch)) break;
                     store.markUploaded(batch.get(batch.size() - 1).id);
                     uploaded += batch.size();
                 }
+                // Times corrected on the device, restated so the website takes
+                // them. Done here as well as in the bridge's upload loop,
+                // because by now the race is over and that service has been
+                // stopped — a correction made on the results screen would
+                // otherwise never leave the phone.
+                //
+                // After the passes and inside its own try: a server that cannot
+                // take corrections must not stop the results being posted. What
+                // it does mean is that the website keeps the times as they were
+                // read, so that is reported rather than passed over.
+                for (String epc : store.correctedEpcs()) {
+                    try {
+                        if (uploader.replaceReads(epc, store.passingsForEpc(epc))) {
+                            store.markUploadedFor(epc);
+                            store.clearCorrected(epc);
+                        }
+                    } catch (Exception e) {
+                        break;
+                    }
+                }
+                unsentCorrections = store.correctedEpcs().size();
                 uploader.uploadStatuses(store.startListEntries()); // DNS/DNF/DSQ declared on the phone
                 if (photoDataUrl != null) uploader.uploadPhoto(photoDataUrl); // publish the race photo
                 uploader.finishRace(prefs.recordLaps()); // list it under the web's Finished races
@@ -267,6 +278,7 @@ public class PostResultsActivity extends BaseActivity {
             }
             final String failure = error;
             final int sent = uploaded;
+            final int stuck = unsentCorrections;
             ui.post(() -> {
                 if (failure != null) {
                     postStatus.setText(failure);
@@ -282,6 +294,15 @@ public class PostResultsActivity extends BaseActivity {
                         + (sent > 0 ? getString(R.string.post_success_sent, sent)
                                     : getString(R.string.post_success_synced)));
                 successCard.setVisibility(android.view.View.VISIBLE);
+                // Posted, but times corrected on the tablet did not reach the
+                // website: it is publishing them as they were read. Kept next to
+                // the green card rather than instead of it — the results ARE up,
+                // and a correction that fails quietly is the whole reason this
+                // path exists.
+                if (stuck > 0) {
+                    postStatus.setText(getString(R.string.post_corrections_stuck, stuck));
+                    postStatus.setVisibility(android.view.View.VISIBLE);
+                }
             });
         }).start();
     }
