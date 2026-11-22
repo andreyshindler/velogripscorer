@@ -1643,8 +1643,12 @@ function leaderOf(rows) {
   return finished[0] || null;
 }
 
-function isFemaleW(g) { g = String(g || '').trim().toLowerCase(); return ['f', 'female', 'נקבה', 'אישה'].includes(g); }
-function isMaleW(g) { g = String(g || '').trim().toLowerCase(); return ['m', 'male', 'זכר', 'גבר'].includes(g); }
+// The same gender vocabulary as server/race-results.js (MALE_WORDS /
+// FEMALE_WORDS), duplicated because this file is served raw to the browser and
+// cannot require it. Add a spelling in both places or the page and the scoring
+// will disagree about who is in which group.
+function isFemaleW(g) { g = String(g || '').trim().toLowerCase(); return ['f', 'female', 'woman', 'women', 'girl', 'נ', 'נקבה', 'אישה', 'אשה', 'נשים', 'בת', 'בנות'].includes(g); }
+function isMaleW(g) { g = String(g || '').trim().toLowerCase(); return ['m', 'male', 'man', 'men', 'boy', 'ז', 'זכר', 'גבר', 'גברים', 'בן', 'בנים'].includes(g); }
 function genderShort(g) { return isMaleW(g) ? 'M' : isFemaleW(g) ? 'F' : ''; }
 
 // mm:ss.t / h:mm:ss.t from milliseconds (matches the server's formatElapsed)

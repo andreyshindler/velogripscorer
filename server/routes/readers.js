@@ -6,7 +6,7 @@ const { db, auditLog } = require('../db');
 const { requireAuth, requireAdmin } = require('../auth');
 const { sseBroadcast } = require('../events');
 const multer = require('multer');
-const { parseXlsx } = require('../xlsx');
+const { parseXlsxSheets } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
 const { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('../race-results');
 const { normalizeSettings, computeLeagueStandings } = require('../league-scoring');
@@ -849,40 +849,62 @@ function importRacers(contest, racers, userId, { replace = false } = {}) {
 
 // Header names recognized in uploaded files (Webscorer exports, our CSV
 // template, Hebrew sheets). Matched case-insensitively.
+// Column names seen in the files organizers actually hand over. The Hebrew
+// ones matter as much as the English: a workplace league's own results export
+// says "מס רץ" and "שם הרץ", and the team column is the employer — "שם המפעל"
+// — not the word for a team.
 const FILE_HEADERS = {
-  bib: ['bib', 'number', 'num', '#', 'מספר', 'מספר חזה', 'חזה'],
-  participant: ['name', 'participant', 'racer', 'שם', 'שם מלא'],
+  bib: ['bib', 'number', 'num', '#', 'מספר', 'מספר חזה', 'חזה', 'מס רץ', 'מס׳ רץ', "מס' רץ", 'מספר רץ'],
+  participant: ['name', 'participant', 'racer', 'runner', 'שם', 'שם מלא', 'שם הרץ', 'שם הרוכב', 'שם המשתתף'],
   category: ['category', 'cat', 'קטגוריה'],
   wave: ['wave', 'heat', 'מקצה'],
   epc: ['epc', 'chip', 'tag', 'chip id', 'chipid', 'שבב', 'תג'],
   epc2: ['chip id2', 'chipid2', 'epc2', 'chip 2', 'שבב 2'],
   distance: ['distance', 'מרחק'],
-  team: ['team', 'team name', 'קבוצה', 'שם קבוצה'],
+  team: ['team', 'team name', 'קבוצה', 'שם קבוצה', 'מפעל', 'שם המפעל', 'שם מפעל'],
   gender: ['gender', 'sex', 'מין', 'מגדר'],
 };
 
 // Canonical 'Male' / 'Female' / '' from the many spellings seen in start lists.
-function normalizeGender(raw) {
-  const s = String(raw ?? '').trim().toLowerCase();
-  if (['m', 'male', 'man', 'זכר', 'גבר', 'בן'].includes(s)) return 'Male';
-  if (['f', 'female', 'woman', 'נקבה', 'אישה', 'בת'].includes(s)) return 'Female';
-  return '';
-}
+// The vocabulary lives in race-results.js, with the scoring that depends on it.
+const normalizeGender = (raw) => genderLabelG(raw);
 
-function rowsToRacers(rows) {
-  if (!rows.length) return [];
-  const header = rows[0].map((h) => String(h ?? '').trim().toLowerCase());
+/** The column map a row gives if it is a header row, else null. */
+function headerColumns(row) {
+  const header = (row || []).map((h) => String(h ?? '').trim().toLowerCase());
   const cols = {};
-  let hasHeader = false;
+  let found = false;
   for (const [field, names] of Object.entries(FILE_HEADERS)) {
     const idx = header.findIndex((h) => names.includes(h));
-    if (idx >= 0) { cols[field] = idx; hasHeader = true; }
+    if (idx >= 0) { cols[field] = idx; found = true; }
   }
-  if (!hasHeader) {
+  return found ? cols : null;
+}
+
+/**
+ * @param allowPositional false for a workbook of several sheets: a tab with no
+ *   header is notes or a lookup table, and reading it by column position would
+ *   invent racers out of whatever it happens to contain. A single-sheet file
+ *   keeps the old behaviour, where a bare list of rows is a valid start list.
+ */
+function rowsToRacers(rows, allowPositional = true) {
+  if (!rows.length) return [];
+  // The header is not always the first row: a results export usually opens
+  // with a merged title line ("מירוץ נתיבות 13/11/2026 — תוצאות"), and taking
+  // that as the header used to drop the file into the positional fallback,
+  // which read the title's one cell as a bib and every real column as the
+  // wrong field. Look for the header among the first few rows instead.
+  let headerAt = -1, cols = null;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const found = headerColumns(rows[i]);
+    if (found) { headerAt = i; cols = found; break; }
+  }
+  if (!cols) {
+    if (!allowPositional) return [];
     // positional fallback: bib, name, category, wave, epc
-    Object.assign(cols, { bib: 0, participant: 1, category: 2, wave: 3, epc: 4 });
+    cols = { bib: 0, participant: 1, category: 2, wave: 3, epc: 4 };
   }
-  return rows.slice(hasHeader ? 1 : 0).map((cells) => {
+  return rows.slice(headerAt + 1).map((cells) => {
     const get = (field) => (cols[field] !== undefined ? String(cells[cols[field]] ?? '').trim() : '');
     return {
       bib: get('bib'), participant: get('participant'), category: get('category'),
@@ -929,15 +951,32 @@ router.post('/contests/:id/startlist-file', requireAuth, uploadMemory.single('fi
   const contest = organizerContest(req, res);
   if (!contest) return;
   if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'file required' });
-  let rows;
+  // Every sheet of a workbook, not just the first: a results file that splits
+  // its distances across tabs would otherwise import as one distance, with no
+  // error to say the rest had been dropped.
+  let sheets;
   try {
     const isXlsx = /\.xlsx$/i.test(req.file.originalname || '')
       || req.file.buffer.subarray(0, 2).toString('latin1') === 'PK';
-    rows = isXlsx ? parseXlsx(req.file.buffer) : parseCsvBuffer(req.file.buffer);
+    sheets = isXlsx ? parseXlsxSheets(req.file.buffer)
+                    : [{ name: '', rows: parseCsvBuffer(req.file.buffer) }];
   } catch (err) {
     return res.status(400).json({ error: `could not read file: ${err.message}` });
   }
-  const racers = rowsToRacers(rows).slice(0, 2000);
+  const single = sheets.length === 1;
+  const all = sheets.flatMap((s) => rowsToRacers(s.rows, single));
+  // A workbook often carries a summary tab that repeats every runner from the
+  // per-distance tabs. The upsert would collapse them anyway, but the import
+  // would then report twice the racers it actually added, so drop the repeats
+  // here and count what really went in. First occurrence wins.
+  const seen = new Set();
+  const racers = all.filter((r) => {
+    const key = (r.epc || '').toUpperCase() || (r.bib ? 'bib:' + r.bib : '');
+    if (!key) return true;                     // no identity yet: let it through to be reported
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 2000);
   if (!racers.length) return res.status(400).json({ error: 'no racers found in the file' });
   // multipart: the flag arrives as a form field, so it is a string.
   const replace = String(req.body?.replace ?? '') === 'true';
@@ -974,14 +1013,17 @@ router.post('/contests/:id/readers/:rid/import-reads', requireAuth, uploadMemory
   if (!reader) return res.status(404).json({ error: 'reader not found' });
   if (reader.role !== 'checkpoint') return res.status(400).json({ error: 'reads can only be imported into a checkpoint reader' });
   if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'file required' });
-  let rows;
+  let sheets;
   try {
     const isXlsx = /\.xlsx$/i.test(req.file.originalname || '') || req.file.buffer.subarray(0, 2).toString('latin1') === 'PK';
-    rows = isXlsx ? parseXlsx(req.file.buffer) : parseCsvBuffer(req.file.buffer);
+    sheets = isXlsx ? parseXlsxSheets(req.file.buffer)
+                    : [{ name: '', rows: parseCsvBuffer(req.file.buffer) }];
   } catch (err) {
     return res.status(400).json({ error: `could not read file: ${err.message}` });
   }
-  const reads = rowsToReads(rows).slice(0, 5000);
+  // Every sheet, for the same reason the start-list upload takes every sheet:
+  // a reader that exports one tab per session would otherwise merge one of them.
+  const reads = sheets.flatMap((s) => rowsToReads(s.rows)).slice(0, 5000);
   if (!reads.length) return res.status(400).json({ error: 'no reads found in the file' });
 
   const waves = new Map(db.prepare('SELECT id, started_at FROM waves WHERE contest_id = ?').all(contest.id).map((w) => [w.id, w]));

@@ -69,8 +69,17 @@ function colIndex(ref) {
   return n - 1;
 }
 
-/** Parses the first worksheet into an array of rows (arrays of strings). */
-function parseXlsx(buf) {
+/**
+ * Every worksheet in the workbook, in the order the tabs appear, as
+ * `[{ name, rows }]`.
+ *
+ * This reader used to stop at sheet1 and say nothing about the rest. A results
+ * workbook that splits its distances across tabs — "5 ק\"מ", "10 ק\"מ" — then
+ * imported as a third of the field, with no error and no warning: the sheet it
+ * read looked perfectly valid, so nothing anywhere said that two thirds of the
+ * runners had been dropped on the floor.
+ */
+function parseXlsxSheets(buf) {
   const zip = readZipEntries(buf);
 
   const shared = [];
@@ -83,11 +92,49 @@ function parseXlsx(buf) {
     }
   }
 
-  const sheetName = zip.names.find((n) => /^xl\/worksheets\/sheet1\.xml$/.test(n))
-    || zip.names.find((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
-  if (!sheetName) throw new Error('xlsx has no worksheet');
-  const sheet = zip.read(sheetName).toString('utf8');
-  return parseSheetRows(sheet, shared);
+  // Tab order and tab names come from the workbook part, which points at each
+  // sheet by relationship id; the rels part maps that id to the file. Either
+  // may be missing or unreadable in a hand-made file, so fall back to the
+  // worksheet files in numeric order, which is the order Excel writes them.
+  const files = zip.names.filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+    .sort((a, b) => Number(a.match(/(\d+)\.xml$/)[1]) - Number(b.match(/(\d+)\.xml$/)[1]));
+  if (!files.length) throw new Error('xlsx has no worksheet');
+
+  let ordered = null;
+  try {
+    const wb = zip.read('xl/workbook.xml');
+    const rels = zip.read('xl/_rels/workbook.xml.rels');
+    if (wb && rels) {
+      const target = new Map();
+      for (const m of rels.toString('utf8').matchAll(/<Relationship\b([^>]*)\/?>/g)) {
+        const id = /Id="([^"]+)"/.exec(m[1]);
+        const to = /Target="([^"]+)"/.exec(m[1]);
+        if (id && to) target.set(id[1], 'xl/' + to[1].replace(/^\/?xl\//, '').replace(/^\.\//, ''));
+      }
+      const list = [];
+      for (const m of wb.toString('utf8').matchAll(/<sheet\b([^>]*)\/?>/g)) {
+        const name = /name="([^"]*)"/.exec(m[1]);
+        const rid = /r:id="([^"]+)"/.exec(m[1]);
+        const file = rid && target.get(rid[1]);
+        if (file && files.includes(file)) {
+          list.push({ name: name ? decodeXmlEntities(name[1]) : file, file });
+        }
+      }
+      if (list.length) ordered = list;
+    }
+  } catch { /* fall back to file order below */ }
+  if (!ordered) ordered = files.map((file, i) => ({ name: `Sheet${i + 1}`, file }));
+
+  return ordered.map(({ name, file }) => ({
+    name,
+    rows: parseSheetRows(zip.read(file).toString('utf8'), shared),
+  }));
+}
+
+/** The first worksheet's rows. Prefer parseXlsxSheets: a workbook that keeps
+ *  part of its data on a later tab loses it here, silently. */
+function parseXlsx(buf) {
+  return parseXlsxSheets(buf)[0].rows;
 }
 
 // Split out so the cell-parsing (the tricky part) can be unit-tested directly.
@@ -117,4 +164,4 @@ function parseSheetRows(sheet, shared) {
   return rows;
 }
 
-module.exports = { parseXlsx, parseSheetRows };
+module.exports = { parseXlsx, parseXlsxSheets, parseSheetRows };

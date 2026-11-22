@@ -853,3 +853,72 @@ test('leader-ends-race is XCO-only: a running race ignores the flag', async () =
     .set(auth(org))).body.results.map((r) => [r.bib, r]));
   assert.equal(by['301'].laps, 4, 'a non-XCO race ignores the leader rule even with the flag on');
 });
+
+test('xlsx: every sheet is read, and the header is found under a title row', async () => {
+  const { parseXlsxSheets } = require('../server/xlsx');
+  const buf = fs.readFileSync('test/fixtures/multisheet-results.xlsx');
+  const sheets = parseXlsxSheets(buf);
+  assert.equal(sheets.length, 3, 'all three tabs');
+  assert.deepEqual(sheets.map((s) => s.name), ['5 ק"מ', '10 ק"מ', 'כל המשתתפים']);
+  // Row 0 is a merged title, row 1 is the real header — the thing that used to
+  // drop the whole file into the positional fallback.
+  assert.equal(sheets[0].rows[0].length, 1);
+  assert.ok(sheets[0].rows[1].includes('שם הרץ'));
+
+  const org = await register('multisheet@test.co', 'Multisheet Org');
+  const race = (await request(app).post('/api/contests').set(auth(org)).send({
+    kind: 'race', title: 'Two distances', sport: 'Running', start_at: past, end_at: future,
+  })).body;
+  const up = await request(app).post(`/api/contests/${race.id}/startlist-file`).set(auth(org))
+    .attach('file', 'test/fixtures/multisheet-results.xlsx');
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  // 66 in the 5k tab + 35 in the 10k tab; the third tab repeats all 101, and
+  // the repeats are dropped rather than counted twice.
+  assert.equal(up.body.imported, 101);
+  assert.equal(up.body.errors.length, 0);
+
+  const tags = (await request(app).get(`/api/contests/${race.id}/tags`).set(auth(org))).body.tags;
+  assert.equal(tags.length, 101, 'both distances landed');
+  assert.equal(tags.filter((t) => t.distance === '5 ק"מ').length, 66);
+  assert.equal(tags.filter((t) => t.distance === '10 ק"מ').length, 35);
+  // The header row itself must not arrive as a racer.
+  assert.ok(!tags.some((t) => t.participant === 'שם הרץ'));
+});
+
+test('gender: the plural spellings a Hebrew start list actually uses', () => {
+  const { genderLabelG, isMaleG, isFemaleG } = require('../server/race-results');
+  // These are what the league's own files say, and what used to read as blank —
+  // which merged the men and the women of a category into one scoring group.
+  assert.equal(genderLabelG('גברים'), 'Male');
+  assert.equal(genderLabelG('נשים'), 'Female');
+  for (const m of ['m', 'M', 'Male', 'man', 'men', 'זכר', 'גבר', 'גברים', 'בן', ' ז ']) {
+    assert.ok(isMaleG(m), `male: ${m}`);
+  }
+  for (const f of ['f', 'Female', 'woman', 'women', 'נקבה', 'אישה', 'אשה', 'נשים', 'בת', ' נ ']) {
+    assert.ok(isFemaleG(f), `female: ${f}`);
+  }
+  assert.equal(genderLabelG(''), '');
+  assert.equal(genderLabelG('mixed'), '');
+  assert.equal(isMaleG('נשים'), false);
+  assert.equal(isFemaleG('גברים'), false);
+});
+
+test('league scoring separates men and women spelled in Hebrew, on a plain age category', () => {
+  const { normalizeSettings, scoreRace } = require('../server/league-scoring');
+  // One category label, a separate gender column — the shape of a start list
+  // whose categories are plain ages. "גברים"/"נשים" used to read as blank, so
+  // every runner landed in one scoring group and the fastest woman was scored
+  // behind men she never raced.
+  const results = [
+    { status: 'finished', bib: '901', participant: 'גבר מהיר', team: 'A', distance: '5k', gender: 'גברים', category: 'עד 44', laps: 1, elapsed_ms: 60_000 },
+    { status: 'finished', bib: '902', participant: 'אישה מהירה', team: 'A', distance: '5k', gender: 'נשים', category: 'עד 44', laps: 1, elapsed_ms: 70_000 },
+    { status: 'finished', bib: '903', participant: 'גבר שני', team: 'B', distance: '5k', gender: 'גברים', category: 'עד 44', laps: 1, elapsed_ms: 80_000 },
+  ];
+  const { riders } = scoreRace(results, normalizeSettings({}));
+  const by = (bib) => riders.find((r) => r.bib === bib);
+  assert.equal(by('902').place, 1, 'the woman is first among the women');
+  assert.equal(by('902').points, 20);
+  assert.equal(by('901').place, 1, 'the man is first among the men');
+  assert.equal(by('903').place, 2);
+  assert.equal(by('903').points, 18);
+});

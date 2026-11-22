@@ -310,10 +310,31 @@ function formatElapsed(ms) {
   return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + `:${String(s).padStart(2, '0')}.${t}`;
 }
 
-const isFemaleG = (g) => ['f', 'female', 'נקבה', 'אישה'].includes(String(g || '').trim().toLowerCase());
-const isMaleG = (g) => ['m', 'male', 'זכר', 'גבר'].includes(String(g || '').trim().toLowerCase());
+/**
+ * Gender, as start lists actually spell it.
+ *
+ * The scoring group is distance + gender + category, so a value this does not
+ * recognise reads as blank and the men and women of a category are ranked
+ * against each other. The league's own result files say "גברים" and "נשים" —
+ * the plural, the way a category heading reads — and that spelling was in none
+ * of the four separate lists this codebase used to keep, one per file. Nothing
+ * showed it: races whose category labels already name the gender ("גברים עד
+ * 44") scored correctly anyway, and the fault only surfaces on a start list
+ * whose categories are plain ages.
+ *
+ * One list now, exported, so a spelling added here is understood everywhere.
+ * public/app.js keeps its own copy (it is served to the browser and cannot
+ * require this); it carries a comment pointing back here.
+ */
+const MALE_WORDS = ['m', 'male', 'man', 'men', 'boy', 'ז', 'זכר', 'גבר', 'גברים', 'בן', 'בנים'];
+const FEMALE_WORDS = ['f', 'female', 'woman', 'women', 'girl', 'נ', 'נקבה', 'אישה', 'אשה', 'נשים', 'בת', 'בנות'];
+
+const normGenderWord = (g) => String(g ?? '').trim().toLowerCase();
+const isFemaleG = (g) => FEMALE_WORDS.includes(normGenderWord(g));
+const isMaleG = (g) => MALE_WORDS.includes(normGenderWord(g));
 const genderLabelG = (g) => (isMaleG(g) ? 'Male' : isFemaleG(g) ? 'Female' : '');
 
 module.exports = {
   computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG, isTimeOnlySport, isXcoSport,
+  MALE_WORDS, FEMALE_WORDS,
 };

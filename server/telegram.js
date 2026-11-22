@@ -18,7 +18,7 @@ const { db, auditLog } = require('./db');
 const { logActivity } = require('./activity-log');
 const { signToken } = require('./auth');
 const { getContest, isOrganizer } = require('./routes/contests');
-const { computeRaceResults } = require('./race-results');
+const { computeRaceResults, genderLabelG } = require('./race-results');
 const defaultMailer = require('./mailer');
 
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
@@ -235,11 +235,11 @@ function mainKeyboard() {
   };
 }
 
+// Canonical Male/Female from the spellings in race-results.js; anything it
+// does not know is passed through as typed, so an operator's own wording is
+// never silently discarded.
 function normGender(raw) {
-  const s = String(raw || '').trim().toLowerCase();
-  if (['m', 'male', 'man', 'boy', 'זכר', 'גבר'].includes(s)) return 'Male';
-  if (['f', 'female', 'woman', 'girl', 'נקבה', 'אישה'].includes(s)) return 'Female';
-  return String(raw || '').trim();
+  return genderLabelG(raw) || String(raw || '').trim();
 }
 function normStatus(raw) {
   const s = String(raw || '').trim().toUpperCase();
