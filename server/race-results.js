@@ -58,7 +58,7 @@ function computeRaceResults(contest, { category } = {}) {
     .sort((a, b) => a.id - b.id);
 
   const allReads = db
-    .prepare('SELECT epc, read_at, manual, reader_id FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
+    .prepare('SELECT epc, read_at, manual, reader_id, source FROM tag_reads WHERE contest_id = ? ORDER BY read_at')
     .all(contest.id);
   const readsByEpc = new Map();     // primary crossings (finish/lap)
   const cpReadsByEpc = new Map();   // checkpoint passes: epc -> [{at, reader_id}]
@@ -67,10 +67,21 @@ function computeRaceResults(contest, { category } = {}) {
     const role = readerRole.get(r.reader_id)?.role;
     const off = readerRole.get(r.reader_id)?.clock_offset_ms || 0;
     // Reconcile device reads to server time by the reader's clock offset.
-    // Checkpoint reads — auto OR a marshal's manual tap — come from the
-    // checkpoint device, so always correct them. On a primary reader, device
-    // reads are corrected but web/operator manual reads are already server time.
-    const offset = role === 'checkpoint' ? off : (manual ? 0 : off);
+    //
+    // Whether a row needs that correction is a question of WHERE IT CAME FROM:
+    // a timing device stamps in its own clock, an operator typing on the web
+    // is already in server time. It is NOT the `manual` flag, which answers a
+    // different question — whether this is a deliberate crossing, exempt from
+    // the start-suppression window and the lap-gap dedupe.
+    //
+    // Reading `manual` as "already server time" was wrong for the one row that
+    // is both: a time corrected on the tablet. It is deliberate, so it carries
+    // the flag, and it is stamped in device time, so it still needs the
+    // offset — which was then not applied, and every correction landed on the
+    // website short by the device's clock offset while the untouched reads
+    // beside it were right. A few tenths, on exactly the times an operator had
+    // just gone to the trouble of fixing.
+    const offset = r.source === 'manual' ? 0 : off;
     const at = Date.parse(r.read_at) + offset;
     // A read on a checkpoint reader is a split/pass — whether the tag was read by
     // RFID or the marshal tapped the bib in manually.

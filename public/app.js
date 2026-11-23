@@ -1347,7 +1347,14 @@ async function openResultEditor(c, row, refetch) {
   const mine = reads
     .filter((x) => (row.bib && x.bib === row.bib) || epcs.includes(x.epc))
     .sort((a, b) => Date.parse(a.read_at) - Date.parse(b.read_at));
-  const waveStart = row.wave_started_at ? Date.parse(row.wave_started_at) : null;
+  // The gun reconciled to server time, as firstGunOfResults and the wave strip
+  // already do it. Without the offset the elapsed shown here, and every time
+  // typed into this editor, is out by the timing device's clock offset — the
+  // times saved from here are in server time, so they have to be measured from
+  // the server's idea of the gun.
+  const waveStart = row.wave_started_at
+    ? Date.parse(row.wave_started_at) + (row.wave_gun_offset_ms || 0)
+    : null;
   const canAdd = waveStart && row.bib; // a timed manual crossing needs a wave start + bib
 
   const statusSel = `<select id="re-status" aria-label="${t('result_status')}" style="width:auto">

@@ -9,9 +9,12 @@ const path = require('path');
 process.env.DATA_DIR = process.env.DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'vgs-sync-'));
 process.env.DISABLE_RATE_LIMIT = '1';
 process.env.OPEN_REGISTRATION = '1'; // tests use self-service accounts; approval flow covered in approval.test.js
+process.env.ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'sync-admin@test.local';
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'sync-admin-secret';
 
 const request = require('supertest');
-const { app } = require('../server/index');
+const { app, seedAdmin } = require('../server/index');
+seedAdmin(); // ADMIN_EMAIL/PASSWORD account, for the read-editing test below
 
 const past = new Date(Date.now() - 3600_000).toISOString();
 const future = new Date(Date.now() + 86400_000).toISOString();
@@ -280,4 +283,97 @@ test('the app replaces one chip\'s crossings, and only that chip on its own read
     .send({ epc: 'nothex', reads: [] })).status, 400);
   assert.equal((await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
     .send({ epc: 'AAAA0801' })).status, 400);
+});
+
+// ---- a device's clock offset and a corrected time ----
+//
+// Reported from a race: nudge a crossing by +1.0s on the tablet and the website
+// publishes it a few tenths short, while the untouched crossings beside it are
+// exact. The device stamps in its own clock and the server reconciles by the
+// reader's offset — but it decided whether to do that from the `manual` flag,
+// which a corrected read also carries. So the one row that is both deliberate
+// AND in device time got no correction at all.
+
+test('a time corrected on the device keeps its elapsed when the device clock is off', async () => {
+  const o = await register('clockskew@test.co', 'Clock Skew Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    kind: 'race', title: 'Skewed clock', sport: 'Running', start_at: past, end_at: future,
+  })).body;
+  const phone = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(o))
+    .send({ name: 'Phone at finish' })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'open' })).body;
+  for (const [epc, bib] of [['AAAA0A01', '1001'], ['AAAA0A02', '1002']]) {
+    await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+      .send({ epc, bib, participant: 'Runner ' + bib, wave_id: w.id });
+  }
+
+  // The tablet's clock runs 400 ms behind the server. It says so on every
+  // upload, gun included, so the gun carries the same offset as the reads.
+  const SKEW = 400;
+  const deviceNow = () => new Date(Date.now() - SKEW).toISOString();
+  const gunDevice = Date.now() - SKEW - 600_000;
+  await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', phone.token)
+    .send({ name: 'open', started_at: new Date(gunDevice).toISOString(), client_time: deviceNow() });
+  const at = (ms) => new Date(gunDevice + ms).toISOString();
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', phone.token).send({
+    reads: [{ epc: 'AAAA0A01', read_at: at(300_000) }, { epc: 'AAAA0A02', read_at: at(310_000) }],
+    client_time: deviceNow(),
+  });
+
+  let res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  const el = (bib) => res.body.results.find((r) => r.bib === bib).elapsed;
+  assert.equal(el('1001'), '5:00.0', 'an untouched read is reconciled against the gun');
+  assert.equal(el('1002'), '5:10.0');
+
+  // The operator nudges 1002 by +1.0s on the tablet, which restates that chip's
+  // crossings — stamped in device time and flagged manual, as a deliberate one.
+  await request(app).post('/api/ingest/replace-reads').set('X-Reader-Token', phone.token)
+    .send({ epc: 'AAAA0A02', reads: [{ read_at: at(311_000), manual: true }], client_time: deviceNow() });
+
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  assert.equal(el('1002'), '5:11.0', 'the correction lands exactly where the tablet shows it');
+  assert.equal(el('1001'), '5:00.0', 'and nothing else moves');
+});
+
+test('a time typed on the website is already server time and is not offset again', async () => {
+  const o = await register('webedit@test.co', 'Web Edit Org');
+  const c = (await request(app).post('/api/contests').set(auth(o)).send({
+    kind: 'race', title: 'Typed by hand', sport: 'Running', start_at: past, end_at: future,
+  })).body;
+  const phone = (await request(app).post(`/api/contests/${c.id}/readers`).set(auth(o))
+    .send({ name: 'Phone at finish' })).body;
+  const w = (await request(app).post(`/api/contests/${c.id}/waves`).set(auth(o)).send({ name: 'open' })).body;
+  await request(app).post(`/api/contests/${c.id}/tags`).set(auth(o))
+    .send({ epc: 'AAAA0B01', bib: '1101', participant: 'Typed Runner', wave_id: w.id });
+
+  const SKEW = 400;
+  const gunDevice = Date.now() - SKEW - 600_000;
+  await request(app).post('/api/ingest/wave-start').set('X-Reader-Token', phone.token)
+    .send({
+      name: 'open', started_at: new Date(gunDevice).toISOString(),
+      client_time: new Date(Date.now() - SKEW).toISOString(),
+    });
+  await request(app).post('/api/ingest/reads').set('X-Reader-Token', phone.token).send({
+    reads: [{ epc: 'AAAA0B01', read_at: new Date(gunDevice + 300_000).toISOString() }],
+    client_time: new Date(Date.now() - SKEW).toISOString(),
+  });
+
+  let res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  let row = res.body.results.find((r) => r.bib === '1101');
+  assert.equal(row.elapsed, '5:00.0');
+
+  // The page measures from the gun reconciled to server time — started_at plus
+  // the gun's own offset — which is what the editor now does.
+  const serverGun = Date.parse(row.wave_started_at) + (row.wave_gun_offset_ms || 0);
+  const reads = (await request(app).get(`/api/contests/${c.id}/reads`).set(auth(o))).body.reads;
+  const readId = reads.find((x) => x.epc === 'AAAA0B01').id;
+  const admin = (await request(app).post('/api/auth/login')
+    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD })).body;
+  const edit = await request(app).patch(`/api/contests/${c.id}/reads/${readId}`).set(auth(admin))
+    .send({ at: new Date(serverGun + 330_000).toISOString() });
+  assert.equal(edit.status, 200, JSON.stringify(edit.body));
+
+  res = await request(app).get(`/api/contests/${c.id}/race-results`).set(auth(o));
+  row = res.body.results.find((r) => r.bib === '1101');
+  assert.equal(row.elapsed, '5:30.0', 'the typed time is taken as given');
 });

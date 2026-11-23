@@ -1500,7 +1500,10 @@ router.patch('/contests/:id/reads/:readId', requireAuth, requireAdmin, (req, res
   const at = req.body?.at;
   if (!at || Number.isNaN(Date.parse(at))) return res.status(400).json({ error: 'at must be an ISO date-time' });
   const iso = new Date(at).toISOString();
-  db.prepare('UPDATE tag_reads SET read_at = ?, manual = 1 WHERE id = ?').run(iso, readId);
+  // Also now an operator-entered time, in server time rather than the device's,
+  // so results must not put the reader's clock offset on it. `source` is what
+  // says that; `manual` only says the crossing is deliberate.
+  db.prepare("UPDATE tag_reads SET read_at = ?, manual = 1, source = 'manual' WHERE id = ?").run(iso, readId);
   auditLog(req.user.id, 'read.edit', 'contest', contest.id, `read ${readId} epc ${row.epc} -> ${iso}`);
   sseBroadcast(contest.id, 'tag_reads', { edited: [{ id: readId, read_at: iso }] });
   res.json({ ok: true, read_at: iso });
