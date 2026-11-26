@@ -78,6 +78,19 @@ public class RaceTimingActivity extends BaseActivity {
     private final java.util.LinkedHashSet<String> dnsReturns = new java.util.LinkedHashSet<>();
     private final java.util.Set<String> dnsReturnsSettled = new java.util.HashSet<>();
     private TextView dnsReturnBanner;
+
+    // ---- start gate: who has been read since the gun, while the roll call decides ----
+    private TextView startGateStrip;
+    private static final int GATE_HIDDEN = 0, GATE_OPEN = 1, GATE_CLOSED = 2;
+    private int gateState = GATE_HIDDEN;
+    private int gateSeen, gateTotal;
+    /** When the roll call closes for the soonest open wave in view (0 = no
+     *  deadline: the roll call is off, or already closed). */
+    private long gateDeadline;
+    /** Racers in view not read since their gun, while the roll call is open.
+     *  Their tiles go grey; empty once it closes. */
+    private final java.util.Set<String> gateNotSeen = new java.util.HashSet<>();
+    private final List<RaceEngine.Result> gateMissing = new ArrayList<>();
     // Pre-entry: a racer tapped first waits here for the next timer press.
     private RaceStore.Racer pendingRacer;
     // Swap: a finish whose bib was wrong, waiting for the correct racer's tile.
@@ -158,6 +171,16 @@ public class RaceTimingActivity extends BaseActivity {
         pager.setOnPage(p -> { page = p; updateHint(); });
         resultsBox = findViewById(R.id.resultsBox);
         dnsReturnBanner = findViewById(R.id.dnsReturnBanner);
+        startGateStrip = findViewById(R.id.startGateStrip);
+        startGateStrip.setOnClickListener(v -> showGateMissing());
+        android.graphics.drawable.Drawable gateIcon = getDrawable(R.drawable.ic_ctrl_flag);
+        if (gateIcon != null) {
+            gateIcon = gateIcon.mutate();
+            gateIcon.setTint(0xFFFFFFFF);
+            gateIcon.setBounds(0, 0, dp(24), dp(24));
+            startGateStrip.setCompoundDrawablesRelative(gateIcon, null, null, null);
+            startGateStrip.setCompoundDrawablePadding(dp(10));
+        }
         dnsReturnBanner.setOnClickListener(v -> {
             java.util.Iterator<String> it = dnsReturns.iterator();
             if (it.hasNext()) askAboutDnsReturn(it.next());
@@ -296,6 +319,9 @@ public class RaceTimingActivity extends BaseActivity {
         Long gun = displayGunTime();
         long elapsed = gun == null ? 0 : System.currentTimeMillis() - gun;
         clockText.setText(RaceEngine.formatElapsed(Math.max(0, elapsed), 1));
+        // Only the countdown moves between renders; the counts change on a read,
+        // which re-renders anyway. Text only — no rebuild of anything.
+        if (gateState == GATE_OPEN && gateDeadline > 0) paintGateStrip();
         if (multiWave) {
             long now = System.currentTimeMillis();
             for (java.util.Map.Entry<String, TextView> e : waveChipClocks.entrySet()) {
@@ -650,6 +676,8 @@ public class RaceTimingActivity extends BaseActivity {
                         ? getString(R.string.name_col) + " · " + waveFilter
                         : getString(R.string.name_col));
 
+        updateStartGateStrip(results);
+
         List<RaceStore.Pending> pendingEntries = store.pendingEntries();
         java.util.Set<String> pendingBibs = new java.util.HashSet<>();
         for (RaceStore.Pending p : pendingEntries) if (p.hasRacer() && !p.hasTime()) pendingBibs.add(p.bib);
@@ -707,6 +735,142 @@ public class RaceTimingActivity extends BaseActivity {
             }
             if (soonest != Long.MAX_VALUE) handler.postDelayed(rollCallTick, soonest - now + 200);
         }
+    }
+
+    // ---- start gate counter ----
+
+    /**
+     * The start-line roll call, made visible while it is still deciding.
+     *
+     * At the gun every rider rolls over the mat; a rider never read since the
+     * gun is marked DNS once the roll call closes. Until then a rider who rolled
+     * over the mat and one who never turned up look the same on this screen —
+     * both on course with no laps — so the operator found out who was missing
+     * only when the no-shows dropped off the grid. This counts them live:
+     * read since the gun, out of everyone gunned, in the wave being viewed.
+     *
+     * Uses RaceEngine.Result.seenSinceGun, the same test the roll call applies,
+     * so the count and the DNS that follows it cannot disagree.
+     */
+    private void updateStartGateStrip(List<RaceEngine.Result> results) {
+        gateNotSeen.clear();
+        gateMissing.clear();
+        gateSeen = 0;
+        gateTotal = 0;
+        gateDeadline = 0;
+        gateState = GATE_HIDDEN;
+
+        if (prefs.courseClosedAt() > 0 || prefs.raceFinalized()) { paintGateStrip(); return; }
+
+        // An organizer-declared status is not a roll-call question.
+        java.util.Set<String> declared = new java.util.HashSet<>();
+        for (RaceStore.Racer r : store.startListEntries()) {
+            if (r.status != null && !r.status.isEmpty()) declared.add(r.bib);
+        }
+        long now = System.currentTimeMillis();
+        long win = prefs.rollCallSecs() * 1000L;
+        long closedAt = prefs.rollCallClosedAt();
+        boolean anyOpen = false, anyLapDone = false;
+        long soonest = Long.MAX_VALUE;
+        for (RaceEngine.Result r : results) {
+            String wave = r.wave == null ? "" : r.wave;
+            if (multiWave && waveFilter != null && !waveFilter.equals(wave)) continue;
+            Long gun = gunByWave.get(wave);
+            if (gun == null || declared.contains(r.bib)) continue;
+            gateTotal++;
+            if (r.seenSinceGun) gateSeen++;
+            else gateMissing.add(r);
+            if (r.laps > 0 || "finished".equals(r.status)) anyLapDone = true;
+            // Closed for this rider's wave exactly as RaceEngine decides it.
+            boolean closed = (closedAt > 0 && closedAt > gun) || (win > 0 && now >= gun + win);
+            if (!closed) {
+                anyOpen = true;
+                if (win > 0) soonest = Math.min(soonest, gun + win);
+            }
+        }
+        if (gateTotal == 0) { paintGateStrip(); return; }
+
+        if (anyOpen) {
+            // While it is open the counter stays, even once laps start: with a
+            // short loop the first lap can beat a two-minute roll call, and
+            // that is exactly when the operator is still chasing the missing.
+            // With the roll call off there is no deadline, so it goes then.
+            boolean off = win <= 0;
+            if (off && anyLapDone) { paintGateStrip(); return; }
+            gateState = GATE_OPEN;
+            gateDeadline = soonest == Long.MAX_VALUE ? 0 : soonest;
+            for (RaceEngine.Result r : gateMissing) if (r.bib != null && !r.bib.isEmpty()) gateNotSeen.add(r.bib);
+        } else if (!anyLapDone) {
+            gateState = GATE_CLOSED;   // summary until the first lap is done
+        }
+        java.util.Collections.sort(gateMissing, (a, b) -> Long.compare(bibNum(a.bib), bibNum(b.bib)));
+        paintGateStrip();
+    }
+
+    /** Text and colour for the strip from the cached counts; also called every
+     *  clock tick while a countdown is running. */
+    private void paintGateStrip() {
+        if (startGateStrip == null) return;
+        if (gateState == GATE_HIDDEN) { startGateStrip.setVisibility(View.GONE); return; }
+        int missing = gateTotal - gateSeen;
+        String top, bottom = null;
+        int bg;
+        if (gateState == GATE_CLOSED) {
+            top = getString(R.string.gate_summary, gateSeen, missing);
+            bg = 0xFF4A5568;                       // grey: decided, nothing to do
+        } else {
+            String left = gateDeadline > 0 ? countdown(gateDeadline) : null;
+            if (missing > 0) {
+                top = getString(R.string.gate_seen, gateSeen, gateTotal);
+                bottom = left != null ? getString(R.string.gate_missing_countdown, missing, left)
+                                      : getString(R.string.gate_missing_off, missing);
+                bg = 0xFF946006;                   // amber, dark enough for white text
+            } else {
+                top = getString(R.string.gate_all_seen, gateTotal);
+                bottom = left != null ? getString(R.string.gate_all_countdown, left)
+                                      : getString(R.string.gate_all_off);
+                bg = 0xFF2F7A17;                   // green, dark enough for white text
+            }
+        }
+        CharSequence text = top;
+        if (bottom != null) {
+            String all = top + "\n" + bottom;
+            android.text.SpannableString sp = new android.text.SpannableString(all);
+            sp.setSpan(new android.text.style.RelativeSizeSpan(0.87f), top.length() + 1, all.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            text = sp;
+        }
+        startGateStrip.setText(text);
+        startGateStrip.setBackground(roundedTile(bg));
+        startGateStrip.setVisibility(View.VISIBLE);
+    }
+
+    /** Time left until a deadline as m:ss, rounded UP — the roll call has not
+     *  closed while it still says 0:01, so it never shows 0:00 early. */
+    private static String countdown(long deadline) {
+        long secs = Math.max(0, (deadline - System.currentTimeMillis() + 999) / 1000);
+        return (secs / 60) + ":" + String.format(Locale.US, "%02d", secs % 60);
+    }
+
+    /** Tap the strip: who has not been read since the gun, and a way to close
+     *  the roll call now instead of waiting out the window. */
+    private void showGateMissing() {
+        if (gateState != GATE_OPEN || gateMissing.isEmpty()) return;
+        StringBuilder list = new StringBuilder();
+        for (RaceEngine.Result r : gateMissing) {
+            if (list.length() > 0) list.append('\n');
+            list.append('#').append(r.bib).append("   ").append(r.name == null ? "" : r.name);
+            if (multiWave && r.wave != null && !r.wave.isEmpty()) list.append("  · ").append(r.wave);
+        }
+        String body = gateDeadline > 0
+                ? getString(R.string.gate_missing_body, countdown(gateDeadline))
+                : getString(R.string.gate_missing_body_off);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.gate_missing_title, gateMissing.size()))
+                .setMessage(body + "\n\n" + list)
+                .setPositiveButton(R.string.gate_close_rollcall_now, (d, w) -> closeRollCall())
+                .setNegativeButton(R.string.close, null)
+                .show();
     }
 
     private void updateHint() {
@@ -827,6 +991,8 @@ public class RaceTimingActivity extends BaseActivity {
         sb.append('|').append(new java.util.TreeSet<>(doneBibs));
         sb.append('|').append(new java.util.TreeSet<>(pendingBibs));
         sb.append('|').append(new java.util.TreeMap<>(lapsByBib)); // lap progress -> rebuild on each new lap
+        // A rider read at the start mat turns from "not seen" to green at once.
+        sb.append('|').append(new java.util.TreeSet<>(gateNotSeen));
         // Which waves have been gunned, and the active wave filter. Without this
         // the tiles keep their pre-gun look (grey, "not started") and their stale
         // tap handler after a wave starts, because the bib list alone is unchanged.
@@ -903,10 +1069,13 @@ public class RaceTimingActivity extends BaseActivity {
                 // the tile out and say so, rather than banking a time that sits
                 // before their start.
                 final boolean started = waveStartedFor(r);
-                int bg = !started ? 0xFF9AA0A6
+                // Gunned but not read since: the roll call will call them DNS.
+                final boolean notSeen = started && !waiting && gateNotSeen.contains(r.bib);
+                int bg = !started || notSeen ? 0xFF9AA0A6
                         : waiting ? 0xFFEDE023 : (multiLap ? lapColor(currentLap) : 0xFF8DC63F);
                 tile.setBackground(roundedTile(bg));
                 String status = !started ? getString(R.string.not_started_wave)
+                        : notSeen ? getString(R.string.not_seen_yet)
                         : waiting ? getString(R.string.time_pending)
                         : multiLap ? getString(R.string.on_lap, currentLap, target)
                         : getString(R.string.tap_to_finish);

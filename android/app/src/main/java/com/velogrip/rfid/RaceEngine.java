@@ -32,6 +32,13 @@ public final class RaceEngine {
          *  time alone meant deleting a racer's whole race and re-entering one
          *  finish, which in a lap race threw away every lap they had ridden. */
         public long[] lapPassingId = new long[0];
+        /** Read at least once since their wave's gun — the start-mat pass, or
+         *  any lap. This is what the start-line roll call checks before it
+         *  marks a racer DNS, exposed so the console can show the tally live
+         *  while the roll call is still open, when a racer who rolled over the
+         *  mat and one who never turned up are otherwise both just "on course
+         *  with 0 laps". False for a declared status or a wave not yet gunned. */
+        public boolean seenSinceGun;
 
         Result(String bib, String name, String category, String wave, String distance, String gender,
                String status, int laps, long elapsedMs) {
@@ -147,6 +154,10 @@ public final class RaceEngine {
                 continue;
             }
             List<Read> raw = collectRaw(group, readsByEpc);
+            // One definition of "seen" for both the roll call below and the
+            // console's live count, so the two can never disagree.
+            boolean seenSinceGun = false;
+            for (Read rd : raw) { if (rd.at >= gun) { seenSinceGun = true; break; } }
             int target = resolveTarget(recordLaps, lapTargets, raceLaps, racer.distance);
             List<Read> crossings = buildCrossings(raw, gun, suppressMs, lapGapMs, target, lateStartOf(group));
 
@@ -178,8 +189,6 @@ public final class RaceEngine {
                 // Start-line roll call: gunned but no crossings. If the roll call
                 // has closed and this racer was never read since the gun, they
                 // didn't start -> DNS; otherwise they're still out on course.
-                boolean seenSinceGun = false;
-                for (Read rd : raw) { if (rd.at >= gun) { seenSinceGun = true; break; } }
                 boolean rollCallClosed = (rollCallClosedAt > 0 && rollCallClosedAt > gun)
                         || (rollCallWindowMs > 0 && nowMs >= gun + rollCallWindowMs);
                 String s = (rollCallClosed && !seenSinceGun) ? "DNS" : "on_course";
@@ -196,6 +205,7 @@ public final class RaceEngine {
             }
             res.lapElapsed = splits;
             res.lapPassingId = ids;
+            res.seenSinceGun = seenSinceGun;
             results.add(res);
         }
 

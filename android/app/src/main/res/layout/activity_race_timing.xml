@@ -128,6 +128,24 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Start gate: how many riders have been read since the gun, live, while
+         the start-line roll call is still deciding who is DNS. Colour, text and
+         visibility are set in code (updateStartGateStrip). -->
+    <TextView
+        android:id="@+id/startGateStrip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginBottom="6dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:gravity="center_vertical"
+        android:maxLines="2"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Wave races only: the sequential gun button, and a chip per wave that
          carries that wave's own clock and filters the grid to it. Both stay
          gone for a mass start. -->
