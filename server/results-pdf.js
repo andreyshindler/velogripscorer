@@ -378,7 +378,7 @@ async function leagueIndividualPdf(league, individual, raceList) {
  * (100, 99, …); in "category" mode from the place within the category.
  */
 async function raceTeamPointsPdf(contest, scored, settings) {
-  const ctx = await newDoc(false);
+  const ctx = await newDoc(true);
   addPage(ctx);
   const overall = settings.team_scoring_mode === 'overall';
   const top = settings.team_top_runners;
@@ -396,7 +396,8 @@ async function raceTeamPointsPdf(contest, scored, settings) {
   const memberCols = [
     { header: overall ? 'מקום כללי' : 'מקום בקטגוריה', width: 62, align: 'r', render: (r) => placeOf(r) },
     { header: H.bib, width: 38, align: 'r', render: (r) => r.bib },
-    { header: H.name, width: 130, align: 'r', render: (r) => r.participant },
+    { header: H.name, width: 140, align: 'r', render: (r) => r.participant },
+    { header: H.team, width: 130, align: 'r', render: (r) => r.team },
     { header: H.distance, width: 46, align: 'r', render: (r) => r.distance },
     { header: H.category, width: 66, align: 'r', render: (r) => r.category },
     { header: H.gender, width: 38, align: 'r', render: (r) => genderHe(genderLabelG(r.gender), false) },
@@ -442,8 +443,8 @@ async function raceTeamPointsPdf(contest, scored, settings) {
     const allCols = [
       { header: 'מקום כללי', width: 62, align: 'r', render: (r) => r.overall_place },
       { header: H.bib, width: 38, align: 'r', render: (r) => r.bib },
-      { header: H.name, width: 115, align: 'r', render: (r) => r.participant },
-      { header: H.team, width: 110, align: 'r', render: (r) => r.team },
+      { header: H.name, width: 140, align: 'r', render: (r) => r.participant },
+      { header: H.team, width: 140, align: 'r', render: (r) => r.team },
       { header: H.distance, width: 40, align: 'r', render: (r) => r.distance },
       { header: H.category, width: 56, align: 'r', render: (r) => r.category },
       { header: H.time, width: 56, align: 'r', render: (r) => r.elapsed },
