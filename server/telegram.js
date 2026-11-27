@@ -1078,19 +1078,31 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const res = await A('GET', `/contests/${c.id}/race-results?format=pdf`);
     if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
     await send.document(chatId, `race-results-${c.id}.pdf`, res.buffer, `${c.title} — results`);
-    // Offer to email these results, plus (for a league race) the season PDFs.
+    // Offer the results PDF again and by email, plus (for a league race) the
+    // season PDFs.
     const inLeague = db.prepare('SELECT 1 FROM league_races WHERE contest_id = ?').get(c.id);
-    const rows = [[btn('📧 Email results', `emask:rr:${c.id}:results`)]];
-    if (inLeague) {
-      rows.unshift([btn('📑 Individual PDF', 'rpdf:individual'), btn('📑 Team PDF', 'rpdf:team')]);
-      rows.push([btn('📧 Email Individual', `emask:rr:${c.id}:individual`), btn('📧 Email Team', `emask:rr:${c.id}:team`)]);
-    }
-    await send.message(chatId, inLeague ? 'League standings / email:' : 'Email these results:', { reply_markup: kb(rows) });
+    const resultsPdf = btn('📑 Results PDF', 'rpdf:results');
+    const emailResults = btn('📧 Email results', `emask:rr:${c.id}:results`);
+    const rows = inLeague
+      ? [
+        [resultsPdf],
+        [btn('📑 Individual PDF', 'rpdf:individual'), btn('📑 Team PDF', 'rpdf:team')],
+        [emailResults],
+        [btn('📧 Email Individual', `emask:rr:${c.id}:individual`), btn('📧 Email Team', `emask:rr:${c.id}:team`)],
+      ]
+      : [[resultsPdf, emailResults]];
+    await send.message(chatId, inLeague ? 'Results / league standings:' : 'Results PDF / email:', { reply_markup: kb(rows) });
   }
 
   async function raceStandingsPdf(chatId, doc) {
     const c = await needRace(chatId);
     if (!c) return;
+    if (doc === 'results') {
+      const res = await A('GET', `/contests/${c.id}/race-results?format=pdf`);
+      if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
+      await send.document(chatId, `race-results-${c.id}.pdf`, res.buffer, `${c.title} — results`);
+      return;
+    }
     const which = doc === 'team' ? 'team' : 'individual';
     const res = await A('GET', `/contests/${c.id}/race-results?format=pdf&doc=${which}`);
     if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }

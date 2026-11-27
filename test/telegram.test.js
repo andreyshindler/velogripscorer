@@ -349,6 +349,20 @@ test('/pdf sends a PDF document', async () => {
   assert.equal(doc.filename, `race-results-${contestId}.pdf`);
   assert.ok(Buffer.isBuffer(doc.content), 'PDF content is a Buffer');
   assert.equal(doc.content.subarray(0, 5).toString('latin1'), '%PDF-');
+
+  // the menu offers the general results PDF beside the league ones
+  const btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  for (const d of ['rpdf:results', 'rpdf:individual', 'rpdf:team', `emask:rr:${contestId}:results`]) {
+    assert.ok(btns.includes(d), `menu has ${d}`);
+  }
+
+  // and the Results PDF button sends the same file again
+  send.reset();
+  await tap(ALLOWED, 'rpdf:results');
+  const again = send.last('document');
+  assert.ok(again, 'Results PDF button sent a document');
+  assert.equal(again.filename, `race-results-${contestId}.pdf`);
+  assert.equal(again.content.subarray(0, 5).toString('latin1'), '%PDF-');
 });
 
 test('league PDF buttons send PDF documents', async () => {
