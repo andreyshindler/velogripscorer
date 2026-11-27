@@ -9,8 +9,8 @@ const multer = require('multer');
 const { parseXlsxSheets } = require('../xlsx');
 const { getContest, isOrganizer, canView } = require('./contests');
 const { computeRaceResults, formatElapsed, isFemaleG, isMaleG, genderLabelG } = require('../race-results');
-const { normalizeSettings, computeLeagueStandings } = require('../league-scoring');
-const { raceResultsPdf, leagueIndividualPdf, leagueTeamPdf } = require('../results-pdf');
+const { normalizeSettings, computeLeagueStandings, scoreRace } = require('../league-scoring');
+const { raceResultsPdf, leagueIndividualPdf, leagueTeamPdf, raceTeamPointsPdf } = require('../results-pdf');
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -1196,6 +1196,17 @@ router.get('/contests/:id/race-results', async (req, res) => {
     if (!isOrganizer(contest, req.user)) return res.status(403).json({ error: 'organizer only' });
     const doc = req.query.doc;
     try {
+      // This race's team points worked out rider by rider, by the league's rules.
+      if (doc === 'teampoints') {
+        const lr = db.prepare('SELECT league_id FROM league_races WHERE contest_id = ?').get(contest.id);
+        const league = lr && db.prepare('SELECT settings FROM leagues WHERE id = ?').get(lr.league_id);
+        if (!league) return res.status(400).json({ error: 'race not in a league' });
+        const settings = normalizeSettings(league.settings);
+        const buf = await raceTeamPointsPdf(contest, scoreRace(computeRaceResults(contest), settings), settings);
+        return res.type('application/pdf')
+          .set('Content-Disposition', `attachment; filename="team-points-${contest.id}.pdf"`)
+          .send(buf);
+      }
       // Season standings PDFs (team / per-category individual) require the race
       // to belong to a league — that's where cumulative + rounds come from.
       if (doc === 'team' || doc === 'individual') {

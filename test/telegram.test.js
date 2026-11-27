@@ -352,7 +352,7 @@ test('/pdf sends a PDF document', async () => {
 
   // the menu offers the general results PDF beside the league ones
   const btns = send.last('message').extra.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
-  for (const d of ['rpdf:results', 'rpdf:individual', 'rpdf:team', `emask:rr:${contestId}:results`]) {
+  for (const d of ['rpdf:results', 'rpdf:teampoints', 'rpdf:individual', 'rpdf:team', `emask:rr:${contestId}:results`]) {
     assert.ok(btns.includes(d), `menu has ${d}`);
   }
 
@@ -363,6 +363,14 @@ test('/pdf sends a PDF document', async () => {
   assert.ok(again, 'Results PDF button sent a document');
   assert.equal(again.filename, `race-results-${contestId}.pdf`);
   assert.equal(again.content.subarray(0, 5).toString('latin1'), '%PDF-');
+
+  // and Team points PDF sends this race's team score worked out
+  send.reset();
+  await tap(ALLOWED, 'rpdf:teampoints');
+  const tp = send.last('document');
+  assert.ok(tp, 'Team points PDF button sent a document');
+  assert.equal(tp.filename, `team-points-${contestId}.pdf`);
+  assert.equal(tp.content.subarray(0, 5).toString('latin1'), '%PDF-');
 });
 
 test('league PDF buttons send PDF documents', async () => {

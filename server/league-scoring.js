@@ -138,6 +138,11 @@ function scoreRace(results, settings) {
         gender: r.gender || '',
         category: (r.category || '').trim(),
         place,
+        // place among every finisher (team "overall" mode only) and the time,
+        // so a team-points sheet can show where each value came from
+        overall_place: overall ? overallPlace.get(r) : null,
+        laps: r.laps,
+        elapsed: r.elapsed || '',
         points: pointsFor(place, settings.individual_points, settings.individual_other_points),
         team_points: overall ? overallTeamPoints(r) : pointsFor(place, settings.team_points, settings.team_other_points),
       });
@@ -152,14 +157,15 @@ function scoreRace(results, settings) {
     byTeam.get(r.team).push(r);
   }
   const teams = [...byTeam.entries()].map(([team, members]) => {
-    const counted = members
-      .slice()
-      .sort((a, b) => b.team_points - a.team_points)
-      .slice(0, settings.team_top_runners);
+    const ranked = members.slice().sort((a, b) => b.team_points - a.team_points);
+    const counted = ranked.slice(0, settings.team_top_runners);
     return {
       team,
       points: counted.reduce((sum, m) => sum + m.team_points, 0),
       counted: counted.map((m) => ({ bib: m.bib, team_points: m.team_points })),
+      // every member, best first: the first counted.length of them are the
+      // ones the score is made of
+      members: ranked,
     };
   });
 

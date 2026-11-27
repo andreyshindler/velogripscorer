@@ -86,6 +86,30 @@ test('scoreRace: team sums its best N runners only', () => {
   assert.equal(byTeam['Solo'].points, 2);
 });
 
+test('scoreRace: overall mode exposes each rider\'s overall place and every team member, best first', () => {
+  // the team-points PDF prints these: place among all finishers -> 100, 99, …
+  const fin = (bib, team, elapsed, category) => ({
+    bib, participant: `R${bib}`, status: 'finished', laps: 1, elapsed_ms: elapsed, elapsed: `0:0${bib}`,
+    distance: '5k', gender: 'M', category, team,
+  });
+  const results = [
+    fin('1', 'Aces', 100, 'A'), fin('2', 'Solo', 200, 'B'), fin('3', 'Aces', 300, 'B'),
+    fin('4', 'Aces', 400, 'A'), fin('5', 'Aces', 500, 'A'),
+  ];
+  const s = presetSettings('mtb'); // overall 100, 99, …; best 3 count
+  const { riders, teams } = scoreRace(results, s);
+  const byBib = Object.fromEntries(riders.map((r) => [r.bib, r]));
+  assert.deepEqual(['1', '2', '3', '4', '5'].map((b) => byBib[b].overall_place), [1, 2, 3, 4, 5]);
+  assert.deepEqual(['1', '2', '3', '4', '5'].map((b) => byBib[b].team_points), [100, 99, 98, 97, 96]);
+  assert.equal(byBib['3'].elapsed, '0:03');
+  const aces = teams.find((t) => t.team === 'Aces');
+  assert.deepEqual(aces.members.map((m) => m.bib), ['1', '3', '4', '5'], 'all members, best first');
+  assert.equal(aces.points, 100 + 98 + 97, 'the first three members make the score');
+  assert.equal(aces.counted.length, 3);
+  // category mode has no overall place
+  assert.equal(scoreRace(results, DEFAULT_SETTINGS).riders[0].overall_place, null);
+});
+
 test('scoreRace: a partial-lap finisher still counts, ranked below full-lap finishers', () => {
   // MTB lap race: rider B did 3 of 4 laps and was finalised (status finished).
   // Even with a faster elapsed time, fewer laps must rank below the 4-lap rider,

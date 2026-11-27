@@ -92,8 +92,15 @@ test('per-race standings PDFs (doc=individual|team) return PDFs to the organizer
   assert.match(team.headers['content-disposition'], new RegExp(`team-standings-${contest.id}\\.pdf`));
 });
 
+test('per-race team points PDF (doc=teampoints) returns a PDF to the organizer', async () => {
+  const tp = await getPdf(`/api/contests/${contest.id}/race-results?format=pdf&doc=teampoints`, org);
+  assert.equal(tp.status, 200);
+  assert.ok(isPdf(tp), 'teampoints: application/pdf beginning with %PDF-');
+  assert.match(tp.headers['content-disposition'], new RegExp(`team-points-${contest.id}\\.pdf`));
+});
+
 test('per-race standings PDFs are organizer-gated', async () => {
-  for (const doc of ['individual', 'team']) {
+  for (const doc of ['individual', 'team', 'teampoints']) {
     const nobody = await request(app).get(`/api/contests/${contest.id}/race-results?format=pdf&doc=${doc}`).set(auth(other));
     assert.equal(nobody.status, 403, `${doc}: other user forbidden`);
     const anon = await request(app).get(`/api/contests/${contest.id}/race-results?format=pdf&doc=${doc}`);
@@ -104,7 +111,7 @@ test('per-race standings PDFs are organizer-gated', async () => {
 test('per-race standings PDFs 400 when the race is not in a league', async () => {
   const solo = (await request(app).post('/api/contests').set(auth(org))
     .send({ kind: 'race', title: 'מרוץ בודד', visibility: 'public', start_at: past, end_at: future })).body;
-  for (const doc of ['individual', 'team']) {
+  for (const doc of ['individual', 'team', 'teampoints']) {
     const res = await request(app).get(`/api/contests/${solo.id}/race-results?format=pdf&doc=${doc}`).set(auth(org));
     assert.equal(res.status, 400, `${doc}: not in a league`);
   }

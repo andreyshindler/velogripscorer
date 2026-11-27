@@ -1085,7 +1085,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     const emailResults = btn('📧 Email results', `emask:rr:${c.id}:results`);
     const rows = inLeague
       ? [
-        [resultsPdf],
+        [resultsPdf, btn('🧮 Team points PDF', 'rpdf:teampoints')],
         [btn('📑 Individual PDF', 'rpdf:individual'), btn('📑 Team PDF', 'rpdf:team')],
         [emailResults],
         [btn('📧 Email Individual', `emask:rr:${c.id}:individual`), btn('📧 Email Team', `emask:rr:${c.id}:team`)],
@@ -1101,6 +1101,13 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       const res = await A('GET', `/contests/${c.id}/race-results?format=pdf`);
       if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
       await send.document(chatId, `race-results-${c.id}.pdf`, res.buffer, `${c.title} — results`);
+      return;
+    }
+    if (doc === 'teampoints') {
+      // this race's team score worked out: each rider's place and points
+      const res = await A('GET', `/contests/${c.id}/race-results?format=pdf&doc=teampoints`);
+      if (res.status >= 400 || !res.buffer) { await send.message(chatId, '⚠️ Could not build the PDF.'); return; }
+      await send.document(chatId, `team-points-${c.id}.pdf`, res.buffer, `${c.title} — team points`);
       return;
     }
     const which = doc === 'team' ? 'team' : 'individual';

@@ -368,6 +368,96 @@ async function leagueIndividualPdf(league, individual, raceList) {
   return Buffer.from(await ctx.doc.save());
 }
 
+// ---------------------------------------------------------------------------
+// 4) One race's team points, worked out: every rider's place and points and
+//    which of them make up each team's score.
+// ---------------------------------------------------------------------------
+/**
+ * `scored` is scoreRace(results, settings) for this one race. In "overall"
+ * mode a rider's team points come from the place among every finisher
+ * (100, 99, …); in "category" mode from the place within the category.
+ */
+async function raceTeamPointsPdf(contest, scored, settings) {
+  const ctx = await newDoc(false);
+  addPage(ctx);
+  const overall = settings.team_scoring_mode === 'overall';
+  const top = settings.team_top_runners;
+
+  // Teams, best first; equal scores share a place.
+  const teams = scored.teams.slice()
+    .sort((a, b) => (b.points - a.points) || a.team.localeCompare(b.team));
+  let prevPts = null, prevPlace = 0;
+  teams.forEach((t, i) => {
+    t.rank = t.points === prevPts ? prevPlace : i + 1;
+    prevPts = t.points; prevPlace = t.rank;
+  });
+
+  const placeOf = (r) => (overall ? r.overall_place : r.place);
+  const memberCols = [
+    { header: overall ? 'מקום כללי' : 'מקום בקטגוריה', width: 62, align: 'r', render: (r) => placeOf(r) },
+    { header: H.bib, width: 38, align: 'r', render: (r) => r.bib },
+    { header: H.name, width: 130, align: 'r', render: (r) => r.participant },
+    { header: H.distance, width: 46, align: 'r', render: (r) => r.distance },
+    { header: H.category, width: 66, align: 'r', render: (r) => r.category },
+    { header: H.gender, width: 38, align: 'r', render: (r) => genderHe(genderLabelG(r.gender), false) },
+    { header: H.time, width: 56, align: 'r', render: (r) => r.elapsed },
+    { header: H.points, width: 44, align: 'r', render: (r) => r.team_points },
+    { header: 'נספר', width: 40, align: 'r', render: (r) => (r.counted ? 'כן' : '') },
+  ];
+  const totalW = memberCols.reduce((s, c) => s + c.width, 0);
+  const x0 = ctx.size.W - MARGIN - totalW;
+
+  const rule = overall
+    ? `ניקוד לפי מקום כללי: ${settings.team_overall_start} למקום הראשון, ומטה נקודה לכל מקום, מינימום ${settings.team_other_points}`
+    : `ניקוד לפי מקום בקטגוריה: ${settings.team_points.join(' / ')}, אחרים ${settings.team_other_points}`;
+  drawTitle(ctx, contest.title || 'Race', 15, x0, totalW);
+  drawSub(ctx, `${H.teamStandings} · ${rule}`, x0, totalW);
+  drawSub(ctx, `ניקוד הקבוצה = סכום ${top} הרוכבים הטובים שלה`, x0, totalW);
+
+  // Summary: one line per team.
+  const sumCols = [
+    { header: H.place, width: 40, align: 'r', render: (t) => t.rank },
+    { header: H.team, width: 170, align: 'r', render: (t) => t.team },
+    { header: H.points, width: 56, align: 'r', render: (t) => t.points },
+    { header: 'פירוט', width: 254, align: 'r', render: (t) => t.counted.map((m) => m.team_points).join(' + ') },
+  ];
+  const sumW = sumCols.reduce((s, c) => s + c.width, 0);
+  ctx.y -= 4;
+  drawTitle(ctx, 'סיכום', 11, x0, totalW);
+  drawTable(ctx, sumCols, teams, ctx.size.W - MARGIN - sumW);
+
+  // Each team with every member; the counted ones marked.
+  for (const t of teams) {
+    const rows = t.members.map((m, i) => ({ ...m, counted: i < t.counted.length }));
+    ctx.y -= 8;
+    if (ctx.y - 11 - 6 - ROW_H * 2 < MARGIN) addPage(ctx);
+    drawTitle(ctx, rtlTitle([`${H.place} ${t.rank}`, '·', t.team, '·', `${t.points} נקודות`]), 11, x0, totalW);
+    drawTable(ctx, memberCols, rows, x0);
+  }
+
+  // Overall mode: the whole field in finishing order, so every 100, 99, … can
+  // be traced, riders without a team included.
+  if (overall) {
+    const all = scored.riders.slice().sort((a, b) => a.overall_place - b.overall_place);
+    const allCols = [
+      { header: 'מקום כללי', width: 62, align: 'r', render: (r) => r.overall_place },
+      { header: H.bib, width: 38, align: 'r', render: (r) => r.bib },
+      { header: H.name, width: 115, align: 'r', render: (r) => r.participant },
+      { header: H.team, width: 110, align: 'r', render: (r) => r.team },
+      { header: H.distance, width: 40, align: 'r', render: (r) => r.distance },
+      { header: H.category, width: 56, align: 'r', render: (r) => r.category },
+      { header: H.time, width: 56, align: 'r', render: (r) => r.elapsed },
+      { header: H.points, width: 44, align: 'r', render: (r) => r.team_points },
+    ];
+    const allW = allCols.reduce((s, c) => s + c.width, 0);
+    addPage(ctx);
+    drawTitle(ctx, `כל המסיימים · ${all.length}`, 11, ctx.size.W - MARGIN - allW, allW);
+    drawTable(ctx, allCols, all, ctx.size.W - MARGIN - allW);
+  }
+
+  return Buffer.from(await ctx.doc.save());
+}
+
 function bestNote(teams) {
   const c = teams.reduce((mx, t) => Math.max(mx, (t.counted_ids || []).length), 0);
   return c ? `${c} ${H.counted}` : H.overall;
@@ -400,4 +490,4 @@ function categorySections(rows) {
 
 // raceSectionRows is exported for the tests: it carries the placing, tie and
 // gap rules, none of which can be read back out of a rendered PDF.
-module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceSectionRows, categorySections };
+module.exports = { raceResultsPdf, leagueTeamPdf, leagueIndividualPdf, raceTeamPointsPdf, raceSectionRows, categorySections };
