@@ -259,8 +259,9 @@ public class RaceTimingActivity extends BaseActivity {
         pager.post(this::render);     // after layout, the pager height is known
     }
 
-    /** Show names uses wider tiles, so fewer columns. */
-    private int cols() { return showNames ? 2 : 4; }
+    /** Four columns either way: Show names fits the name into the same tile
+     *  (it used to switch to two wide columns, halving the bibs on screen). */
+    private int cols() { return 4; }
 
     private void applyNamesMode() {
         ((TextView) findViewById(R.id.aNamesLabel)).setText(showNames ? R.string.hide_name : R.string.show_names);
@@ -270,7 +271,7 @@ public class RaceTimingActivity extends BaseActivity {
 
     /** One grid row's height (tile + its top/bottom margins). Fast-tap gives
      *  every tile exactly this height so the rows it counts actually fit. */
-    private int rowHpx() { return dp(showNames ? 92 : 76); }
+    private int rowHpx() { return dp(76); }
 
     // Tile colour per lap: lap 1 green, then blue, orange, purple, teal (cycling).
     private static final int[] LAP_COLORS =
@@ -902,6 +903,14 @@ public class RaceTimingActivity extends BaseActivity {
         }
     }
 
+    /** Drop the font's extra top/bottom padding, so three lines fit a tile. */
+    private static TextView compact(TextView t) {
+        t.setIncludeFontPadding(false);
+        t.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        return t;
+    }
+
     private TextView line(String text, int sizeSp, boolean bold, int color) {
         TextView t = new TextView(this);
         t.setText(text);
@@ -1051,12 +1060,13 @@ public class RaceTimingActivity extends BaseActivity {
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER);
-            tile.setPadding(dp(8), dp(6), dp(8), dp(6));
+            // Show names needs the width for the name, and the height for a
+            // third line, inside the same tile.
+            tile.setPadding(dp(showNames ? 3 : 8), dp(showNames ? 4 : 6), dp(showNames ? 3 : 8), dp(showNames ? 4 : 6));
 
             if (t instanceof String) { // No Bib / Unknown Racer
                 tile.setBackground(roundedTile(0xFF8A8F98));
-                tile.addView(line(getString(showNames ? R.string.unknown_racer : R.string.no_bib),
-                        showNames ? 17 : 20, true, 0xFFFFFFFF));
+                tile.addView(line(getString(R.string.no_bib), 20, true, 0xFFFFFFFF));
                 tile.setOnClickListener(v -> recordNoBib());
             } else {
                 final RaceStore.Racer r = (RaceStore.Racer) t;
@@ -1093,11 +1103,17 @@ public class RaceTimingActivity extends BaseActivity {
                     status = r.wave + " · " + status;
                 }
                 if (showNames) {
-                    tile.addView(line(r.bib + " - " + r.name, 17, true, 0xFF1A1A1A));
-                    String sub = r.distance
-                            + (r.category.isEmpty() ? "" : (r.distance.isEmpty() ? "" : " - ") + r.category);
-                    if (!sub.isEmpty()) tile.addView(line(sub, 13, false, 0xFF294715));
-                    tile.addView(line(status, 12, false, 0xFF1A3A0A));
+                    // Bib, name, status — the same tile as without names. A
+                    // name too long for it is cut with "…" on one line.
+                    tile.addView(compact(line(r.bib, 19, true, 0xFF1A1A1A)));
+                    TextView name = compact(line(r.name, 12, true, 0xFF1A1A1A));
+                    name.setSingleLine(true);
+                    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    tile.addView(name);
+                    TextView st = compact(line(status, 11, false, 0xFF1A3A0A));
+                    st.setSingleLine(true);
+                    st.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    tile.addView(st);
                 } else {
                     tile.addView(line(r.bib, 20, true, 0xFF1A1A1A));
                     tile.addView(line(status, 13, false, 0xFF1A3A0A));
