@@ -234,6 +234,12 @@
     <string name="show_names">Show names</string>
     <string name="hide_name">Hide name</string>
     <string name="unknown_racer">Unknown Racer</string>
+    <string name="leaders">Leaders</string>
+    <string name="leaders_title">Top 5 leaders</string>
+    <string name="leaders_none">No laps recorded yet.</string>
+    <string name="leaders_lap">Lap %1$d</string>
+    <string name="leaders_finished">Finished</string>
+    <string name="leaders_refresh">Refresh</string>
     <string name="progress">Progress</string>
     <string name="race_progress_title">Race Progress</string>
     <string name="total_racers">Total racers</string>

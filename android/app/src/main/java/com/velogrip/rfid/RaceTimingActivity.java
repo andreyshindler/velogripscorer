@@ -217,6 +217,7 @@ public class RaceTimingActivity extends BaseActivity {
                         .putExtra(StartListActivity.EXTRA_NO_FORWARD, true)));
         findViewById(R.id.bPause).setOnClickListener(v ->
                 startActivity(new Intent(this, RaceProgressActivity.class)));
+        findViewById(R.id.aLeaders).setOnClickListener(v -> showLeaders());
         findViewById(R.id.bHide).setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
@@ -2325,6 +2326,53 @@ public class RaceTimingActivity extends BaseActivity {
         head.addView(s);
         content.addView(head);
         return content;
+    }
+
+    /** The five riders leading right now: most laps, then whoever completed
+     *  that lap first (a finisher's time is their last lap). Follows the wave
+     *  chip like the finish list does. Refresh re-reads it in place. */
+    private void showLeaders() {
+        List<RaceEngine.Result> results = RaceResults.compute(store, prefs, prefs.raceFinalized());
+        List<RaceEngine.Result> racing = new java.util.ArrayList<>();
+        for (RaceEngine.Result r : results) {
+            if (multiWave && waveFilter != null && !waveFilter.equals(r.wave)) continue;
+            if (r.laps <= 0) continue;
+            if (!"finished".equals(r.status) && !"on_course".equals(r.status)) continue;
+            racing.add(r);
+        }
+        java.util.Collections.sort(racing, (a, b) -> a.laps != b.laps
+                ? Integer.compare(b.laps, a.laps)
+                : Long.compare(lastCrossing(a), lastCrossing(b)));
+        StringBuilder sb = new StringBuilder();
+        RaceEngine.Result lead = racing.isEmpty() ? null : racing.get(0);
+        int dec = prefs.timingDecimals();
+        for (int i = 0; i < Math.min(5, racing.size()); i++) {
+            RaceEngine.Result r = racing.get(i);
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(i + 1).append(".  #").append(r.bib == null ? "" : r.bib)
+                    .append("  ").append(r.name == null ? "" : r.name).append('\n')
+                    .append("     ")
+                    .append("finished".equals(r.status) ? getString(R.string.leaders_finished)
+                            : getString(R.string.leaders_lap, r.laps))
+                    .append(" · ").append(RaceEngine.formatElapsed(lastCrossing(r), dec));
+            if (r != lead && r.laps == lead.laps && lastCrossing(r) > lastCrossing(lead)) {
+                sb.append(" · +").append(RaceEngine.formatElapsed(lastCrossing(r) - lastCrossing(lead), dec));
+            }
+        }
+        String title = getString(R.string.leaders_title)
+                + (multiWave && waveFilter != null ? " · " + waveFilter : "");
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(sb.length() == 0 ? getString(R.string.leaders_none) : sb.toString())
+                .setNeutralButton(R.string.leaders_refresh, (d, w) -> showLeaders())
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    /** Elapsed at a racer's latest counted crossing (their time, once finished). */
+    private static long lastCrossing(RaceEngine.Result r) {
+        if ("finished".equals(r.status) && r.elapsedMs > 0) return r.elapsedMs;
+        return r.lapElapsed.length > 0 ? r.lapElapsed[r.lapElapsed.length - 1] : Long.MAX_VALUE;
     }
 
     private void showRaceProgress() {

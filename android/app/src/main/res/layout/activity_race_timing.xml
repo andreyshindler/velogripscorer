@@ -246,7 +246,8 @@
         android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
-    <!-- Bottom bar page A (swipe sideways to flip to page B) -->
+    <!-- Bottom bar page A (swipe sideways to flip to page B): the actions used
+         during a race. Page B holds the view toggle, start list and settings. -->
     <com.velogrip.rfid.SwipeBar
         android:id="@+id/tbarA"
         android:layout_width="match_parent"
@@ -262,13 +263,13 @@
             <TextView style="@style/BottomIcon" android:text="⏹" android:textColor="#E74C3C" />
             <TextView style="@style/BottomText" android:text="@string/race_control" />
         </LinearLayout>
-        <LinearLayout android:id="@+id/aNormal" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="▦" />
-            <TextView android:id="@+id/aNormalLabel" style="@style/BottomText" android:text="@string/normal_view" />
+        <LinearLayout android:id="@+id/bPause" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="📊" />
+            <TextView style="@style/BottomText" android:text="@string/progress" />
         </LinearLayout>
-        <LinearLayout android:id="@+id/aStartList" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="☰" />
-            <TextView style="@style/BottomText" android:text="@string/start_list_title" />
+        <LinearLayout android:id="@+id/aLeaders" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="🏆" />
+            <TextView style="@style/BottomText" android:text="@string/leaders" />
         </LinearLayout>
         <LinearLayout android:id="@+id/aMoreT" style="@style/BottomAction">
             <TextView style="@style/BottomIcon" android:text="•••" />
@@ -285,9 +286,13 @@
         android:orientation="horizontal"
         android:paddingVertical="6dp"
         android:visibility="gone">
-        <LinearLayout android:id="@+id/bPause" style="@style/BottomAction">
-            <TextView style="@style/BottomIcon" android:text="📊" />
-            <TextView style="@style/BottomText" android:text="@string/progress" />
+        <LinearLayout android:id="@+id/aNormal" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="▦" />
+            <TextView android:id="@+id/aNormalLabel" style="@style/BottomText" android:text="@string/normal_view" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/aStartList" style="@style/BottomAction">
+            <TextView style="@style/BottomIcon" android:text="☰" />
+            <TextView style="@style/BottomText" android:text="@string/start_list_title" />
         </LinearLayout>
         <LinearLayout android:id="@+id/bHide" style="@style/BottomAction">
             <TextView style="@style/BottomIcon" android:text="⚙" />

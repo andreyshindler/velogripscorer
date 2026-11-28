@@ -234,6 +234,12 @@
     <string name="show_names">הצג שמות</string>
     <string name="hide_name">הסתר שם</string>
     <string name="unknown_racer">משתתף לא ידוע</string>
+    <string name="leaders">מובילים</string>
+    <string name="leaders_title">5 המובילים</string>
+    <string name="leaders_none">עדיין לא נרשמו הקפות.</string>
+    <string name="leaders_lap">הקפה %1$d</string>
+    <string name="leaders_finished">סיים</string>
+    <string name="leaders_refresh">רענון</string>
     <string name="progress">התקדמות</string>
     <string name="race_progress_title">התקדמות המרוץ</string>
     <string name="total_racers">סך המשתתפים</string>
