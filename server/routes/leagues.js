@@ -29,6 +29,13 @@ function canManageLeague(league, user) {
   return !!user && (user.role === 'admin' || league.created_by === user.id);
 }
 
+// A test league is visible to the user who created it and nobody else — not
+// other admins, not the public. Anything else that can't see it gets a 404, so
+// its existence isn't given away either.
+function canSeeLeague(league, user) {
+  return !league.is_test || (!!user && league.created_by === user.id);
+}
+
 function leagueRaces(leagueId) {
   return db.prepare(
     `SELECT lr.contest_id, lr.round, c.title, c.start_at, c.end_at, c.status, c.visibility
@@ -57,7 +64,7 @@ router.get('/leagues', (req, res) => {
   const status = req.query.status || '';
   const where = status === 'all' ? '1=1' : status ? 'l.status = ?' : "l.status != 'archived'";
   const rows = db.prepare(
-    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings, l.preset, l.created_by,
+    `SELECT l.id, l.name, l.season, l.status, l.created_at, l.settings, l.preset, l.created_by, l.is_test,
             (SELECT COUNT(*) FROM league_races lr WHERE lr.league_id = l.id) AS race_count,
             (SELECT COUNT(*) FROM league_races lr JOIN contests c ON c.id = lr.contest_id
               WHERE lr.league_id = l.id AND c.status = 'finished') AS finished_race_count,
@@ -75,7 +82,7 @@ router.get('/leagues', (req, res) => {
             (SELECT u.name FROM users u WHERE u.id = l.created_by) AS creator_name,
             (SELECT u.role FROM users u WHERE u.id = l.created_by) AS creator_role
        FROM leagues l WHERE ${where} ORDER BY l.created_at DESC`
-  ).all(...(status && status !== 'all' ? [status] : []));
+  ).all(...(status && status !== 'all' ? [status] : [])).filter((l) => canSeeLeague(l, req.user));
   const leagues = rows.map(({ settings, creator_name, creator_role, ...row }) => ({
     ...row,
     racer_count: leagueRacerCount(row.id),
@@ -88,13 +95,13 @@ router.get('/leagues', (req, res) => {
 
 router.get('/leagues/:id', (req, res) => {
   const league = getLeague(req.params.id);
-  if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!league || !canSeeLeague(league, req.user)) return res.status(404).json({ error: 'league not found' });
   res.json({ league: leagueJson(league), races: leagueRaces(league.id) });
 });
 
 router.get('/leagues/:id/standings', async (req, res) => {
   const league = getLeague(req.params.id);
-  if (!league) return res.status(404).json({ error: 'league not found' });
+  if (!league || !canSeeLeague(league, req.user)) return res.status(404).json({ error: 'league not found' });
   const settings = normalizeSettings(league.settings);
 
   const attached = leagueRaces(league.id);
@@ -169,7 +176,7 @@ router.post('/leagues', requireAuth, (req, res) => {
   if (req.user.role !== 'admin' && process.env.OPEN_REGISTRATION !== '1') {
     return res.status(403).json({ error: 'only admins can create leagues' });
   }
-  const { name, season, settings, preset } = req.body || {};
+  const { name, season, settings, preset, is_test } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   let normalized;
   try {
@@ -181,8 +188,9 @@ router.post('/leagues', requireAuth, (req, res) => {
     return res.status(400).json({ error: String(err.message) });
   }
   const info = db.prepare(
-    'INSERT INTO leagues (name, season, settings, preset, created_by) VALUES (?, ?, ?, ?, ?)'
-  ).run(String(name).trim(), String(season || '').trim(), JSON.stringify(normalized), preset ? String(preset) : '', req.user.id);
+    'INSERT INTO leagues (name, season, settings, preset, created_by, is_test) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(String(name).trim(), String(season || '').trim(), JSON.stringify(normalized), preset ? String(preset) : '', req.user.id,
+    is_test ? 1 : 0);
   auditLog(req.user.id, 'league.create', 'league', info.lastInsertRowid, name);
   res.status(201).json({ league: leagueJson(getLeague(info.lastInsertRowid)) });
 });
@@ -191,7 +199,7 @@ router.patch('/leagues/:id', requireAuth, (req, res) => {
   const league = getLeague(req.params.id);
   if (!league) return res.status(404).json({ error: 'league not found' });
   if (!canManageLeague(league, req.user)) return res.status(403).json({ error: 'not your league' });
-  const { name, season, status, settings, preset } = req.body || {};
+  const { name, season, status, settings, preset, is_test } = req.body || {};
   if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'name cannot be empty' });
   if (status !== undefined && !['active', 'finished', 'archived'].includes(status)) {
     return res.status(400).json({ error: 'invalid status' });
@@ -212,12 +220,13 @@ router.patch('/leagues/:id', requireAuth, (req, res) => {
       return res.status(400).json({ error: String(err.message) });
     }
   }
-  db.prepare('UPDATE leagues SET name = ?, season = ?, status = ?, settings = ?, preset = ? WHERE id = ?').run(
+  db.prepare('UPDATE leagues SET name = ?, season = ?, status = ?, settings = ?, preset = ?, is_test = ? WHERE id = ?').run(
     name !== undefined ? String(name).trim() : league.name,
     season !== undefined ? String(season).trim() : league.season,
     status !== undefined ? status : league.status,
     settingsJson !== undefined ? settingsJson : league.settings,
     presetVal !== undefined ? presetVal : league.preset,
+    is_test !== undefined ? (is_test ? 1 : 0) : league.is_test,
     league.id
   );
   auditLog(req.user.id, 'league.update', 'league', league.id, '');

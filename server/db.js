@@ -397,6 +397,10 @@ for (const stmt of [
      seen_at    TEXT NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (contest_id, epc)
    )`,
+  // A test league is seen only by the user who created it, and so are the
+  // races attached to it (canView in routes/contests.js), so a league can be
+  // set up and tried out on the live site without anyone else seeing it.
+  `ALTER TABLE leagues ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0`,
 ]) {
   try {
     db.exec(stmt);

@@ -462,14 +462,14 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     }
     // No query: browse by league first, then drill into a league's races.
     const leagues = db.prepare(
-      `SELECT l.id, l.name, l.season, COUNT(lr.contest_id) AS n
+      `SELECT l.id, l.name, l.season, l.is_test, COUNT(lr.contest_id) AS n
          FROM leagues l JOIN league_races lr ON lr.league_id = l.id
         WHERE l.status != 'archived'
         GROUP BY l.id ORDER BY l.created_at DESC`).all();
     const ungrouped = db.prepare(
       "SELECT COUNT(*) AS n FROM contests WHERE kind = 'race' AND id NOT IN (SELECT contest_id FROM league_races)").get().n;
     if (!leagues.length) return listRacesFlat(chatId, 'all'); // no leagues yet -> flat list
-    const rows = leagues.map((l) => [btn(`🏆 ${l.name}${l.season ? ` (${l.season})` : ''} — ${l.n}`.slice(0, 60), `rl:${l.id}`)]);
+    const rows = leagues.map((l) => [btn(`${l.is_test ? '🧪' : '🏆'} ${l.name}${l.season ? ` (${l.season})` : ''} — ${l.n}`.slice(0, 60), `rl:${l.id}`)]);
     if (ungrouped) rows.push([btn(`🏁 Races without a league (${ungrouped})`, 'rl:none')]);
     // Every race in one list, newest first. Without it the races are only ever
     // reachable a league at a time, which reads as "the bot has one race".
@@ -1120,10 +1120,10 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
 
   async function cmdLeague(chatId) {
     const rows = db.prepare(
-      "SELECT id, name, season FROM leagues WHERE status != 'archived' ORDER BY created_at DESC LIMIT 20").all();
+      "SELECT id, name, season, is_test FROM leagues WHERE status != 'archived' ORDER BY created_at DESC LIMIT 20").all();
     if (!rows.length) { await send.message(chatId, 'No leagues yet — create one in the web admin.'); return; }
     if (rows.length === 1) return showLeague(chatId, rows[0].id);
-    const buttons = rows.map((l) => [btn(`${l.name}${l.season ? ` (${l.season})` : ''}`.slice(0, 60), `lg:${l.id}`)]);
+    const buttons = rows.map((l) => [btn(`${l.is_test ? '🧪 ' : ''}${l.name}${l.season ? ` (${l.season})` : ''}`.slice(0, 60), `lg:${l.id}`)]);
     await send.message(chatId, 'Pick a league:', { reply_markup: kb(buttons) });
   }
 

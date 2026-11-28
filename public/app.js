@@ -2799,6 +2799,7 @@ async function viewLeagues() {
               ? `<span class="pill tag">🏆 ${esc(t('league_preset_' + l.preset))}</span>`
               : (l.sport ? `<span class="pill">🏁 ${esc(sportLabel(l.sport))}</span>` : '')}
             <span class="pill ${isFinished ? 'finished' : 'live'}">${isFinished ? t('status_finished') : t('status_active')}</span>
+            ${l.is_test ? `<span class="pill tag">🧪 ${t('league_test_pill')}</span>` : ''}
           </div>
           ${canDelete ? `<span style="display:flex;gap:6px;margin-inline-start:auto">
             <button class="btn small secondary league-manage">${t('league_manage')}</button>
@@ -2843,7 +2844,8 @@ async function viewLeague(id, tab) {
       <h1 style="text-align:center;margin-bottom:2px">${esc(league.name)}</h1>
       <p style="text-align:center;margin:0 0 12px;color:var(--muted)">
         ${league.season ? esc(league.season) + ' — ' : ''}${t('league_rounds_count', { n: races.length })}
-        ${provisional ? ` · ${t('league_provisional')}` : ''}</p>
+        ${provisional ? ` · ${t('league_provisional')}` : ''}
+        ${league.is_test ? ` · <span class="pill tag">🧪 ${t('league_test_pill')}</span>` : ''}</p>
       ${state.user && (state.user.role === 'admin' || league.created_by === state.user.id)
         ? `<div style="text-align:center;margin:0 0 12px"><a class="btn secondary" href="#/myleagues">⚙️ ${t('league_manage')}</a></div>` : ''}
       ${meta ? leagueInfoPanel(league, meta) : ''}
@@ -3210,6 +3212,7 @@ async function renderLeagueManager(box, scope, refresh) {
           <option value="running">${t('league_preset_running')}</option>
           <option value="mtb">${t('league_preset_mtb')}</option>
         </select></label>
+        <label><input type="checkbox" id="lg-test" style="width:auto"> ${t('league_test_label')}</label>
         <button class="btn">${t('league_create')}</button>
       </form>
     </div>
@@ -3239,6 +3242,7 @@ async function renderLeagueManager(box, scope, refresh) {
         name: document.getElementById('lg-name').value,
         season: document.getElementById('lg-season').value,
         preset: document.getElementById('lg-preset').value,
+        is_test: document.getElementById('lg-test').checked,
       }});
       toast(t('league_saved'));
       refresh();
@@ -3305,6 +3309,8 @@ async function renderLeagueManager(box, scope, refresh) {
         </select>
         <button class="btn small danger" data-act="delete" style="margin-inline-start:auto;flex:0 0 auto">${t('delete')}</button>
       </div>
+      <label class="mt" style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" data-f="is_test" style="width:auto" ${league.is_test ? 'checked' : ''}> ${t('league_test_label')}</label>
 
       <table class="board mt"><thead><tr><th>${t('league_round_col')}</th><th>${t('race_word')}</th><th>${t('status_word')}</th><th></th></tr></thead>
       <tbody>${races.map((r) => `<tr>
@@ -3338,6 +3344,10 @@ async function renderLeagueManager(box, scope, refresh) {
         </form>
       </details>`;
 
+    card.querySelector('[data-f="is_test"]').onchange = async (e) => {
+      try { await api(`/leagues/${league.id}`, { method: 'PATCH', body: { is_test: e.target.checked } }); toast(t('league_saved')); }
+      catch (err) { e.target.checked = !e.target.checked; toast(err.message, true); }
+    };
     card.querySelector('[data-f="status"]').onchange = async (e) => {
       try { await api(`/leagues/${league.id}`, { method: 'PATCH', body: { status: e.target.value } }); toast(t('league_saved')); }
       catch (err) { toast(err.message, true); }

@@ -40,6 +40,14 @@ function isCollaborator(contest, user) {
 // Private contests are visible to the organizer, admins, approved participants,
 // and anyone presenting the invite code (req 3.2).
 function canView(contest, user, inviteCode) {
+  // A race in a test league is hidden like the league itself: only the
+  // league's creator and the race's own organizer see it, whatever its own
+  // visibility says. Un-marking the league (or detaching the race) brings it
+  // back. The timing app and readers use tokens, not this, so it still times.
+  const testLeague = db.prepare(
+    `SELECT l.created_by FROM league_races lr JOIN leagues l ON l.id = lr.league_id
+      WHERE lr.contest_id = ? AND l.is_test = 1`).get(contest.id);
+  if (testLeague) return !!user && (user.id === testLeague.created_by || user.id === contest.organizer_id);
   if (contest.visibility === 'public') return true;
   if (isOrganizer(contest, user)) return true;
   if (isCollaborator(contest, user)) return true;
@@ -339,7 +347,10 @@ router.get('/contests/recommended', requireAuth, (req, res) => {
   const candidates = db
     .prepare(
       `SELECT * FROM contests WHERE status = 'active' AND visibility = 'public'
-       AND organizer_id != ? ORDER BY created_at DESC LIMIT 200`
+       AND organizer_id != ?
+       AND id NOT IN (SELECT lr.contest_id FROM league_races lr JOIN leagues l ON l.id = lr.league_id
+                       WHERE l.is_test = 1)
+       ORDER BY created_at DESC LIMIT 200`
     )
     .all(req.user.id)
     .filter((c) => JSON.parse(c.tags || '[]').some((t) => myTags.has(t)))
