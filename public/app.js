@@ -1488,7 +1488,7 @@ async function viewPublicResults(id, tab) {
       body.innerHTML = filteredResultsTable(results, id, qs.get('dist') || '', qs.get('cat') || '', qs.get('gender') || '');
     } else if (tab === 'full') body.innerHTML = fullResultsTable(results, isAdmin(), checkpoints);
     else if (tab === 'laps') body.innerHTML = lapTimesTables(results);
-    else if (tab === 'top3') body.innerHTML = topFinishersTables(results, 3);
+    else if (tab === 'top3') body.innerHTML = topFinishersTables(results);
     else body.innerHTML = raceWinnersTables(id, results, c.status === 'finished');
   };
   render(data.results);
@@ -1944,17 +1944,30 @@ function raceWinnersTables(id, results, raceDone) {
     </table></div>`;
 }
 
-function topFinishersTables(results, n) {
+// The overall podium is five deep (five get medals); each category's is three.
+const OVERALL_PODIUM = 5;
+const CATEGORY_PODIUM = 3;
+// A women's category ("נשים", "Women 40+", or one only women ride in) is shown
+// straight after the overall table, ahead of the age groups.
+function isWomenCategory(cat, rows) {
+  const words = String(cat || '').toLowerCase().split(/[\s\-–—_/,.()]+/).filter(Boolean);
+  if (words.some((w) => isFemaleW(w))) return true;
+  const inCat = rows.filter((r) => r.category === cat);
+  return inCat.length > 0 && inCat.every((r) => isFemaleW(r.gender));
+}
+function topFinishersTables(results) {
   const byDist = groupByDistance(results);
   const dists = [...byDist.keys()].sort();
   return dists.map((d) => {
     const rows = byDist.get(d);
-    const cats = ['', ...[...new Set(rows.map((r) => r.category).filter(Boolean))].sort(compareCategories)];
+    const named = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort(compareCategories);
+    const women = named.filter((c) => isWomenCategory(c, rows));
+    const cats = ['', ...women, ...named.filter((c) => !women.includes(c))];
     return cats.map((cat) => {
       const scope = (cat ? rows.filter((r) => r.category === cat) : rows)
         .filter((r) => r.status === 'finished')
         .sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9))
-        .slice(0, n);
+        .slice(0, cat ? CATEGORY_PODIUM : OVERALL_PODIUM);
       if (!scope.length) return '';
       return `
         <table class="board mt">
@@ -1998,7 +2011,7 @@ function fullResultsTable(results, editable, checkpoints) {
     // A dead heat shares the medal: two riders level for first are both gold,
     // and the next one is third.
     const places = sharedPlaces(finished);
-    const finRows = finished.map((r, i) => `<tr class="${places[i] <= 3 ? 'top' + places[i] : ''}">
+    const finRows = finished.map((r, i) => `<tr class="${places[i] <= OVERALL_PODIUM ? 'top' + places[i] : ''}">
       <td><strong>${MEDALS[places[i]] || places[i]}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
       <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
