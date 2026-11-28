@@ -269,6 +269,9 @@ table.board tr.top1 td { background: #fffbef; }
 table.board tr.top2 td { background: #f5f7fc; }
 table.board tr.top3 td { background: #fff6ec; }
 table.board tr.top4 td, table.board tr.top5 td { background: #eef4ff; } /* rest of the 5-deep podium */
+/* place number + medal: fixed width so numbers and medals line up row to row */
+.place-medal { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 2.6em; }
+.place-medal strong { font-variant-numeric: tabular-nums; }
 table.board tr { transition: background 0.6s ease; }
 table.board tbody tr:hover td { background: color-mix(in srgb, var(--primary) 5%, transparent); }
 tr.flash td { background: #e4f6ee !important; }

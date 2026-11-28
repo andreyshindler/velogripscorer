@@ -151,9 +151,16 @@ function avatar(url, name) {
     : `<span class="avatar" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;font-weight:700">${esc((name || '?')[0].toUpperCase())}</span>`;
 }
 
-// The overall podium is five deep: 4th and 5th get a medal too, with the
-// place beside it since the emoji alone doesn't tell them apart.
-const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉', 4: '🏅4', 5: '🏅5' };
+// The overall podium is five deep, so 4th and 5th get a medal too.
+const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉', 4: '🏅', 5: '🏅' };
+// A place cell: the number, and for the podium its medal beside it. Both sit
+// in a fixed-width box so every row's number lines up, and every medal lines
+// up on the far (left, in Hebrew) side of it.
+function placeCell(place) {
+  const medal = MEDALS[place];
+  if (!medal) return `<strong>${place ?? ''}</strong>`;
+  return `<span class="place-medal"><strong>${place}</strong><span class="medal">${medal}</span></span>`;
+}
 
 // A small badge marking an admin account, shown next to their name.
 function adminBadge(role) {
@@ -1268,7 +1275,7 @@ async function renderRaceResults(box, c) {
     body.innerHTML = [
       ...finished.map((r) => `
         <tr class="${r.rank <= 3 && !cat ? 'top' + r.rank : ''}">
-          <td><strong>${!cat ? (MEDALS[r.rank] || r.rank) : r.category_rank}</strong></td>
+          <td>${!cat ? placeCell(r.rank) : `<strong>${r.category_rank ?? ''}</strong>`}</td>
           <td><strong>${esc(r.bib || '')}</strong></td>
           <td>${esc(r.participant)}</td>
           <td>${esc(r.category || '')}</td>
@@ -1976,7 +1983,7 @@ function topFinishersTables(results) {
           <thead><tr><th colspan="4">${esc(d || t('overall'))}${cat ? ' — ' + esc(cat) : ' — ' + t('overall')}</th></tr>
           <tr><th>${t('place')}</th><th>${t('bib')}</th><th>${t('participant')}</th><th>${t('elapsed_col')}</th></tr></thead>
           <tbody>${scope.map((r, i) => `<tr class="top${i + 1}">
-            <td><strong>${MEDALS[i + 1] || (i + 1)}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
+            <td>${placeCell(i + 1)}</td><td><strong>${esc(r.bib || '')}</strong></td>
             <td>${nameWithTeam(r)}</td>
             <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td></tr>`).join('')}</tbody>
         </table>`;
@@ -2014,7 +2021,7 @@ function fullResultsTable(results, editable, checkpoints) {
     // and the next one is third.
     const places = sharedPlaces(finished);
     const finRows = finished.map((r, i) => `<tr class="${places[i] <= OVERALL_PODIUM ? 'top' + places[i] : ''}">
-      <td><strong>${MEDALS[places[i]] || places[i]}</strong></td><td><strong>${esc(r.bib || '')}</strong></td>
+      <td>${placeCell(places[i])}</td><td><strong>${esc(r.bib || '')}</strong></td>
       <td>${nameWithTeam(r)}</td>
       <td>${esc(r.category || '')}</td><td>${r.category_rank ?? ''}</td><td>${r.laps}</td>
       <td style="font-variant-numeric:tabular-nums"><strong>${r.elapsed}</strong></td>
