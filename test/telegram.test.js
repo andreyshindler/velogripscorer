@@ -127,7 +127,7 @@ test('flat keyboard: /start offers one button per action; group labels still wor
   // CSV and PDF are on the keyboard itself: at a race they are wanted in one
   // tap, not two behind a group.
   assert.deepEqual(labels,
-    ['🏁 Races', '📋 List', '➕ Add', '✏️ Edit', '📄 CSV', '📑 PDF', '🏆 League', '❓ Help']);
+    ['🏁 Races', '📋 List', '➕ Add', '✏️ Edit', '📄 CSV', '📑 PDF', '🏆 League', '🔗 Link', '❓ Help']);
   assert.ok(!labels.some((l) => CATEGORY_LABELS.includes(l)), 'no group buttons on the keyboard');
 
   // A phone still showing the grouped keyboard keeps working: the group labels
@@ -157,6 +157,14 @@ test('flat keyboard: /start offers one button per action; group labels still wor
   send.reset();
   await text(ALLOWED, '📑 PDF');
   assert.ok(send.last('document'), '📑 PDF sends the results PDF in one tap');
+
+  // 🔗 Link: the race's public page, to forward to spectators
+  const prevUrl = process.env.PUBLIC_BASE_URL;
+  process.env.PUBLIC_BASE_URL = 'https://scores.example.test';
+  send.reset();
+  await text(ALLOWED, '🔗 Link');
+  assert.ok(send.last('message').text.includes(`https://scores.example.test/#/results/${contestId}`), 'the link is sent');
+  if (prevUrl === undefined) delete process.env.PUBLIC_BASE_URL; else process.env.PUBLIC_BASE_URL = prevUrl;
 });
 
 test('/add (one line) creates a racer with a synthetic chip id', async () => {

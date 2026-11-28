@@ -401,6 +401,9 @@ for (const stmt of [
   // races attached to it (canView in routes/contests.js), so a league can be
   // set up and tried out on the live site without anyone else seeing it.
   `ALTER TABLE leagues ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0`,
+  // When the bot sent the operators the race's public link because it went
+  // live (first gun fired). Once per race; NULL = not sent.
+  `ALTER TABLE contests ADD COLUMN live_link_sent_at TEXT`,
 ]) {
   try {
     db.exec(stmt);

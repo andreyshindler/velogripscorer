@@ -218,6 +218,7 @@ const COMMAND_LABELS = {
   '❓ Help': '/help',
   '🏁 Races': '/races', '📋 List': '/list', '➕ Add': '/add', '✏️ Edit': '/edit', '🔁 Laps': '/laps',
   '👥 Marshals': '/operators', '📄 CSV': '/csv', '📑 PDF': '/pdf', '🏆 League': '/league',
+  '🔗 Link': '/link',
 };
 // One button per action. Grouping them behind 🏁 Race / 👤 Start list /
 // ⚙️ Setup / 📊 Results tidied the keyboard but put the things reached most
@@ -229,7 +230,8 @@ function mainKeyboard() {
       [{ text: '🏁 Races' }, { text: '📋 List' }],
       [{ text: '➕ Add' }, { text: '✏️ Edit' }],
       [{ text: '📄 CSV' }, { text: '📑 PDF' }],
-      [{ text: '🏆 League' }, { text: '❓ Help' }],
+      [{ text: '🏆 League' }, { text: '🔗 Link' }],
+      [{ text: '❓ Help' }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -359,6 +361,7 @@ const HELP = [
   '/csv — download the results CSV',
   '/pdf — download the results PDF',
   '/league — season league standings + CSV/PDF',
+  '/link — the race\'s public link, to forward to spectators (sent by itself when the race goes live)',
   '/emails — manage the email recipients (add / remove)',
   '/whoami — show your Telegram id',
   '/cancel — abort the current step',
@@ -1073,6 +1076,15 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     await send.document(chatId, `race-results-${c.id}.csv`, res.text, `${c.title} — results`);
   }
 
+  // The current race's public results page, to forward to spectators. The
+  // same message the bot sends by itself when the race goes live.
+  async function cmdLink(chatId) {
+    const c = await needRace(chatId);
+    if (!c) return;
+    const row = db.prepare('SELECT * FROM contests WHERE id = ?').get(c.id);
+    return send.message(chatId, liveLinkMessage(row || c, { live: false }));
+  }
+
   async function cmdPdf(chatId) {
     const c = await needRace(chatId);
     if (!c) return;
@@ -1448,6 +1460,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         case 'emails': return await emailList(chatId);
         case 'csv': return await cmdCsv(chatId);
         case 'pdf': return await cmdPdf(chatId);
+        case 'link': return await cmdLink(chatId);
         case 'league': return await cmdLeague(chatId);
         default: return await send.message(chatId, 'Unknown menu action.');
       }
@@ -1539,6 +1552,7 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       case '/csv': return cmdCsv(chatId);
       case '/pdf': return cmdPdf(chatId);
       case '/league': return cmdLeague(chatId);
+      case '/link': return cmdLink(chatId);
       case '/emails': return emailList(chatId);
       default:
         return send.message(chatId, 'Unknown command. /help for the list.');
@@ -2019,6 +2033,7 @@ const OPERATOR_COMMANDS = [
   { command: 'csv', description: 'Download the results CSV' },
   { command: 'pdf', description: 'Download the results PDF' },
   { command: 'league', description: 'Season league standings' },
+  { command: 'link', description: 'Public link of the race, for spectators' },
   { command: 'whoami', description: 'Show your Telegram id' },
   { command: 'help', description: 'Show help' },
 ];
@@ -2068,6 +2083,11 @@ function startBot({ port, basePath } = {}) {
       .catch((err) => console.error('race reminder sweep failed:', err.message));
     setInterval(runReminders, 60 * 60 * 1000).unref();
     setTimeout(runReminders, 10_000).unref();
+    // The race's public link, sent the moment a race goes live (first gun).
+    const runLiveLinks = () => sendLiveLinks({ send, now: new Date() })
+      .then((r) => { if (r.races) console.log(`Live links: ${r.races} race(s), ${r.messages} message(s).`); })
+      .catch((err) => console.error('live link sweep failed:', err.message));
+    setInterval(runLiveLinks, 60 * 1000).unref();
     pollLoop('operator', send, core, OPERATOR_COMMANDS);
   }
 
@@ -2110,8 +2130,8 @@ function raceReminderMessage(c) {
     `🗓 ${esc(when)}`,
   ];
   if (c.location) lines.push(`📍 ${esc(c.location)}`);
-  const baseUrl = String(process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
-  if (baseUrl) lines.push('', `🔗 ${baseUrl}/#/results/${c.id}`);
+  const url = publicRaceUrl(c.id);
+  if (url) lines.push('', `🔗 ${url}`);
   return lines.join('\n');
 }
 
@@ -2135,7 +2155,80 @@ async function sendRaceReminders({ send, now = new Date() } = {}) {
   return { races: due.length, messages };
 }
 
+// ---------- live link ----------
+//
+// The moment a race goes live — its first wave gun is fired, which is what puts
+// it on the site's Live tab — the operators get its public results link to
+// forward to spectators. Once per race, tracked by contests.live_link_sent_at.
+
+/** The site's public address: PUBLIC_BASE_URL, else https://DOMAIN/BASE_PATH. */
+function publicBaseUrl() {
+  const explicit = String(process.env.PUBLIC_BASE_URL || '').trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const domain = String(process.env.DOMAIN || '').trim();
+  if (!domain) return '';
+  const base = String(process.env.BASE_PATH || '').trim().replace(/\/+$/, '');
+  return `https://${domain}${base && !base.startsWith('/') ? '/' : ''}${base}`;
+}
+function publicRaceUrl(id) {
+  const base = publicBaseUrl();
+  return base ? `${base}/#/results/${id}` : '';
+}
+
+// Recently live: a gun older than this is a race that started before the bot
+// was watching (e.g. a deploy mid-afternoon) — not announced as "just started".
+const LIVE_LINK_WINDOW_MS = 3 * 3600 * 1000;
+
+function pendingLiveLinks(nowMs = Date.now()) {
+  const since = new Date(nowMs - LIVE_LINK_WINDOW_MS).toISOString();
+  return db.prepare(
+    `SELECT c.*, MIN(w.started_at) AS first_gun FROM contests c JOIN waves w ON w.contest_id = c.id
+      WHERE c.kind = 'race' AND c.status = 'active' AND c.live_link_sent_at IS NULL
+        AND w.started_at IS NOT NULL
+      GROUP BY c.id
+     HAVING datetime(first_gun) >= datetime(?)
+      ORDER BY first_gun`
+  ).all(since);
+}
+
+function liveLinkMessage(c, { live = true } = {}) {
+  const url = publicRaceUrl(c.id);
+  const lines = [live ? '🔴 <b>הלייב התחיל!</b>' : '🔗 <b>קישור לצופים</b>', `🏁 <b>${esc(c.title)}</b>`];
+  if (url) {
+    lines.push(`🔗 ${url}`, '', 'אפשר להעביר את הקישור לצופים.');
+  } else {
+    lines.push('', '⚠️ כתובת האתר לא מוגדרת בשרת (PUBLIC_BASE_URL), אז אין קישור לשלוח.');
+  }
+  // Viewers can't open it: say so rather than let a forwarded link fail.
+  const inTestLeague = db.prepare(
+    `SELECT 1 FROM league_races lr JOIN leagues l ON l.id = lr.league_id
+      WHERE lr.contest_id = ? AND l.is_test = 1`).get(c.id);
+  if (inTestLeague) lines.push('🧪 המרוץ בליגת בדיקה — צופים לא יוכלו לפתוח אותו.');
+  else if (c.visibility === 'private') lines.push('🔒 המרוץ פרטי — צופים לא יוכלו לפתוח אותו.');
+  return lines.join('\n');
+}
+
+// Send each newly-live race's link to the operators, then mark it sent.
+// Best-effort per chat, like the reminders: a failed send doesn't re-queue.
+async function sendLiveLinks({ send, now = new Date() } = {}) {
+  const due = pendingLiveLinks(now.getTime());
+  if (!due.length) return { races: 0, messages: 0 };
+  const chats = adminChatIds();
+  const mark = db.prepare('UPDATE contests SET live_link_sent_at = ? WHERE id = ?');
+  let messages = 0;
+  for (const c of due) {
+    mark.run(now.toISOString(), c.id); // first, so an overlapping sweep can't send it twice
+    const text = liveLinkMessage(c);
+    for (const chatId of chats) {
+      try { await send.message(chatId, text); messages++; }
+      catch (err) { console.error(`live link to ${chatId} failed:`, err.message); }
+    }
+  }
+  return { races: due.length, messages };
+}
+
 module.exports = {
   startBot, createBotCore,
   pendingRaceReminders, raceReminderMessage, sendRaceReminders,
+  pendingLiveLinks, liveLinkMessage, sendLiveLinks, publicRaceUrl,
 };

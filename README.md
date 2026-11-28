@@ -38,7 +38,7 @@ Environment variables:
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | see above | Seeded administrator |
 | `TELEGRAM_BOT_TOKEN` | unset | Enables the Telegram start-list bot |
 | `TELEGRAM_ALLOWED_USER_IDS` | unset | Comma-separated Telegram user ids allowed to use the bot |
-| `PUBLIC_BASE_URL` | unset | Public site URL; when set, race-day reminders include a results link |
+| `PUBLIC_BASE_URL` | unset | Public site URL (falls back to `https://DOMAIN/BASE_PATH`); used for the results link in race-day reminders and in the live link the bot sends when a race's first gun fires (`/link` sends it on demand) |
 | `DISABLE_RATE_LIMIT` | unset | Disables rate limiting (tests only) |
 
 ### Telegram start-list bot
