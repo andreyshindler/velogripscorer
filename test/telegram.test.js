@@ -290,6 +290,71 @@ test('/league lists leagues, shows standings, and sends CSVs', async () => {
   assert.equal(doc.filename, `league-${league.id}-team.csv`);
 });
 
+test('the add wizard offers existing categories and teams (this race + its league), and a new one', async () => {
+  const org = { Authorization: `Bearer ${organizer.token}` };
+  const admin = (await request(app).post('/api/auth/login')
+    .send({ email: 'admin@velogripscorer.local', password: 'change-me-please' })).body;
+  const league = ((await request(app).get('/api/leagues').set({ Authorization: `Bearer ${admin.token}` })).body.leagues || [])
+    .find((l) => l.name === 'Bot League');
+  assert.ok(league, 'the league from the test above');
+  // another round of the same league, whose start list has team Bees / M50
+  const sib = (await request(app).post('/api/contests').set(org)
+    .send({ kind: 'race', title: 'Telegram race round 2', start_at: past, end_at: future })).body;
+  await request(app).post(`/api/contests/${sib.id}/tags`).set(org)
+    .send({ epc: pad(5501), bib: '5501', participant: 'Bee Rider', team: 'Bees', category: 'M50' });
+  await request(app).post(`/api/leagues/${league.id}/races`).set({ Authorization: `Bearer ${admin.token}` })
+    .send({ contest_id: sib.id });
+
+  await text(ALLOWED, `/use ${contestId}`);
+  send.reset();
+  await text(ALLOWED, '/add');
+  await text(ALLOWED, '404');
+  await text(ALLOWED, 'Pick Rider');
+  // category: buttons from this race and the league's other round
+  let prompt = send.last('message');
+  assert.match(prompt.text, /Category\?/);
+  let buttons = prompt.extra.reply_markup.inline_keyboard.flat();
+  const m50 = buttons.find((b) => b.text === 'M50');
+  assert.ok(m50 && /^addc:\d+$/.test(m50.callback_data), 'M50 (from the other round) is a button carrying an index');
+  assert.ok(buttons.some((b) => b.text === 'M45'), 'this race’s own category too');
+  await tap(ALLOWED, m50.callback_data);
+  await text(ALLOWED, '/skip');            // distance
+  await tap(ALLOWED, 'addg:');             // gender: skip
+  // team: existing teams + ➕ New team
+  prompt = send.last('message');
+  assert.match(prompt.text, /Team\?/);
+  buttons = prompt.extra.reply_markup.inline_keyboard.flat();
+  for (const team of ['Aces', 'Bees']) assert.ok(buttons.some((b) => b.text === team), `${team} offered`);
+  assert.ok(buttons.some((b) => b.callback_data === 'addnew:'), 'a ➕ New team button');
+  await tap(ALLOWED, 'addnew:');
+  assert.match(send.last('message').text, /Type the new team/);
+  await text(ALLOWED, 'Comets');           // the new team
+  await text(ALLOWED, '/skip');            // wave
+  await text(ALLOWED, '/skip');            // chip -> create
+
+  let r = (await request(app).get(`/api/contests/${contestId}/tags`).set(org)).body.tags.find((x) => x.bib === '404');
+  assert.ok(r, 'racer 404 created');
+  assert.equal(r.category, 'M50');
+  assert.equal(r.team, 'Comets');
+
+  // Edit -> Team offers the same list (now with Comets) as buttons
+  send.reset();
+  await tap(ALLOWED, 'ef:404:team');
+  buttons = send.last('message').extra.reply_markup.inline_keyboard.flat();
+  const bees = buttons.find((b) => b.text === 'Bees');
+  assert.ok(bees && /^evo:\d+$/.test(bees.callback_data), 'edit offers teams as index buttons');
+  assert.ok(buttons.some((b) => b.text === 'Comets'), 'the team just created is offered');
+  await tap(ALLOWED, bees.callback_data);
+  r = (await request(app).get(`/api/contests/${contestId}/tags`).set(org)).body.tags.find((x) => x.bib === '404');
+  assert.equal(r.team, 'Bees', 'tapping a team saves it');
+
+  // typing a new value at the edit prompt still works
+  await tap(ALLOWED, 'ef:404:team');
+  await text(ALLOWED, 'Dragons');
+  r = (await request(app).get(`/api/contests/${contestId}/tags`).set(org)).body.tags.find((x) => x.bib === '404');
+  assert.equal(r.team, 'Dragons');
+});
+
 test('/races browses by league first, then lists that league’s races', async () => {
   const admin = (await request(app).post('/api/auth/login')
     .send({ email: 'admin@velogripscorer.local', password: 'change-me-please' })).body;

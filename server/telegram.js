@@ -19,6 +19,7 @@ const { logActivity } = require('./activity-log');
 const { signToken } = require('./auth');
 const { getContest, isOrganizer } = require('./routes/contests');
 const { computeRaceResults, genderLabelG } = require('./race-results');
+const { compareCategories } = require('./league-scoring');
 const defaultMailer = require('./mailer');
 
 const EPC_RE = /^[0-9A-Fa-f]{4,64}$/;
@@ -1305,7 +1306,50 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
     return [...all].map((d) => String(d).trim()).filter(Boolean).sort();
   }
 
+  /**
+   * The categories / teams already in use: on this race's start list and on
+   * the other races of its league, so a new round's empty start list still
+   * offers the season's teams — and a team spelled once is picked, not
+   * retyped (a typo splits a team in two and halves its score).
+   */
+  const CHOICE_FIELDS = { category: 'category', team: 'team' }; // column names, never from input
+  function existingValues(contestId, field) {
+    const col = CHOICE_FIELDS[field];
+    if (!col) return [];
+    const rows = db.prepare(
+      `SELECT DISTINCT TRIM(${col}) AS v FROM tag_assignments
+        WHERE TRIM(${col}) != ''
+          AND contest_id IN (SELECT ? UNION
+                SELECT lr2.contest_id FROM league_races lr1
+                  JOIN league_races lr2 ON lr2.league_id = lr1.league_id
+                 WHERE lr1.contest_id = ?)`).all(contestId, contestId);
+    const vals = rows.map((r) => r.v);
+    return field === 'category' ? vals.sort(compareCategories) : vals.sort((a, b) => a.localeCompare(b, 'he'));
+  }
+  // Up to 30 choices, two per row; each button carries only its index in the
+  // list kept on the chat state (callback_data is capped at 64 bytes).
+  const MAX_CHOICES = 30;
+  function choiceRows(vals, prefix) {
+    const rows = [];
+    const shown = vals.slice(0, MAX_CHOICES);
+    for (let i = 0; i < shown.length; i += 2) {
+      rows.push(shown.slice(i, i + 2).map((v, j) => btn(v.slice(0, 30), `${prefix}:${i + j}`)));
+    }
+    return rows;
+  }
+
   async function promptStep(chatId, st, step) {
+    if (step === 'category' || step === 'team') {
+      const c = await activeContest(chatId);
+      const vals = c ? existingValues(c.id, step) : [];
+      if (!vals.length) return send.message(chatId, ADD_PROMPT[step]);
+      st.opts = vals;
+      setState(chatId, st);
+      const rows = choiceRows(vals, step === 'team' ? 'addt' : 'addc');
+      rows.push([btn(step === 'team' ? '➕ New team' : '➕ New category', 'addnew:'), btn('Skip', step === 'team' ? 'addt:' : 'addc:')]);
+      const what = step === 'team' ? 'Team' : 'Category';
+      return send.message(chatId, `${what}? Tap one, tap ➕ to add a new one, or /skip.`, { reply_markup: kb(rows) });
+    }
     if (step === 'gender') {
       return send.message(chatId, 'Gender?', {
         reply_markup: kb([[btn('Male', 'addg:Male'), btn('Female', 'addg:Female'), btn('Skip', 'addg:')]]),
@@ -1567,6 +1611,18 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
       // short number — so the button hands over to it instead of asking for 24
       // characters to be typed, which is what this used to do.
       if (field === 'epc') return cmdChip(chatId, bib, 'replace');
+      if (field === 'category' || field === 'team') {
+        const c = await activeContest(chatId);
+        const vals = c ? existingValues(c.id, field) : [];
+        if (vals.length) {
+          // typing a new value still works: the editval text path takes it
+          setState(chatId, { flow: 'editval', bib, field, opts: vals });
+          const rows = choiceRows(vals, 'evo');
+          rows.push([btn('🧹 Clear', 'evo:')]);
+          return send.message(chatId,
+            `Pick the ${FIELD_LABELS[field].toLowerCase()} for #${esc(bib)}, or type a new one:`, { reply_markup: kb(rows) });
+        }
+      }
       setState(chatId, { flow: 'editval', bib, field });
       return send.message(chatId, `Send the new ${FIELD_LABELS[field] || field} for #${esc(bib)}:`);
     }
@@ -1593,6 +1649,35 @@ function createBotCore({ api, send, role = 'operator', crossSend, mailer = defau
         return wizardStep(chatId, st, picked);
       }
       return undefined;
+    }
+    if (tag === 'addc' || tag === 'addt') { // category / team chosen during the add wizard
+      const st = getState(chatId);
+      const step = tag === 'addt' ? 'team' : 'category';
+      if (st && st.flow === 'add' && st.step === step) {
+        const i = Number(a);
+        const picked = a !== '' && Number.isInteger(i) ? (st.opts || [])[i] || '' : '';
+        return wizardStep(chatId, st, picked);
+      }
+      return undefined;
+    }
+    if (tag === 'addnew') { // "➕ New …": the step stays open for the typed name
+      const st = getState(chatId);
+      if (st && st.flow === 'add' && (st.step === 'team' || st.step === 'category')) {
+        return send.message(chatId, `Type the new ${st.step} name:`);
+      }
+      return undefined;
+    }
+    if (tag === 'evo') { // category / team picked while editing a racer
+      const st = getState(chatId);
+      if (!st || st.flow !== 'editval' || !st.opts) return send.message(chatId, 'That choice has expired — open Edit again.');
+      setState(chatId, null);
+      const i = Number(a);
+      const value = a !== '' && Number.isInteger(i) ? st.opts[i] || '' : '';
+      const c = await activeContest(chatId);
+      if (!c) return send.message(chatId, 'Race no longer selected.');
+      const r = findRacer(await listRacers(c.id), st.bib);
+      if (!r) return send.message(chatId, `No racer with bib #${esc(st.bib)}.`);
+      return editAgain(chatId, c.id, await applyEdit(chatId, c.id, r, { [st.field]: value }));
     }
     if (tag === 'addw') { // wave chosen during the add wizard
       const st = getState(chatId);
