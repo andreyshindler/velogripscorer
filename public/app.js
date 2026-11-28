@@ -151,7 +151,9 @@ function avatar(url, name) {
     : `<span class="avatar" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;font-weight:700">${esc((name || '?')[0].toUpperCase())}</span>`;
 }
 
-const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+// The overall podium is five deep: 4th and 5th get a medal too, with the
+// place beside it since the emoji alone doesn't tell them apart.
+const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉', 4: '🏅4', 5: '🏅5' };
 
 // A small badge marking an admin account, shown next to their name.
 function adminBadge(role) {
